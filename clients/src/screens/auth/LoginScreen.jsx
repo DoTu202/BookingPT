@@ -22,18 +22,29 @@ import {RowComponent} from '../../components';
 import SocialLogin from './components/SocialLogin';
 import authenticationAPI from '../../apis/authApi';
 
-
 const LoginScreen = ({navigation}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRemember, setIsRemember] = useState(false);
 
   const handleLogin = async () => {
-    try {
-      const res = await authenticationAPI.HandleAuthentication('/hello')
-      console.log(res);
-    } catch (error) {
-      console.log('error', error);
+    const emailValidation = Validate.email(email);
+    if (!email || !password || !emailValidation) {
+      try {
+        const res = await authenticationAPI.HandleAuthentication(
+          '/login',
+          {email, password},
+          'post',
+        );
+        await AsyncStorage.setItem(
+          'auth',
+          isRemember ? JSON.stringify(res.data) : email,
+        );
+      } catch (error) {
+        console.log(error);
+      }
+    } else {
+      Alert.alert('Please enter valid email and password');
     }
   };
 
@@ -103,7 +114,6 @@ const LoginScreen = ({navigation}) => {
               type="text"
               color={appColors.white}
               textStyles={{textDecorationLine: 'underline', fontSize: 12}}
-
             />
           </RowComponent>
         </SectionComponent>
@@ -112,7 +122,7 @@ const LoginScreen = ({navigation}) => {
           onPress={handleLogin}
           styles={styles.button}
           type="primary"
-          textFont={fontFamilies.semiBold}   
+          textFont={fontFamilies.semiBold}
         />
       </View>
 

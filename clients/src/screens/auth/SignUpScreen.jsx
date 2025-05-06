@@ -27,8 +27,13 @@ import {
 import TextComponent from '../../components/TextComponent';
 import SocialLogin from './components/SocialLogin';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import {RowComponent} from '../../components';
-import {LoadingModal} from '../../modals'
+import {LoadingModal} from '../../modals';
+import authenticationAPI from '../../apis/authApi';
+import {Validate} from '../../utils/validate';
+import {useDispatch} from 'react-redux';
+import { addAuth } from '../../redux/reducers/authReducer'
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const initValue = {
   email: '',
@@ -36,10 +41,13 @@ const initValue = {
   username: '',
   phoneNumber: '',
   confirmPassword: '',
+  dob: null,
 };
 
 const SignUpScreen = ({navigation}) => {
   const [values, setValues] = useState(initValue);
+
+  const dispatch = useDispatch();
 
   const handleChangeValue = (key, value) => {
     const data = {...values};
@@ -47,41 +55,89 @@ const SignUpScreen = ({navigation}) => {
     setValues(data);
   };
 
-
   const [show, setShow] = useState(false);
-  const [dob, setDob] = useState(new Date());
   const [isDateFocused, setIsDateFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleRegister = async () => {
-    setIsLoading(true);
-    try{
-    console.log(values);
-    }catch (error) {
-      console.log('Error:', error);
-      setIsLoading(false);
-      Alert.alert('Error', 'An error occurred during registration.');
-    }finally{
-      setIsLoading(false);
-    }
-  }
-
-  const formatDate = date => {
+  const formatDate = (date) => {
+    if (!date) return 'Select your birthday'; 
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
 
-  // Sửa lại hàm onChange này
   const handleDateChange = (event, selectedDate) => {
-    if (selectedDate) {
-      setDob(selectedDate);
-    }
+    if (event.type === 'set' && selectedDate) { 
+    handleChangeValue('dob', selectedDate);
+    }  
+    setShow(false);
   };
-
+  
   const closeDatePicker = () => {
     setIsDateFocused(false);
     setShow(false);
   };
 
+
+  //handle register
+  const handleRegister = async () => {
+    const {username, email, phoneNumber, password, confirmPassword, dob} = values;
+
+    // Debugging input values
+    console.log('Form values:', values);
+
+    // 1. Check for empty fields
+    if (!username || !email || !password || !confirmPassword || !phoneNumber) {
+      console.log('Some fields are empty');
+      Alert.alert('Error', 'Please fill in all fields.');
+      return;
+    }
+
+    // 2. Validate email
+    const emailValidation = Validate.email(email);
+    if (!emailValidation) {
+      console.log('Invalid email format');
+      Alert.alert('Error', 'Email is not valid');
+      return;
+    }
+
+    const passwordValidation = Validate.Password(password);
+    if (!passwordValidation) {
+      console.log('At least 6 ');
+      Alert.alert('Error', 'Password');
+      return;
+    }
+
+    // 3. Check if passwords match
+    if (password !== confirmPassword) {
+      console.log('Passwords do not match');
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await authenticationAPI.HandleAuthentication(
+        '/register',
+        {
+          username,
+          email,
+          phoneNumber,
+          password,
+          dob: dob.toISOString(),
+        },
+        'post',
+      );    
+ 
+      dispatch(addAuth(res.data));
+      console.log('Auth payload:', res.data);
+      await AsyncStorage.setItem('auth', JSON.stringify(res.data));
+      setIsLoading(false);
+    } catch (error) {
+      console.log('API error:', error);
+      Alert.alert('Error', 'Something went wrong during registration.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <ImageBackground
@@ -122,6 +178,7 @@ const SignUpScreen = ({navigation}) => {
         value={values.username}
         onChange={val => handleChangeValue('username', val)}
         placeholder="Username"
+        autoCapitalize="none"
         allowClear
       />
 
@@ -139,6 +196,7 @@ const SignUpScreen = ({navigation}) => {
         value={values.email}
         onChange={val => handleChangeValue('email', val)}
         placeholder="Email"
+        autoCapitalize="none"
         allowClear
       />
 
@@ -148,7 +206,7 @@ const SignUpScreen = ({navigation}) => {
         styles={{
           color: appColors.white,
           alignSelf: 'flex-start',
-          marginBottom:5,
+          marginBottom: 5,
           padding: 5,
         }}
       />
@@ -191,11 +249,11 @@ const SignUpScreen = ({navigation}) => {
         <Text
           style={{
             paddingLeft: 14,
-            color: appColors.placeholder,
+            color: values.dob ? appColors.text : appColors.placeholder,
             fontSize: 14,
             fontFamily: fontFamilies.medium,
           }}>
-          {formatDate(dob)}
+          {formatDate(values.dob)}
         </Text>
         <Calendar size={22} color={appColors.placeholder} />
       </TouchableOpacity>
@@ -205,14 +263,13 @@ const SignUpScreen = ({navigation}) => {
         <View style={{width: '100%'}}>
           <DateTimePicker
             testID="dateTimePicker"
-            value={dob}
+            value={values.dob || new Date()}
             mode="date"
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={handleDateChange}
             maximumDate={new Date()}
             minimumDate={new Date(1950, 0, 1)}
             textColor={appColors.primary}
-            themVariant="light"
           />
 
           <TouchableOpacity
@@ -226,6 +283,7 @@ const SignUpScreen = ({navigation}) => {
               marginBottom: 16,
               flexDirection: 'row',
               justifyContent: 'center',
+              
             }}>
             <CloseCircle
               size={18}
@@ -258,6 +316,7 @@ const SignUpScreen = ({navigation}) => {
         value={values.password}
         onChange={val => handleChangeValue('password', val)}
         placeholder="Password"
+        autoCapitalize="none"
         secureTextEntry
         allowClear
         isPassword
@@ -278,6 +337,7 @@ const SignUpScreen = ({navigation}) => {
         value={values.confirmPassword}
         onChange={val => handleChangeValue('confirmPassword', val)}
         placeholder="Confirm Password"
+        autoCapitalize="none"
         secureTextEntry
         allowClear
         isPassword
@@ -290,6 +350,7 @@ const SignUpScreen = ({navigation}) => {
         styles={styles.button}
         type="primary"
         textFont={fontFamilies.semiBold}
+        disable={false}
       />
       <LoadingModal visible={isLoading} />
       <SocialLogin />

@@ -10,13 +10,13 @@ import { Facebook } from '../../../assets/svg'
 const SocialLogin = () => {
   return (
     <View style={{alignItems: 'center', paddingVertical: 20, width: '100%'}}>
-      <TextComponent 
+      {/* <TextComponent 
         style={{textAlign: "center", width: '100%'}} 
         text="OR"
         size={4} 
         color={appColors.gray}
         font={fontFamilies.medium}
-      />
+      /> */}
 
       <ButtonComponent 
         styles={{
