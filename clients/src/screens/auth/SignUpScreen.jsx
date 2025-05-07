@@ -85,7 +85,7 @@ const SignUpScreen = ({navigation}) => {
     console.log('Form values:', values);
 
     // 1. Check for empty fields
-    if (!username || !email || !password || !confirmPassword || !phoneNumber) {
+    if (!username || !email || !password || !confirmPassword || !phoneNumber || !dob) {
       console.log('Some fields are empty');
       Alert.alert('Error', 'Please fill in all fields.');
       return;

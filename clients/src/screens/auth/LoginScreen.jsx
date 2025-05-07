@@ -21,21 +21,30 @@ import {SectionComponent} from '../../components';
 import {RowComponent} from '../../components';
 import SocialLogin from './components/SocialLogin';
 import authenticationAPI from '../../apis/authApi';
+import {useDispatch} from 'react-redux';
+import {addAuth} from '../../redux/reducers/authReducer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {Validate} from '../../utils/validate';
+import {Alert} from 'react-native';
 
 const LoginScreen = ({navigation}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRemember, setIsRemember] = useState(false);
 
+  const dispatch = useDispatch();
+
   const handleLogin = async () => {
     const emailValidation = Validate.email(email);
-    if (!email || !password || !emailValidation) {
+    if (emailValidation) {
       try {
         const res = await authenticationAPI.HandleAuthentication(
           '/login',
           {email, password},
           'post',
         );
+        dispatch(addAuth(res.data));
+
         await AsyncStorage.setItem(
           'auth',
           isRemember ? JSON.stringify(res.data) : email,
@@ -44,7 +53,7 @@ const LoginScreen = ({navigation}) => {
         console.log(error);
       }
     } else {
-      Alert.alert('Please enter valid email and password');
+      Alert.alert('Email is not correct');
     }
   };
 
@@ -130,7 +139,7 @@ const LoginScreen = ({navigation}) => {
         <TextComponent text="Don't have an account?" color={appColors.white} />
         <ButtonComponent
           text="Sign Up"
-          onPress={() => navigation.navigate('SignUpScreen')}
+          onPress={handleLogin}
           type="link"
           textStyles={{textDecorationLine: 'underline', fontSize: 14}}
           styles={{paddingHorizontal: 0}}
