@@ -6,7 +6,9 @@ const  appColors = {
     primary: '#F97516',
     placeholder: '#98A2B3',
     facebook: '#1877F2',
-    gray2: '#3C3C3C'
+    gray2: '#3C3C3C',
+    danger: '#e74c3c',
+    gray4: '#9d9898',
     
 };
 

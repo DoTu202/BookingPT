@@ -8,6 +8,6 @@ export const appInfo = {
     
     // BASE_URL: 'http://192.168.1.20:3001',
 
-    BASE_URL: 'http://10.88.2.74:3001',
+    BASE_URL: 'http://10.83.2.161:3001',
 
 }

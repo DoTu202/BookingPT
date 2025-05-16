@@ -1,191 +1,226 @@
-import {
-  StyleSheet,
-  Text,
-  View,
-  SafeAreaView,
-  TouchableOpacity,
-} from 'react-native';
-import React from 'react';
-import {TextComponent, InputComponent, ButtonComponent} from '../../components';
-import {globalStyles} from '../../styles/globalStyles';
+import {StyleSheet, Text, View, TextInput, SafeAreaView} from 'react-native';
+import React, {useEffect, useState} from 'react';
+import {useRef} from 'react';
+
 import appColors from '../../constants/appColors';
-import {fontFamilies} from '../../constants/fontFamilies';
-import {useState} from 'react';
 
-import {ArrowLeft} from 'iconsax-react-native';
+import {LoadingModal} from '../../modals';
+import {
+  SectionComponent,
+  RowComponent,
+  SpaceComponent,
+  TextComponent,
+  ButtonComponent,
+} from '../../components';
+import authenticationAPI from '../../apis/authApi';
+import {useDispatch} from 'react-redux';
+import {addAuth} from '../../redux/reducers/authReducer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {appInfo} from '../../constants/appInfos';
 
-const VerifyCodeScreen = ({navigation}) => {
-  const [code1, setCode1] = useState('');
-  const [code2, setCode2] = useState('');
-  const [code3, setCode3] = useState('');
-  const [code4, setCode4] = useState('');
-  const [code5, setCode5] = useState('');
-  const [code6, setCode6] = useState('');
+const VerifyCodeScreen = ({navigation, route}) => {
+  const {code, email, password, username, dob, phoneNumber} = route.params;
+
+  const [currentCode, setCurrentCode] = useState(code);
+  const [codeValues, setCodeValues] = useState(['']);
+  const [newCode, setNewCode] = useState(['']);
+  const [limit, setLimit] = useState(60);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const dispatch = useDispatch();
+
+  const ref1 = useRef(null);
+  const ref2 = useRef(null);
+  const ref3 = useRef(null);
+  const ref4 = useRef(null);
+
+  useEffect(() => {
+    ref1.current.focus();
+  }, []);
+
+  useEffect(() => {
+    if (limit > 0) {
+      const interval = setInterval(() => {
+        setLimit(limit => limit - 1);
+      }, 1000);
+
+      return () => clearInterval(interval);
+    }
+  }, [limit]);
+
+  useEffect(() => {
+    let item = ``;
+    codeValues.forEach(val => (item += val));
+    setNewCode(item);
+  }, [codeValues]);
+
+  const handleChangeCode = (val, index) => {
+    const data = [...codeValues];
+    data[index] = val;
+    setCodeValues(data);
+  };
+
+  const handleResendVerifaction = async () => {
+    setCodeValues(['', '', '', '']);
+    setNewCode('');
+    const api = '/verification';
+    setIsLoading(true);
+    try {
+      const res = await authenticationAPI.HandleAuthentication(
+        api,
+        {email},
+        'post',
+      );
+      setLimit(60);
+      setCurrentCode(res.data.verificationCode);
+    } catch {
+      console.log(`Error in resend verification ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerification = async () => {
+    if (limit > 0) {
+      if (parseInt(newCode) !== parseInt(currentCode)) {
+        setErrorMessage('Code is not correct');
+      } else {
+        setIsLoading(true);
+
+        const api = '/register';
+
+        const data = {
+          email,
+          password,
+          username,
+          dob,
+          phoneNumber,
+        };
+        try {
+          const res = await authenticationAPI.HandleAuthentication(
+            api,
+            data,
+            'post',
+          );
+          dispatch(addAuth(res.data));
+          await AsyncStorage.setItem('auth', JSON.stringify(res.data));
+        } catch (error) {
+          console.log(`Error in verification ${error}`);
+          setErrorMessage('Code is not correct');
+        }
+      }
+    } else {
+      setErrorMessage('Code expired, please resend');
+    }
+  };
 
   return (
-    <SafeAreaView
-      style={[
-        globalStyles.container,
-        {backgroundColor: appColors.black, height: '100%'},
-      ]}>
-      <TouchableOpacity
-        onPress={() => navigation.goBack()}
-        style={{
-          position: 'absolute',
-          top: 50,
-          left: 20,
-          zIndex: 10,
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          backgroundColor: 'rgba(255, 255, 255, 0.2)',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}>
-        <ArrowLeft size={22} color={appColors.white} />
-      </TouchableOpacity>
-
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 30,
-        }}>
-        <TextComponent
-          text="Send code"
-          styles={{
-            color: appColors.white,
-            fontSize: 24,
-            fontFamily: fontFamilies.bold,
-            padding: 20,
-            alignSelf: 'center',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        />
-        <TextComponent
-          text="Enter the code sent to your email"
-          styles={{
-            color: appColors.white,
-            fontSize: 14,
-            fontFamily: fontFamilies.medium,
-            padding: 20,
-            alignSelf: 'center',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        />
-
-        {/* Text và button Resend code */}
-        <Text
-          style={{
-            textAlign: 'center',
-            color: appColors.white,
-            fontSize: 14,
-            fontFamily: fontFamilies.medium,
-            marginBottom: 20,
-          }}>
-          If you didn't receive the code?{' '}
-          <Text
-            style={{
-              color: appColors.primary,
-              textDecorationLine: 'underline',
-            }}
-            onPress={() => navigation.navigate('ForgotPasswordScreen')}>
-            Resend code
-          </Text>
-        </Text>
-
-        {/* OTP Input Boxes - 6 ô vuông */}
-        <View style={styles.otpContainer}>
-          <View style={styles.otpBox}>
-            <InputComponent
-              value={code1}
-              onChange={setCode1}
-              placeholder=""
+    <SafeAreaView style={[styles.container]}>
+      <View style={[styles.content]}>
+        <SectionComponent>
+          <TextComponent text="Verify Code" title color={appColors.primary} />
+          <TextComponent
+            text={`Please enter the code sent to ${email.replace(/.{1,5}/, m =>
+              '*'.repeat(m.length),
+            )}`}
+            color={appColors.white}
+            style={styles.subtitle}
+            fontSize={16}
+          />
+          <SpaceComponent height={20} />
+          <RowComponent justify="space-around">
+            <TextInput
+              ref={ref1}
+              style={[styles.input]}
+              maxLength={1}
+              onChangeText={val => {
+                val.length > 0 && ref2.current.focus();
+                handleChangeCode(val, 0);
+              }}
+              keyboardType="number-pad"
+              value={codeValues[0]}
+            />
+            <TextInput
+              ref={ref2}
+              onChangeText={val => {
+                handleChangeCode(val, 1);
+                val.length > 0 && val && ref3.current.focus();
+              }}
+              style={[styles.input]}
               keyboardType="number-pad"
               maxLength={1}
-              type="numeric"
-              isOtp={true}
+              value={codeValues[1]}
             />
-          </View>
-
-          <View style={styles.otpBox}>
-            <InputComponent
-              value={code2}
-              onChange={setCode2}
-              placeholder=""
+            <TextInput
+              ref={ref3}
+              onChangeText={val => {
+                handleChangeCode(val, 2);
+                val.length > 0 && val && ref4.current.focus();
+              }}
+              style={styles.input}
               keyboardType="number-pad"
               maxLength={1}
-              type="numeric"
-              isOtp={true}
+              value={codeValues[2]}
             />
-          </View>
-
-          <View style={styles.otpBox}>
-            <InputComponent
-              value={code3}
-              onChange={setCode3}
-              placeholder=""
+            <TextInput
+              ref={ref4}
+              onChangeText={val => {
+                handleChangeCode(val, 3);
+                val.length > 0 && console.log(newCode);
+              }}
+              style={[styles.input]}
               keyboardType="number-pad"
               maxLength={1}
-              type="numeric"
-              isOtp={true}
+              value={codeValues[3]}
             />
-          </View>
+          </RowComponent>
+        </SectionComponent>
 
-          <View style={styles.otpBox}>
-            <InputComponent
-              value={code4}
-              onChange={setCode4}
-              placeholder=""
-              keyboardType="number-pad"
-              maxLength={1}
-              type="numeric"
-              isOtp={true}
+        <SectionComponent>
+          <ButtonComponent
+            disable={newCode.length < 4}
+            onPress={handleVerification}
+            text="Continue"
+            type="primary"
+          />
+        </SectionComponent>
+        {errorMessage && (
+          <TextComponent
+            flex={0}
+            text={errorMessage}
+            color={appColors.danger}
+            styles={{textAlign: 'center'}}
+          />
+        )}
+        <SectionComponent>
+          {limit > 0 ? (
+            <RowComponent>
+              <TextComponent
+                text="Re-send code in "
+                flex={0}
+                color={appColors.white}
+              />
+              <TextComponent
+                text={`${Math.floor(limit / 60)
+                  .toString()
+                  .padStart(2, '0')}:${(limit % 60)
+                  .toString()
+                  .padStart(2, '0')}`}
+                flex={0}
+                color={appColors.primary}
+              />
+            </RowComponent>
+          ) : (
+            <ButtonComponent
+              type="link"
+              text="Resend email verification"
+              onPress={handleResendVerifaction}
             />
-          </View>
-
-          <View style={styles.otpBox}>
-            <InputComponent
-              value={code5}
-              onChange={setCode5}
-              placeholder=""
-              keyboardType="number-pad"
-              maxLength={1}
-              type="numeric"
-              isOtp={true}
-            />
-          </View>
-
-          <View style={styles.otpBox}>
-            <InputComponent
-              value={code6}
-              onChange={setCode6}
-              placeholder=""
-              keyboardType="number-pad"
-              maxLength={1}
-              type="numeric"
-              isOtp={true}
-            />
-          </View>
-        </View>
-
-        {/* Verify Button */}
-        <ButtonComponent
-          text="Verify"
-          type="primary"
-          onPress={() => {
-            // Combine all codes
-            const fullCode = code1 + code2 + code3 + code4 + code5 + code6;
-            console.log('Verification code:', fullCode);
-            // Add your verification logic here
-            // navigation.navigate('NextScreen');
-          }}
-          styles={{width: '100%', marginTop: 30}}
-        />
+          )}
+        </SectionComponent>
       </View>
+      <LoadingModal visible={isLoading} />
     </SafeAreaView>
   );
 };
@@ -193,16 +228,32 @@ const VerifyCodeScreen = ({navigation}) => {
 export default VerifyCodeScreen;
 
 const styles = StyleSheet.create({
-  otpContainer: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
+  container: {
+    flex: 1,
+    backgroundColor: appColors.black,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  otpBox: {
-    width: '15%', // Giảm kích thước để vừa 6 ô
-    aspectRatio: 1, // Tỉ lệ 1:1 để tạo hình vuông
-    borderRadius: 8,
-    overflow: 'hidden',
+  content: {
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 16,
+    paddingVertical: 40,
+  },
+  input: {
+    width: 55,
+    height: 55,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: appColors.gray2,
+    backgroundColor: appColors.white,
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputFocused: {
+    borderColor: appColors.primary,
   },
 });

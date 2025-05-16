@@ -6,11 +6,11 @@ import {globalStyles} from '../styles/globalStyles';
 const RowComponent = props => {
   const {
     styles,
-    justify = 'flex-start',
+    justify,
     children,
     onPress,
     align = 'center',
-    gap
+    gap,
   } = props;
 
   const localStyles = [
@@ -18,7 +18,7 @@ const RowComponent = props => {
     {
       justifyContent: justify,
       alignItems: align,
-      gap: gap || 0,
+      gap: gap,
     },
     styles,
   ];

@@ -102,7 +102,7 @@ const LoginScreen = ({navigation}) => {
         />
 
         <SectionComponent>
-          <RowComponent gap={8} align justify="space-between">
+          <RowComponent align justify="space-between">
             <RowComponent>
               <Switch
                 value={isRemember}
@@ -139,7 +139,7 @@ const LoginScreen = ({navigation}) => {
         <TextComponent text="Don't have an account?" color={appColors.white} />
         <ButtonComponent
           text="Sign Up"
-          onPress={handleLogin}
+          onPress={() => navigation.navigate('SignUpScreen')}
           type="link"
           textStyles={{textDecorationLine: 'underline', fontSize: 14}}
           styles={{paddingHorizontal: 0}}
@@ -156,10 +156,11 @@ export default LoginScreen;
 const styles = StyleSheet.create({
   textLogin: {
     marginBottom: 20,
-    fontSize: 24,
+    fontSize: 28,
     color: appColors.white,
     alignSelf: 'center',
-    fontFamily: fontFamilies.bold,
+    fontFamily: fontFamilies.extraBold,
+
   },
   wrap: {
     width: '100%',

@@ -18,7 +18,8 @@ const InputComponent = props => {
     allowClear,
     type,
     isOtp,
-    maxLength
+    maxLength,
+    onEnd
   } = props;
   const [isShowPass, setIsShowPass] = useState(isPassword ?? false);
   const [isFocused, setIsFocused] = useState(false);
@@ -43,11 +44,13 @@ const InputComponent = props => {
         onChangeText={val => onChange(val)}
         secureTextEntry={isShowPass}
         placeholderTextColor={appColors.placeholder}
-        keyboardType={type ?? 'default'}
+        keyboardType={type || (isOtp ? 'numeric' : 'default')}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         maxLength={maxLength}
-        textAlign={isOtp ? 'center' : 'left'}
+        textAlign={isOtp ? 'center' : 'left'} //OTP
+        autoCapitalize="none"
+        onEndEditing={onEnd}
       />
       {/* {suffix ?? suffix} */}
       {suffix && <View style={styles.suffixWrapper}>{suffix}</View>}

@@ -30,7 +30,11 @@ const ButtonComponent = props => {
       style={[
         globalStyles.button,
         {
-          backgroundColor: color ?? appColors.primary,
+          backgroundColor: color
+            ? color
+            : disable
+            ? appColors.gray4
+            : appColors.primary,
         },
         styles,
       ]}

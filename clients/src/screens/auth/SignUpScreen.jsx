@@ -10,7 +10,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import React from 'react';
+import React, {useEffect} from 'react';
 import {ButtonComponent} from '../../components';
 import {globalStyles} from '../../styles/globalStyles';
 import {InputComponent} from '../../components';
@@ -31,9 +31,10 @@ import {LoadingModal} from '../../modals';
 import authenticationAPI from '../../apis/authApi';
 import {Validate} from '../../utils/validate';
 import {useDispatch} from 'react-redux';
-import { addAuth } from '../../redux/reducers/authReducer'
-
+import {addAuth} from '../../redux/reducers/authReducer';
+import {SectionComponent} from '../../components';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 const initValue = {
   email: '',
@@ -46,8 +47,28 @@ const initValue = {
 
 const SignUpScreen = ({navigation}) => {
   const [values, setValues] = useState(initValue);
+  const [errorMessage, setErrorMessage] = useState({});
+  const [isDisable, setIsDisable] = useState(true);
+  const [show, setShow] = useState(false);
+  const [isDateFocused, setIsDateFocused] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const dispatch = useDispatch();
+  useEffect(() => {
+    if (
+      !errorMessage ||
+      (errorMessage &&
+        (errorMessage.email ||
+          errorMessage.password ||
+          errorMessage.confirmPassword)) ||
+      !values.email ||
+      !values.password ||
+      !values.confirmPassword
+    ) {
+      setIsDisable(true);
+    } else {
+      setIsDisable(false);
+    }
+  }, [errorMessage, values]);
 
   const handleChangeValue = (key, value) => {
     const data = {...values};
@@ -55,85 +76,74 @@ const SignUpScreen = ({navigation}) => {
     setValues(data);
   };
 
-  const [show, setShow] = useState(false);
-  const [isDateFocused, setIsDateFocused] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const formValidator = key => {
+    const data = {...errorMessage};
+    let message = '';
 
-  const formatDate = (date) => {
-    if (!date) return 'Select your birthday'; 
+    switch (key) {
+      case 'email':
+        if (!values.email) {
+          message = 'Email is required!';
+        } else if (!Validate.email(values.email)) {
+          message = 'Email is not valid!';
+        } else {
+          message = '';
+        }
+        break;
+
+      case 'password':
+        message = !values.password ? 'Password is required!' : '';
+        break;
+
+      case 'confirmPassword':
+        if (!values.confirmPassword) {
+          message = 'Please type confirm password!';
+        } else if (values.confirmPassword !== values.password) {
+          message = 'Password is not match!';
+        } else {
+          message = '';
+        }
+        break;
+    }
+
+    data[key] = message;
+    setErrorMessage(data);
+  };
+
+  const formatDate = date => {
+    if (!date) return 'Select your birthday';
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
 
   const handleDateChange = (event, selectedDate) => {
-    if (event.type === 'set' && selectedDate) { 
-    handleChangeValue('dob', selectedDate);
-    }  
+    if (event.type === 'set' && selectedDate) {
+      handleChangeValue('dob', selectedDate);
+    }
     setShow(false);
   };
-  
+
   const closeDatePicker = () => {
     setIsDateFocused(false);
     setShow(false);
   };
 
-
   //handle register
   const handleRegister = async () => {
-    const {username, email, phoneNumber, password, confirmPassword, dob} = values;
-
-    // Debugging input values
-    console.log('Form values:', values);
-
-    // 1. Check for empty fields
-    if (!username || !email || !password || !confirmPassword || !phoneNumber || !dob) {
-      console.log('Some fields are empty');
-      Alert.alert('Error', 'Please fill in all fields.');
-      return;
-    }
-
-    // 2. Validate email
-    const emailValidation = Validate.email(email);
-    if (!emailValidation) {
-      console.log('Invalid email format');
-      Alert.alert('Error', 'Email is not valid');
-      return;
-    }
-
-    const passwordValidation = Validate.Password(password);
-    if (!passwordValidation) {
-      console.log('At least 6 ');
-      Alert.alert('Error', 'Password');
-      return;
-    }
-
-    // 3. Check if passwords match
-    if (password !== confirmPassword) {
-      console.log('Passwords do not match');
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-
+    const api = '/verification';
     setIsLoading(true);
     try {
       const res = await authenticationAPI.HandleAuthentication(
-        '/register',
-        {
-          username,
-          email,
-          phoneNumber,
-          password,
-          dob: dob.toISOString(),
-        },
+        api,
+        {email: values.email},
         'post',
-      );    
- 
-      dispatch(addAuth(res.data));
-      console.log('Auth payload:', res.data);
-      await AsyncStorage.setItem('auth', JSON.stringify(res.data));
-      setIsLoading(false);
+      );
+      navigation.navigate('VerifyCodeScreen', {
+        code: res.data.verificationCode,
+        ...values,
+      });
     } catch (error) {
-      console.log('API error:', error);
-      Alert.alert('Error', 'Something went wrong during registration.');
+      console.log(error);
+      Alert.alert('Error', 'Failed to send verification code');
     } finally {
       setIsLoading(false);
     }
@@ -198,6 +208,7 @@ const SignUpScreen = ({navigation}) => {
         placeholder="Email"
         autoCapitalize="none"
         allowClear
+        onEnd={() => formValidator('email')}
       />
 
       {/* phone number */}
@@ -212,10 +223,12 @@ const SignUpScreen = ({navigation}) => {
       />
       <InputComponent
         value={values.phoneNumber}
-        onChange={val => handleChangeValue('phoneNumber', val)}
+        onChange={val =>
+          handleChangeValue('phoneNumber', val.replace(/[^0-9]/g, ''))
+        }
         placeholder="Phone Number"
         allowClear
-        keyboardType="numeric"
+        keyboradType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
       />
 
       {/* Date of Birth */}
@@ -283,7 +296,6 @@ const SignUpScreen = ({navigation}) => {
               marginBottom: 16,
               flexDirection: 'row',
               justifyContent: 'center',
-              
             }}>
             <CloseCircle
               size={18}
@@ -321,6 +333,7 @@ const SignUpScreen = ({navigation}) => {
         allowClear
         isPassword
         affix={<LockCircle size={22} color={appColors.gray} />}
+        onEnd={() => formValidator('password')}
       />
 
       {/* confirmPassword */}
@@ -342,7 +355,22 @@ const SignUpScreen = ({navigation}) => {
         allowClear
         isPassword
         affix={<LockCircle size={22} color={appColors.gray} />}
+        onEnd={() => formValidator('confirmPassword')}
       />
+
+      {errorMessage && (
+        <SectionComponent>
+          {Object.keys(errorMessage).map((error, index) =>
+            errorMessage[error] ? (
+              <TextComponent
+                text={errorMessage[error]}
+                key={`error${index}`}
+                color={appColors.danger}
+              />
+            ) : null,
+          )}
+        </SectionComponent>
+      )}
 
       <ButtonComponent
         text="Sign Up"
@@ -350,7 +378,7 @@ const SignUpScreen = ({navigation}) => {
         styles={styles.button}
         type="primary"
         textFont={fontFamilies.semiBold}
-        disable={false}
+        disable={isDisable}
       />
       <LoadingModal visible={isLoading} />
       <SocialLogin />
@@ -361,10 +389,10 @@ const SignUpScreen = ({navigation}) => {
 const styles = StyleSheet.create({
   textSignUp: {
     marginBottom: 20,
-    fontSize: 24,
+    fontSize: 28,
     color: appColors.white,
     alignSelf: 'center',
-    fontFamily: fontFamilies.bold,
+    fontFamily: fontFamilies.extraBold,
     justifyContent: 'flex-start',
   },
   button: {

@@ -1,21 +1,28 @@
-import {StyleSheet, Text, View, TextStyle} from 'react-native';
+import {StyleSheet, Text, View, TextStyle, Platform} from 'react-native';
 import React from 'react';
 import appColors from '../constants/appColors';
 import {fontFamilies} from '../constants/fontFamilies';
 import {globalStyles} from '../styles/globalStyles';
 
 const TextComponent = props => {
-  const {text, size, flex, font, color, styles, title} = props;
+  const {text, size, flex, font, color, styles, title, numberOfLine} = props;
+
+  const fontSizeDefault = Platform.OS === 'ios' ? 16 : 14;
+  
   return (
     <Text
+      numberOfLines={numberOfLine}
       style={[
         globalStyles.text,
         {
           color: color ?? appColors.text,
           fontSize: size ?? title ? 24 : 14,
-          flex: flex ?? undefined,
-          fontFamily: font ? font : title ? fontFamilies.bold : fontFamilies.regular,
-          includeFontPadding: false,
+          flex: flex ?? 0,
+          fontFamily: font
+            ? font
+            : title
+            ? fontFamilies.medium
+            : fontFamilies.regular,
         },
         styles,
       ]}>
