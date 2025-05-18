@@ -9,6 +9,7 @@ import {
   Switch,
 } from 'react-native';
 import React from 'react';
+import {useEffect} from 'react';
 import {ButtonComponent} from '../../components';
 import {globalStyles} from '../../styles/globalStyles';
 import {InputComponent} from '../../components';
@@ -26,16 +27,35 @@ import {addAuth} from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Validate} from '../../utils/validate';
 import {Alert} from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 
 const LoginScreen = ({navigation}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isRemember, setIsRemember] = useState(false);
-
+  const [isDisable, setIsDisable] = useState(false);
+  const [isForgotPressed, setIsForgotPressed] = useState(false);
   const dispatch = useDispatch();
+
+  useEffect(() => {
+    const emailValidation = Validate.email(email);
+
+    if (!email || !password || !emailValidation) {
+      setIsDisable(true);
+    } else {
+      setIsDisable(false);
+    }
+  }, [email, password]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setIsForgotPressed(false);
+    }, []),
+  );
 
   const handleLogin = async () => {
     const emailValidation = Validate.email(email);
+ 
     if (emailValidation) {
       try {
         const res = await authenticationAPI.HandleAuthentication(
@@ -43,8 +63,8 @@ const LoginScreen = ({navigation}) => {
           {email, password},
           'post',
         );
+        
         dispatch(addAuth(res.data));
-
         await AsyncStorage.setItem(
           'auth',
           isRemember ? JSON.stringify(res.data) : email,
@@ -53,7 +73,7 @@ const LoginScreen = ({navigation}) => {
         console.log(error);
       }
     } else {
-      Alert.alert('Email is not correct');
+      setErrorMessage('Email is not valid');
     }
   };
 
@@ -119,10 +139,17 @@ const LoginScreen = ({navigation}) => {
 
             <ButtonComponent
               text="Forgot Password?"
-              onPress={() => navigation.navigate('ForgotPasswordScreen')}
+              onPress={() => {
+                setIsForgotPressed(true);
+                navigation.navigate('ForgotPasswordScreen');
+                setTimeout(() => setIsForgotPressed(false), 500);
+              }}
               type="text"
-              color={appColors.white}
-              textStyles={{textDecorationLine: 'underline', fontSize: 12}}
+              textStyles={{
+                textDecorationLine: 'underline',
+                fontSize: 12,
+                color: isForgotPressed ? appColors.primary : appColors.white,
+              }}
             />
           </RowComponent>
         </SectionComponent>
@@ -132,6 +159,7 @@ const LoginScreen = ({navigation}) => {
           styles={styles.button}
           type="primary"
           textFont={fontFamilies.semiBold}
+          disable={isDisable}
         />
       </View>
 
@@ -160,7 +188,6 @@ const styles = StyleSheet.create({
     color: appColors.white,
     alignSelf: 'center',
     fontFamily: fontFamilies.extraBold,
-
   },
   wrap: {
     width: '100%',

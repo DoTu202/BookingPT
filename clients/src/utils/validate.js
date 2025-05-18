@@ -6,7 +6,7 @@ export class Validate {
       return false;
     }
   
-    static Password = (val) => {
+    static password = (val) => {
       return val.length >= 6;
     };
   }

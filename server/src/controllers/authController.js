@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const asyncHandler = require('express-async-handler');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
+const UserModel = require('../models/userModel');
 require('dotenv').config();
 
 const transporter = nodemailer.createTransport({
@@ -25,16 +26,10 @@ const getJsonWebToken = (email, id) => {
   return token;
 };
 
-const handleSendMail = async (val, email) => {
+const handleSendMail = async val => {
   console.log(verification);
   try {
-    await transporter.sendMail({
-      from: `Support FitnessApp <${process.env.USERNAME_EMAIL}>`, // sender address
-      to: email,
-      subject: 'Verification email code',
-      text: 'Your code to verification email', // plain‑text body
-      html: `<h1>${val}</h1>`, // HTML body
-    });
+    await transporter.sendMail(val);
     return 'OK';
   } catch (error) {
     return error;
@@ -45,10 +40,18 @@ const verification = asyncHandler(async (req, res) => {
   const {email} = req.body;
 
   const verificationCode = Math.round(1000 + Math.random() * 9000);
-  await handleSendMail('', email);
 
   try {
-    await handleSendMail(verificationCode, email);
+    const data = {
+      from: `Support FitnessApp <${process.env.USERNAME_EMAIL}>`, // sender address
+      to: email,
+      subject: 'Verification email code',
+      text: 'Your code to verification email', // plain‑text body
+      html: `<h1>${verificationCode}</h1>`, // HTML body
+    };
+
+    await handleSendMail(data);
+
     res.status(200).json({
       message: 'Verification code sent successfully',
       data: {
@@ -132,9 +135,59 @@ const login = asyncHandler(async (req, res) => {
   });
 });
 
+function generatePassword(length = 8) {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+        const randomIndex = Math.floor(Math.random() * characters.length);
+        password += characters[randomIndex];
+    }
+    return password;
+}
+
+
+const forgotPassword = asyncHandler(async (req, res) => {
+  const {email} = req.body;
+  const randomPassword = generatePassword(8);
+  const data = {
+    from: `Support FitnessApp <${process.env.USERNAME_EMAIL}>`, // sender address
+    to: email,
+    subject: 'Your new password',
+    text: 'Your code to reset password', // plain‑text body
+    html: `<h1>${randomPassword}</h1>`, // HTML body
+  };
+
+  const user = await UserModel.findOne({email});
+  if (user) {
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(`${randomPassword}`, salt);
+
+    await UserModel.findByIdAndUpdate(user._id, {
+      password: hashedPassword,
+      isChangePassword: true,
+    });
+
+    await handleSendMail(data)
+      .then(() => {
+        res.status(200).json({
+          message: 'Send email new password successfully',
+          data: [],
+        });
+      })
+      .catch(error => {
+        res.status(401);
+        throw new Error('Error sending email, Can not send email verification');
+      });
+  } else {
+    res.status(401);
+    throw new Error('Email not found');
+  }
+});
+
 module.exports = {
   register,
   login,
   getJsonWebToken,
   verification,
+  forgotPassword,
 };
