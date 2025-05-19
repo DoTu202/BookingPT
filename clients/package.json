@@ -20,6 +20,7 @@
     "@reduxjs/toolkit": "^2.7.0",
     "axios": "^1.8.4",
     "iconsax-react-native": "^0.0.8",
+    "lucide-react-native": "^0.511.0",
     "query-string": "^9.1.1",
     "react": "^19.0.0",
     "react-native": "^0.79.1",
