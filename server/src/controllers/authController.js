@@ -15,10 +15,13 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const getJsonWebToken = (email, id) => {
+const getJsonWebToken = (email, id, role, username, photoUrl) => {
   const payload = {
     email,
     id,
+    role,
+    username,
+    photoUrl
   };
   const token = jwt.sign(payload, process.env.SECRET_KEY, {
     expiresIn: '1d',
@@ -27,7 +30,6 @@ const getJsonWebToken = (email, id) => {
 };
 
 const handleSendMail = async val => {
-  console.log(verification);
   try {
     await transporter.sendMail(val);
     return 'OK';
@@ -65,10 +67,15 @@ const verification = asyncHandler(async (req, res) => {
 });
 
 const register = asyncHandler(async (req, res) => {
-  const {username, email, password, dob, phoneNumber} = req.body;
+  const {username, email, password, dob, phoneNumber, role='client'} = req.body;
 
   if (!username || !email || !password || !dob || !phoneNumber) {
     return res.status(400).json({message: 'All fields are required'});
+  }
+
+  //Check role send from client
+  if(!['client', 'pt'].includes(role)){
+    return res.status(400).json({message: 'Role is not valid'});
   }
 
   //Check if user already exists
@@ -88,6 +95,8 @@ const register = asyncHandler(async (req, res) => {
     password: hashedPassword,
     dob,
     phoneNumber,
+    role,
+    photoUrl: '',
   });
 
   await newUser.save();
@@ -97,7 +106,10 @@ const register = asyncHandler(async (req, res) => {
     data: {
       email: newUser.email,
       id: newUser._id,
-      accesstoken: getJsonWebToken(newUser.email, newUser._id),
+      accesstoken: getJsonWebToken(newUser.email, newUser._id, newUser.role),
+      role: newUser.role,
+      username: newUser.username,
+      photoUrl: newUser.photoUrl ?? '',
     },
   });
 });
@@ -126,11 +138,11 @@ const login = asyncHandler(async (req, res) => {
     data: {
       id: existingUser._id,
       email: existingUser.email,
-      name: existingUser.username,
-      accesstoken: getJsonWebToken(existingUser.email, existingUser._id),
+      username: existingUser.username,
+      accesstoken: getJsonWebToken(existingUser.email, existingUser._id, existingUser.role),
       fcmTokens: existingUser.fcmTokens ?? [],
-      photo: existingUser.photoUrl ?? '',
-      name: existingUser.name ?? '',
+      photoUrl: existingUser.photoUrl ?? '',
+      role: existingUser.role,
     },
   });
 });

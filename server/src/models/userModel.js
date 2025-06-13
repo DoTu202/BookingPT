@@ -4,6 +4,7 @@ const userSchema = new mongoose.Schema({
     username: {
         type: String,
         unique: true,
+        required: true,
     },
     password: {
         type: String,
@@ -14,7 +15,7 @@ const userSchema = new mongoose.Schema({
         required: true,
         unique: true,
     },
-    phoneNumber:{
+    phoneNumber: {
         type: String,
         required: true,
         unique: true,
@@ -26,6 +27,12 @@ const userSchema = new mongoose.Schema({
     photoUrl: {
         type: String,
     },
+    role: {
+        type: String,
+        enum: ['client', 'pt'],
+        default: 'client',
+        required: true,
+    },
     createAt: {
         type: Date,
         default: Date.now(),
@@ -34,8 +41,20 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: Date.now(),
     },
+    isActive: {
+        type: Boolean,
+        default: true,
+    },
+    lastLoginAt: {
+        type: Date
+    }
 
 
+})
+
+userSchema.pre('save', function(next){
+    this.updateAt = Date.now();
+    next();
 })
 
 const UserModal = mongoose.model('users', userSchema);
