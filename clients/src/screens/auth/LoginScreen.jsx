@@ -26,7 +26,6 @@ import {useDispatch} from 'react-redux';
 import {addAuth} from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Validate} from '../../utils/validate';
-import {Alert} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 
 const LoginScreen = ({navigation}) => {

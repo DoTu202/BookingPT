@@ -16,7 +16,7 @@ const TextComponent = props => {
         globalStyles.text,
         {
           color: color ?? appColors.text,
-          fontSize: size ?? title ? 24 : 14,
+          fontSize: size !== undefined ? size : (title ? 24 : 14),
           flex: flex ?? 0,
           fontFamily: font
             ? font

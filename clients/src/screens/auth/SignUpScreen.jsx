@@ -31,10 +31,9 @@ import {LoadingModal} from '../../modals';
 import authenticationAPI from '../../apis/authApi';
 import {Validate} from '../../utils/validate';
 import {useDispatch} from 'react-redux';
-import {addAuth} from '../../redux/reducers/authReducer';
 import {SectionComponent} from '../../components';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import {setLoggedInUser} from '../../redux/reducers/authReducer';
 
 const initValue = {
   email: '',
@@ -43,6 +42,7 @@ const initValue = {
   phoneNumber: '',
   confirmPassword: '',
   dob: null,
+  role: 'client',
 };
 
 const SignUpScreen = ({navigation}) => {
@@ -53,16 +53,27 @@ const SignUpScreen = ({navigation}) => {
   const [isDateFocused, setIsDateFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const dispatch = useDispatch();
+
   useEffect(() => {
     if (
-      !errorMessage ||
+      // !errorMessage ||
+      // (errorMessage &&
+      //   (errorMessage.email ||
+      //     errorMessage.password ||
+      //     errorMessage.confirmPassword)) ||
+      // !values.email ||
+      // !values.password ||
+      // !values.confirmPassword
+      !values.username ||
+      !values.email ||
+      !values.password ||
+      !values.confirmPassword ||
+      !values.phoneNumber ||
       (errorMessage &&
         (errorMessage.email ||
           errorMessage.password ||
-          errorMessage.confirmPassword)) ||
-      !values.email ||
-      !values.password ||
-      !values.confirmPassword
+          errorMessage.confirmPassword))
     ) {
       setIsDisable(true);
     } else {
@@ -129,6 +140,16 @@ const SignUpScreen = ({navigation}) => {
 
   //handle register
   const handleRegister = async () => {
+    if (
+      !values.username ||
+      !values.phoneNumber ||
+      !values.email ||
+      !values.password
+    ) {
+      Alert.alert('Error', 'Please fill in all required fields.');
+      return;
+    }
+    
     const api = '/verification';
     setIsLoading(true);
     try {
@@ -140,6 +161,8 @@ const SignUpScreen = ({navigation}) => {
       navigation.navigate('VerifyCodeScreen', {
         code: res.data.verificationCode,
         ...values,
+        dob: values.dob.toISOString(),
+        role: values.role,
       });
     } catch (error) {
       console.log(error);
@@ -172,216 +195,238 @@ const SignUpScreen = ({navigation}) => {
         }}>
         <ArrowLeft size={22} color={appColors.white} />
       </TouchableOpacity>
+
       <TextComponent text="Sign Up" title styles={styles.textSignUp} />
 
-      {/* username */}
-      <TextComponent
-        text="Username"
-        styles={{
-          color: appColors.white,
-          alignSelf: 'flex-start',
-          marginBottom: 5,
-          padding: 5,
-        }}
-      />
-      <InputComponent
-        value={values.username}
-        onChange={val => handleChangeValue('username', val)}
-        placeholder="Username"
-        autoCapitalize="none"
-        allowClear
-      />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        style={styles.scrollViewFlex}
+        contentContainerStyle={styles.scrollContentContainer}>
+        {/* username */}
+        <TextComponent
+          text="Username"
+          styles={{
+            color: appColors.white,
+            alignSelf: 'flex-start',
+            marginBottom: 5,
+            padding: 5,
+          }}
+        />
+        <InputComponent
+          value={values.username}
+          onChange={val => handleChangeValue('username', val)}
+          placeholder="Username"
+          autoCapitalize="none"
+          allowClear
+        />
 
-      {/* email  */}
-      <TextComponent
-        text="Email"
-        styles={{
-          color: appColors.white,
-          alignSelf: 'flex-start',
-          marginBottom: 5,
-          padding: 5,
-        }}
-      />
-      <InputComponent
-        value={values.email}
-        onChange={val => handleChangeValue('email', val)}
-        placeholder="Email"
-        autoCapitalize="none"
-        allowClear
-        onEnd={() => formValidator('email')}
-      />
+        {/* email  */}
+        <TextComponent
+          text="Email"
+          styles={{
+            color: appColors.white,
+            alignSelf: 'flex-start',
+            marginBottom: 5,
+            padding: 5,
+          }}
+        />
+        <InputComponent
+          value={values.email}
+          onChange={val => handleChangeValue('email', val)}
+          placeholder="Email"
+          autoCapitalize="none"
+          allowClear
+          onEnd={() => formValidator('email')}
+        />
 
-      {/* phone number */}
-      <TextComponent
-        text="Phone Number"
-        styles={{
-          color: appColors.white,
-          alignSelf: 'flex-start',
-          marginBottom: 5,
-          padding: 5,
-        }}
-      />
-      <InputComponent
-        value={values.phoneNumber}
-        onChange={val =>
-          handleChangeValue('phoneNumber', val.replace(/[^0-9]/g, ''))
-        }
-        placeholder="Phone Number"
-        allowClear
-        keyboradType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
-      />
+        {/* phone number */}
+        <TextComponent
+          text="Phone Number"
+          styles={{
+            color: appColors.white,
+            alignSelf: 'flex-start',
+            marginBottom: 5,
+            padding: 5,
+          }}
+        />
+        <InputComponent
+          value={values.phoneNumber}
+          onChange={val =>
+            handleChangeValue('phoneNumber', val.replace(/[^0-9]/g, ''))
+          }
+          placeholder="Phone Number"
+          allowClear
+          keyboradType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
+        />
 
-      {/* Date of Birth */}
-      <TextComponent
-        text="Date of Birth"
-        styles={{
-          color: appColors.white,
-          alignSelf: 'flex-start',
-          marginBottom: 5,
-          padding: 5,
-        }}
-      />
-      <TouchableOpacity
-        style={{
-          flexDirection: 'row',
-          borderRadius: 12,
-          borderWidth: 2,
-          borderColor: appColors.gray,
-          width: '100%',
-          height: 40,
-          alignItems: 'center',
-          paddingHorizontal: 10,
-          backgroundColor: appColors.white,
-          marginBottom: 10,
-          justifyContent: 'space-between',
-        }}
-        onPress={() => {
-          setIsDateFocused(true);
-          setShow(true);
-        }}>
-        <Text
+        {/* Date of Birth */}
+        <TextComponent
+          text="Date of Birth"
+          styles={{
+            color: appColors.white,
+            alignSelf: 'flex-start',
+            marginBottom: 5,
+            padding: 5,
+          }}
+        />
+        <TouchableOpacity
           style={{
-            paddingLeft: 14,
-            color: values.dob ? appColors.text : appColors.placeholder,
-            fontSize: 14,
-            fontFamily: fontFamilies.medium,
+            flexDirection: 'row',
+            borderRadius: 12,
+            borderWidth: 2,
+            borderColor: appColors.gray,
+            width: '100%',
+            height: 40,
+            alignItems: 'center',
+            paddingHorizontal: 10,
+            backgroundColor: appColors.white,
+            marginBottom: 10,
+            justifyContent: 'space-between',
+          }}
+          onPress={() => {
+            setIsDateFocused(true);
+            setShow(true);
           }}>
-          {formatDate(values.dob)}
-        </Text>
-        <Calendar size={22} color={appColors.placeholder} />
-      </TouchableOpacity>
-
-      {/* DateTimePicker */}
-      {show && (
-        <View style={{width: '100%'}}>
-          <DateTimePicker
-            testID="dateTimePicker"
-            value={values.dob || new Date()}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleDateChange}
-            maximumDate={new Date()}
-            minimumDate={new Date(1950, 0, 1)}
-            textColor={appColors.primary}
-          />
-
-          <TouchableOpacity
-            onPress={closeDatePicker}
+          <Text
             style={{
-              padding: 10,
-              alignItems: 'center',
-              backgroundColor: 'rgba(249, 117, 22, 0.1)',
-              borderRadius: 8,
-              marginTop: 8,
-              marginBottom: 16,
-              flexDirection: 'row',
-              justifyContent: 'center',
+              paddingLeft: 14,
+              color: values.dob ? appColors.text : appColors.placeholder,
+              fontSize: 14,
+              fontFamily: fontFamilies.medium,
             }}>
-            <CloseCircle
-              size={18}
-              color={appColors.primary}
-              style={{marginRight: 5}}
+            {formatDate(values.dob)}
+          </Text>
+          <Calendar size={22} color={appColors.placeholder} />
+        </TouchableOpacity>
+
+        {/* DateTimePicker */}
+        {show && (
+          <View style={{width: '100%'}}>
+            <DateTimePicker
+              testID="dateTimePicker"
+              value={values.dob || new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              maximumDate={new Date()}
+              minimumDate={new Date(1950, 0, 1)}
+              textColor={appColors.primary}
             />
-            <Text
+
+            <TouchableOpacity
+              onPress={closeDatePicker}
               style={{
-                color: appColors.primary,
-                fontWeight: 'bold',
-                fontFamily: fontFamilies.medium,
+                padding: 10,
+                alignItems: 'center',
+                backgroundColor: 'rgba(249, 117, 22, 0.1)',
+                borderRadius: 8,
+                marginTop: 8,
+                marginBottom: 16,
+                flexDirection: 'row',
+                justifyContent: 'center',
               }}>
-              Close
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* password */}
-      <TextComponent
-        text="Password"
-        styles={{
-          color: appColors.white,
-          alignSelf: 'flex-start',
-          marginBottom: 5,
-          padding: 5,
-        }}
-      />
-      <InputComponent
-        value={values.password}
-        onChange={val => handleChangeValue('password', val)}
-        placeholder="Password"
-        autoCapitalize="none"
-        secureTextEntry
-        allowClear
-        isPassword
-        affix={<LockCircle size={22} color={appColors.gray} />}
-        onEnd={() => formValidator('password')}
-      />
-
-      {/* confirmPassword */}
-      <TextComponent
-        text="Confirm Password"
-        styles={{
-          color: appColors.white,
-          alignSelf: 'flex-start',
-          marginBottom: 5,
-          padding: 5,
-        }}
-      />
-      <InputComponent
-        value={values.confirmPassword}
-        onChange={val => handleChangeValue('confirmPassword', val)}
-        placeholder="Confirm Password"
-        autoCapitalize="none"
-        secureTextEntry
-        allowClear
-        isPassword
-        affix={<LockCircle size={22} color={appColors.gray} />}
-        onEnd={() => formValidator('confirmPassword')}
-      />
-
-      {errorMessage && (
-        <SectionComponent>
-          {Object.keys(errorMessage).map((error, index) =>
-            errorMessage[error] ? (
-              <TextComponent
-                text={errorMessage[error]}
-                key={`error${index}`}
-                color={appColors.danger}
+              <CloseCircle
+                size={18}
+                color={appColors.primary}
+                style={{marginRight: 5}}
               />
-            ) : null,
-          )}
-        </SectionComponent>
-      )}
+              <Text
+                style={{
+                  color: appColors.primary,
+                  fontWeight: 'bold',
+                  fontFamily: fontFamilies.medium,
+                }}>
+                Close
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-      <ButtonComponent
-        text="Sign Up"
-        onPress={handleRegister}
-        styles={styles.button}
-        type="primary"
-        textFont={fontFamilies.semiBold}
-        disable={isDisable}
-      />
+        {/* password */}
+        <TextComponent
+          text="Password"
+          styles={{
+            color: appColors.white,
+            alignSelf: 'flex-start',
+            marginBottom: 5,
+            padding: 5,
+          }}
+        />
+        <InputComponent
+          value={values.password}
+          onChange={val => handleChangeValue('password', val)}
+          placeholder="Password"
+          autoCapitalize="none"
+          secureTextEntry
+          allowClear
+          isPassword
+          affix={<LockCircle size={22} color={appColors.gray} />}
+          onEnd={() => formValidator('password')}
+        />
+
+        {/* confirmPassword */}
+        <TextComponent
+          text="Confirm Password"
+          styles={{
+            color: appColors.white,
+            alignSelf: 'flex-start',
+            marginBottom: 5,
+            padding: 5,
+          }}
+        />
+        <InputComponent
+          value={values.confirmPassword}
+          onChange={val => handleChangeValue('confirmPassword', val)}
+          placeholder="Confirm Password"
+          autoCapitalize="none"
+          secureTextEntry
+          allowClear
+          isPassword
+          affix={<LockCircle size={22} color={appColors.gray} />}
+          onEnd={() => formValidator('confirmPassword')}
+        />
+        {errorMessage && (
+          <SectionComponent>
+            {Object.keys(errorMessage).map((error, index) =>
+              errorMessage[error] ? (
+                <TextComponent
+                  text={errorMessage[error]}
+                  key={`error${index}`}
+                  color={appColors.danger}
+                />
+              ) : null,
+            )}
+          </SectionComponent>
+        )}
+        <TextComponent text="You are :" styles={styles.inputLabel} />
+        <View style={styles.roleSelectionContainer}>
+          <ButtonComponent
+            text="Client"
+            onPress={() => handleChangeValue('role', 'client')}
+            type={values.role === 'client' ? 'primary' : 'outline'}
+            styles={styles.roleButton}
+            textStyles={{fontSize: 14}}
+          />
+          <ButtonComponent
+            text="Personal Trainer"
+            onPress={() => handleChangeValue('role', 'pt')}
+            type={values.role === 'pt' ? 'primary' : 'outline'}
+            styles={styles.roleButton}
+            textStyles={{fontSize: 14}}
+          />
+        </View>
+
+        <ButtonComponent
+          text={isLoading ? 'Creating account...' : 'Sign Up'}
+          onPress={handleRegister}
+          styles={styles.button}
+          type="primary"
+          textFont={fontFamilies.semiBold}
+          disable={isDisable}
+        />
+        <SocialLogin />
+      </ScrollView>
       <LoadingModal visible={isLoading} />
-      <SocialLogin />
     </ImageBackground>
   );
 };
@@ -429,6 +474,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
+  },
+  inputLabel: {
+    color: appColors.white,
+    alignSelf: 'flex-start',
+    padding: 5,
+    fontFamily: fontFamilies.medium,
+    fontSize: 14,
+  },
+  roleSelectionContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 5,
+    marginBottom: 5,
+    width: '100%',
+  },
+  roleButton: {
+    flex: 1,
+    marginHorizontal: 5,
+    paddingVertical: 8,
+  },
+  scrollViewFlex: {
+    flex: 1,
+    width: '100%',
+  },
+  scrollContentContainer: {
+    paddingBottom: 120, // Khoảng trống ở cuối ScrollView, cần lớn hơn chiều cao của SocialLogin + margin
+    width: '100%',
+    alignItems: 'center',
   },
 });
 

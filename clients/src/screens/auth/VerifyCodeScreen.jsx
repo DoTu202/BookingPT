@@ -19,7 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {appInfo} from '../../constants/appInfos';
 
 const VerifyCodeScreen = ({navigation, route}) => {
-  const {code, email, password, username, dob, phoneNumber} = route.params;
+  const {code, email, password, username, dob, phoneNumber, role} =
+    route.params;
 
   const [currentCode, setCurrentCode] = useState(code);
   const [codeValues, setCodeValues] = useState(['']);
@@ -96,6 +97,7 @@ const VerifyCodeScreen = ({navigation, route}) => {
           username,
           dob,
           phoneNumber,
+          role,
         };
         try {
           const res = await authenticationAPI.HandleAuthentication(
@@ -105,9 +107,13 @@ const VerifyCodeScreen = ({navigation, route}) => {
           );
           dispatch(addAuth(res.data));
           await AsyncStorage.setItem('auth', JSON.stringify(res.data));
+          setIsLoading(false);
         } catch (error) {
           console.log(`Error in verification ${error}`);
-          setErrorMessage('Code is not correct');
+          const message =
+            error.response?.data?.message || 'An unexpected error occurred.';
+          setErrorMessage(message);
+          setIsLoading(false);
         }
       }
     } else {

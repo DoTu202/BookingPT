@@ -9,6 +9,9 @@ const  appColors = {
     gray2: '#3C3C3C',
     danger: '#e74c3c',
     gray4: '#9d9898',
+    white2: '#cfcfcfc',
+    primary2: '#6366F1',
+    primaryLight: '#FAB47C',
     
 };
 
