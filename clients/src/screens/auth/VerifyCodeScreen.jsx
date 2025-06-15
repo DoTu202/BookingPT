@@ -74,7 +74,7 @@ const VerifyCodeScreen = ({navigation, route}) => {
         'post',
       );
       setLimit(60);
-      setCurrentCode(res.data.verificationCode);
+      setCurrentCode(res.data.data.verificationCode);
     } catch {
       console.log(`Error in resend verification ${error}`);
     } finally {
@@ -105,8 +105,12 @@ const VerifyCodeScreen = ({navigation, route}) => {
             data,
             'post',
           );
-          dispatch(addAuth(res.data));
-          await AsyncStorage.setItem('auth', JSON.stringify(res.data));
+          
+          // Extract the actual auth data from nested response
+          const authData = res.data.data || res.data;
+          
+          dispatch(addAuth(authData));
+          await AsyncStorage.setItem('auth', JSON.stringify(authData));
           setIsLoading(false);
         } catch (error) {
           console.log(`Error in verification ${error}`);
@@ -173,7 +177,8 @@ const VerifyCodeScreen = ({navigation, route}) => {
               ref={ref4}
               onChangeText={val => {
                 handleChangeCode(val, 3);
-                val.length > 0 && console.log(newCode);
+                // Remove immediate console.log since newCode hasn't updated yet
+                // The actual newCode will be logged in useEffect
               }}
               style={[styles.input]}
               keyboardType="number-pad"

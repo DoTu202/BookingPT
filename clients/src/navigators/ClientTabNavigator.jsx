@@ -1,7 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
-import { Home, MessageCircle, Calendar, Activity, User } from 'lucide-react-native';
+import { Home2, Messages2, Calendar, Chart, User } from 'iconsax-react-native';
 import appColors from '../constants/appColors';
 import { StyleSheet, Platform } from 'react-native';
 import { fontFamilies } from '../constants/fontFamilies';
@@ -18,28 +18,34 @@ const ClientTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: false,
+        headerShown: route.name === 'ClientBookings', // Show header only for ClientBookings
+        headerTitle: route.name === 'ClientBookings' ? 'My Bookings' : '',
+        headerTintColor: appColors.white,
+        headerStyle: {
+          backgroundColor: appColors.primary,
+        },
+        headerBackTitleVisible: false,
         tabBarIcon: ({ focused, color, size }) => {
           let IconComponent;
           
           switch (route.name) {
             case 'ClientHome':
-              IconComponent = Home;
-              break;
-            case 'Messages':
-              IconComponent = MessageCircle;
+              IconComponent = Home2;
               break;
             case 'ClientBookings':
               IconComponent = Calendar;
               break;
             case 'Progress':
-              IconComponent = Activity;
+              IconComponent = Chart;
+              break;
+            case 'Messages':
+              IconComponent = Messages2;
               break;
             case 'ClientProfile':
               IconComponent = User;
               break;
             default:
-              IconComponent = Home;
+              IconComponent = Home2;
           }
 
           return (
@@ -51,21 +57,22 @@ const ClientTabNavigator = () => {
           );
         },
         tabBarActiveTintColor: appColors.primary,
-        tabBarInactiveTintColor: appColors.gray,
+        tabBarInactiveTintColor: appColors.gray2,
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontFamily: fontFamilies.medium,
-          marginBottom: Platform.OS === 'ios' ? 0 : 5,
+          marginBottom: Platform.OS === 'ios' ? 0 : 3,
+          marginTop: -2,
         },
         tabBarStyle: [
           styles.tabBarStyle,
           {
             paddingBottom: Platform.OS === 'ios' 
-              ? Math.max(insets.bottom - 10, 10) 
-              : 10,
+              ? Math.max(insets.bottom - 5, 8) 
+              : 8,
             height: Platform.OS === 'ios' 
-              ? 85 + Math.max(insets.bottom - 20, 0)
-              : 70,
+              ? 75 + Math.max(insets.bottom - 15, 0)
+              : 65,
           }
         ],
         tabBarItemStyle: styles.tabBarItemStyle,
@@ -78,6 +85,16 @@ const ClientTabNavigator = () => {
           tabBarLabel: 'Home',
         }}
       />
+      
+      <Tab.Screen 
+        name="ClientBookings" 
+        component={ClientBookingsScreen}
+        options={{
+          tabBarLabel: 'Bookings',
+          headerShown: false, 
+        }}
+      />
+      
       <Tab.Screen 
         name="Progress" 
         component={ProgressScreen}
@@ -85,13 +102,7 @@ const ClientTabNavigator = () => {
           tabBarLabel: 'Progress',
         }}
       />
-      <Tab.Screen 
-        name="ClientBookings" 
-        component={ClientBookingsScreen}
-        options={{
-          tabBarLabel: 'Bookings',
-        }}
-      />
+      
       <Tab.Screen 
         name="Messages" 
         component={MessagesScreen}
@@ -99,6 +110,7 @@ const ClientTabNavigator = () => {
           tabBarLabel: 'Messages',
         }}
       />
+      
       <Tab.Screen 
         name="ClientProfile" 
         component={ClientProfileScreen}
@@ -115,25 +127,25 @@ export default ClientTabNavigator;
 const styles = StyleSheet.create({
   tabBarStyle: {
     backgroundColor: appColors.white,
-    borderTopWidth: 0.5,
-    borderTopColor: appColors.gray4,
+    borderTopWidth: 0,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -2,
+      height: -3,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 10,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 15,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
+    paddingHorizontal: 8,
   },
   tabBarItemStyle: {
-    paddingTop: 8,
-    marginBottom: 4,
+    paddingTop: 6,
+    paddingHorizontal: 4,
   },
 });

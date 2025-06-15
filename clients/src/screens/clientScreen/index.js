@@ -1,4 +1,3 @@
-import BookingScreen from './BookingScreen';
 import ClientBookingsScreen from './ClientBookingsScreen';
 import ClientHomeScreen from './ClientHomeScreen';
 import ClientProfileScreen from './ClientProfileScreen';
@@ -9,4 +8,4 @@ import MessagesScreen from './MessagesScreen';
 import SearchPtScreen from './SearchPtScreen';
 
 
-export { BookingScreen, ClientBookingsScreen, ClientHomeScreen, ClientProfileScreen, PaymentScreen, ProgressScreen, PTDetailScreen, MessagesScreen, SearchPtScreen };
+export { ClientBookingsScreen, ClientHomeScreen, ClientProfileScreen, PaymentScreen, ProgressScreen, PTDetailScreen, MessagesScreen, SearchPtScreen };

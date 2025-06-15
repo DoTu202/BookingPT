@@ -7,13 +7,15 @@ import {
   Platform,
   ScrollView,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
-import React from 'react';
+import React, {useState, useEffect} from 'react';
 import {useDispatch} from 'react-redux';
 import {authSelector} from '../../redux/reducers/authReducer';
 import {globalStyles} from '../../styles/globalStyles';
 import appColors from '../../constants/appColors';
 import {useSelector} from 'react-redux';
+import ptApi from '../../apis/ptApi';
 import {
   RowComponent,
   TextComponent,
@@ -38,19 +40,67 @@ import {fontFamilies} from '../../constants/fontFamilies';
 const ClientHomeScreen = ({navigation}) => {
   const dispatch = useDispatch();
   const auth = useSelector(authSelector);
+  
+  // State for PT data
+  const [ptList, setPtList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const itemEvent = {
-    title: 'Personal Training Featured',
-    description: 'Enjoy',
-    location: 'Cau Giay, Hanoi',
-    imageURL: '',
-    users: [''],
-    authorId: 'ptTrainer',
-    startAt: Date.now(),
-    endAt: Date.now(),
-    date: Date.now(),
+  // Fetch PT data when component mounts
+  useEffect(() => {
+    fetchFeaturedPTs();
+  }, []);
 
-  }
+  const fetchFeaturedPTs = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Call API to get PT list
+      const response = await ptApi.searchPTs({
+        limit: 8 // Limit to 8 featured trainers
+      });
+      
+      console.log('API Response:', response); // Debug log
+      console.log('Response data:', response.data); // Debug log
+      
+      // Handle response properly - response.data contains the server response
+      if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        setPtList(response.data.data);
+      } else if (response.data && Array.isArray(response.data)) {
+        setPtList(response.data);
+      } else {
+        console.log('Unexpected response format:', response);
+        setError('Failed to load trainers');
+      }
+    } catch (err) {
+      console.error('Error fetching PTs:', err);
+      setError('Error loading trainers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderPTItem = ({item}) => {
+    return (
+      <PtItem 
+        type="card" 
+        item={{
+          _id: item._id,
+          title: `${item.user?.username || 'Personal Trainer'}`,
+          description: item.bio || 'Professional Personal Trainer',
+          location: `${item.location?.district || ''}, ${item.location?.city || ''}`,
+          imageURL: item.user?.photoUrl || '',
+          rating: item.rating || 0,
+          hourlyRate: item.hourlyRate || 0,
+          specializations: item.specializations || [],
+          experienceYears: item.experienceYears || 0,
+          ptData: item // Pass full PT data
+        }}
+        onPress={() => navigation.navigate('PTDetailScreen', { item: item })} // Truyền object gốc từ API
+      />
+    );
+  };
 
   return (
     <View style={[globalStyles.container]}>
@@ -65,11 +115,16 @@ const ClientHomeScreen = ({navigation}) => {
           paddingHorizontal: 20,
         }}>
         <View style={{paddingHorizontal: 16}}>
-          <RowComponent>
-            <TouchableOpacity onPress={() => navigation.openDrawer()}>
-              <HambergerMenu color={appColors.white} size={24} />
-            </TouchableOpacity>
-            <View style={{flex: 1, alignItems: 'center'}}>
+          <RowComponent justify="space-between" styles={{alignItems: 'center'}}>
+            {/* Left side - Menu button */}
+            <View style={{width: 100, alignItems: 'flex-start'}}>
+              <TouchableOpacity onPress={() => navigation.openDrawer()}>
+                <HambergerMenu color={appColors.white} size={24} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Center - Location */}
+            <View style={{position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 1}}>
               <RowComponent>
                 <TextComponent
                   text="Current Location"
@@ -87,21 +142,44 @@ const ClientHomeScreen = ({navigation}) => {
               />
             </View>
 
-            <CircleComponent color="rgba(255,255,255,0.2)" size={40}>
-              <View>
-                <Notification color={appColors.white} size={24} />
-                <View
-                  style={{
-                    position: 'absolute',
-                    borderRadius: 4,
-                    borderWidth: 1,
-                    width: 8,
-                    height: 8,
-                    backgroundColor: appColors.white,
+            {/* Right side - Action buttons */}
+            <View style={{width: 100, alignItems: 'flex-end', zIndex: 2}}>
+              <RowComponent>
+                <TouchableOpacity 
+                  onPress={() => {
+                    console.log('📅 Calendar button pressed - navigating to ClientBookings');
+                    navigation.navigate('ClientBookings');
                   }}
-                />
-              </View>
-            </CircleComponent>
+                  style={{
+                    marginRight: 8,
+                    padding: 4, // Expand touch area
+                    zIndex: 2   // Above location
+                  }}
+                >
+                  <CircleComponent color="rgba(255,255,255,0.2)" size={36}>
+                    <TextComponent text="📅" size={18} />
+                  </CircleComponent>
+                </TouchableOpacity>
+                
+                <CircleComponent color="rgba(255,255,255,0.2)" size={36}>
+                  <View>
+                    <Notification color={appColors.white} size={20} />
+                    <View
+                      style={{
+                        position: 'absolute',
+                        borderRadius: 4,
+                        borderWidth: 1,
+                        width: 6,
+                        height: 6,
+                        backgroundColor: appColors.white,
+                        top: -2,
+                        right: -2,
+                      }}
+                    />
+                  </View>
+                </CircleComponent>
+              </RowComponent>
+            </View>
           </RowComponent>
           <SpaceComponent height={20} />
           <RowComponent>
@@ -166,12 +244,42 @@ const ClientHomeScreen = ({navigation}) => {
           },
         ]}>
         <TagBarComponent title="Featured Trainers" onPress={() => {}} />
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={Array.from({length: 8})}
-          renderItem={({item}) => <PtItem type="card" item={itemEvent} />}
-        />
+        {loading ? (
+          <View style={{padding: 20, alignItems: 'center'}}>
+            <ActivityIndicator size="large" color={appColors.primary} />
+            <SpaceComponent height={10} />
+            <TextComponent text="Loading trainers..." color={appColors.gray} />
+          </View>
+        ) : error ? (
+          <View style={{padding: 20, alignItems: 'center'}}>
+            <TextComponent text={error} color={appColors.danger} />
+            <SpaceComponent height={10} />
+            <TouchableOpacity 
+              onPress={fetchFeaturedPTs}
+              style={{
+                backgroundColor: appColors.primary,
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                borderRadius: 8
+              }}
+            >
+              <TextComponent text="Retry" color={appColors.white} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <FlatList
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            data={ptList}
+            keyExtractor={(item) => item._id}
+            renderItem={renderPTItem}
+            ListEmptyComponent={() => (
+              <View style={{padding: 20, alignItems: 'center'}}>
+                <TextComponent text="No trainers available" color={appColors.gray} />
+              </View>
+            )}
+          />
+        )}
       </ScrollView>
     </View>
   );

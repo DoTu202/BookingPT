@@ -12,6 +12,7 @@ const  appColors = {
     white2: '#cfcfcfc',
     primary2: '#6366F1',
     primaryLight: '#FAB47C',
+    yellow: '#FFD700',
     
 };
 

@@ -11,15 +11,15 @@ import {
   BookingDetailScreen,
   NotificationScreen,
   ReviewScreen,
-  ChatScreen
+  ChatScreen,
 } from '../screens/commonScreen';
 
 import {
   PTDetailScreen,
-  BookingScreen,
   PaymentScreen,
   ClientProfileScreen,
   SearchPtScreen,
+  ClientBookingsScreen,
 } from '../screens/clientScreen';
 
 const MainNavigator = () => {
@@ -116,10 +116,9 @@ const MainNavigator = () => {
           />
 
           <Stack.Screen
-          name="ChatScreen"
-          component={ChatScreen}
-          options={{ headerShown: false }}
-  
+            name="ChatScreen"
+            component={ChatScreen}
+            options={{headerShown: false}}
           />
 
           {/* Client Booking Flow */}
@@ -129,16 +128,10 @@ const MainNavigator = () => {
             options={{
               headerShown: true,
               title: 'Trainer Profile',
-              headerBackTitleVisible: false,
-            }}
-          />
-
-          <Stack.Screen
-            name="Booking"
-            component={BookingScreen}
-            options={{
-              headerShown: true,
-              title: 'Book Session',
+              headerTintColor: appColors.white,
+              headerStyle: {
+                backgroundColor: appColors.primary,
+              },
             }}
           />
 
@@ -157,6 +150,7 @@ const MainNavigator = () => {
             options={{
               headerShown: true,
               title: 'Booking Details',
+              backgroundColor: appColors.primary,
             }}
           />
 
@@ -185,6 +179,14 @@ const MainNavigator = () => {
             options={{
               headerShown: true,
               title: 'Write Review',
+            }}
+          />
+
+          <Stack.Screen
+            name="ClientBookings"
+            component={ClientBookingsScreen}
+            options={{
+              headerShown: false,
             }}
           />
         </>

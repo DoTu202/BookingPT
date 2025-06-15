@@ -14,7 +14,9 @@ const CardComponent = prop => {
           backgroundColor: bgColor ?? appColors.white,
         },
         styles,
-      ]}>
+      ]}
+      onPress={onPress}
+      disabled={!onPress}>
       {children}
     </TouchableOpacity>
   );

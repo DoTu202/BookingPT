@@ -159,14 +159,15 @@ const SignUpScreen = ({navigation}) => {
         'post',
       );
       navigation.navigate('VerifyCodeScreen', {
-        code: res.data.verificationCode,
+        code: res.data.data.verificationCode,
         ...values,
         dob: values.dob.toISOString(),
         role: values.role,
       });
     } catch (error) {
       console.log(error);
-      Alert.alert('Error', 'Failed to send verification code');
+      const message = error.response?.data?.message || 'Failed to send verification code';
+      Alert.alert('Error', message);
     } finally {
       setIsLoading(false);
     }

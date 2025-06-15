@@ -54,7 +54,7 @@ const LoginScreen = ({navigation}) => {
 
   const handleLogin = async () => {
     const emailValidation = Validate.email(email);
- 
+
     if (emailValidation) {
       try {
         const res = await authenticationAPI.HandleAuthentication(
@@ -62,11 +62,13 @@ const LoginScreen = ({navigation}) => {
           {email, password},
           'post',
         );
-        
-        dispatch(addAuth(res.data));
+
+        const authData = res.data.data || res.data;
+
+        dispatch(addAuth(authData));
         await AsyncStorage.setItem(
           'auth',
-          isRemember ? JSON.stringify(res.data) : email,
+          isRemember ? JSON.stringify(authData) : email,
         );
       } catch (error) {
         console.log(error);
