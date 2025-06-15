@@ -35,7 +35,7 @@ reviewSchema.index({ booking: 1, client: 1 }, { unique: true }); // Một client
 reviewSchema.index({ pt: 1, createdAt: -1 });
 
 
-// Static method để tính toán lại averageRating và numReviews cho PTProfile
+
 reviewSchema.statics.calculateAverages = async function(ptUserId) {
     try {
         // Cần truy cập model PTProfile ở đây. Để tránh lỗi circular dependency

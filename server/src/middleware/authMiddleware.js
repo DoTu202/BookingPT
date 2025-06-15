@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/userModel');
+const UserModal = require('../models/userModel');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.SECRET_KEY;
@@ -26,7 +26,7 @@ const authenticateToken = async (req, res, next) => {
     }
 
     try {
-      const user = await User.findById(decodePayload.id).select('-password');
+      const user = await UserModal.findById(decodePayload.id).select('-password');
       if (!user) {
         return res.status(401).json({
           message: 'Unauthorized',

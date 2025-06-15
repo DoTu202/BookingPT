@@ -318,6 +318,10 @@ const getClientBookings = asyncHandler(async (req, res) => {
   const pageSize = parseInt(req.query.pageSize) || 10;
   const page = parseInt(req.query.pageNumber) || 1;
 
+  console.log('=== Debug getClientBookings ===');
+  console.log('User ID:', req.user._id);
+  console.log('Query params:', req.query);
+
   const queryOptions = {client: req.user._id};
 
   if (status) {
@@ -329,25 +333,46 @@ const getClientBookings = asyncHandler(async (req, res) => {
       // Nếu chỉ lọc upcoming, thì lấy cả pending và confirmed
       queryOptions.status = {$in: ['pending_confirmation', 'confirmed']};
     }
-  } else if (upcoming === 'false') {
+  }
+
+  console.log('Query options:', queryOptions);
+  
+  if (upcoming === 'false') {
     queryOptions['bookingTime.startTime'] = {$lt: new Date()};
   }
 
   const count = await Booking.countDocuments(queryOptions);
+  console.log('Count found:', count);
+  
+  // Get bookings với populate đơn giản
   const bookings = await Booking.find(queryOptions)
     .populate('pt', 'username email photoUrl')
-    .populate({
-      path: 'pt', // Populate user trong booking
-      populate: {
-        path: 'ptProfile', // Populate ptProfile dựa trên trường user của PT
-        model: 'PTProfile', // Tên model PTProfile
-        select: 'hourlyRate specializations location', // Các trường bạn muốn từ PTProfile
-      },
-    })
-    .populate('availabilitySlot', 'startTime endTime') // Có thể không cần nếu bookingTime đã đủ
+    .populate('availabilitySlot', 'startTime endTime')
     .limit(pageSize)
     .skip(pageSize * (page - 1))
     .sort({'bookingTime.startTime': upcoming === 'true' ? 'asc' : 'desc'});
+
+  console.log('Bookings found:', bookings.length);
+  console.log('First booking:', bookings[0]);
+
+  // Sau đó query riêng PTProfile cho mỗi PT trong bookings
+  const enrichedBookings = await Promise.all(
+    bookings.map(async (booking) => {
+      if (booking.pt && booking.pt._id) {
+        const ptProfile = await PTProfile.findOne({ user: booking.pt._id })
+          .select('hourlyRate specializations location');
+        
+        return {
+          ...booking.toObject(),
+          pt: {
+            ...booking.pt.toObject(),
+            ptProfile: ptProfile || null
+          }
+        };
+      }
+      return booking.toObject();
+    })
+  );
 
   // Để populate ptProfile, bạn cần đảm bảo có một cách liên kết từ User (PT) đến PTProfile.
   // Nếu bạn có 1 virtual populate trong UserModel để trỏ đến PTProfile, cách trên sẽ dễ hơn.
@@ -361,7 +386,7 @@ const getClientBookings = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     message: 'Lấy danh sách lịch đặt của bạn thành công.',
-    data: bookings,
+    data: enrichedBookings,
     page,
     pages: Math.ceil(count / pageSize),
     count,

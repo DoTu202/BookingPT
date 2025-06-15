@@ -1,9 +1,8 @@
-const User = require('../models/userModel');
+const UserModal = require('../models/userModel');
 const bcrypt = require('bcrypt');
 const asyncHandler = require('express-async-handler');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
-const UserModel = require('../models/userModel');
 require('dotenv').config();
 
 const transporter = nodemailer.createTransport({
@@ -40,6 +39,12 @@ const handleSendMail = async val => {
 
 const verification = asyncHandler(async (req, res) => {
   const {email} = req.body;
+
+  // Check if user already exists before sending verification
+  const existingUser = await UserModal.findOne({email});
+  if (existingUser) {
+    return res.status(400).json({message: 'User already exists'});
+  }
 
   const verificationCode = Math.round(1000 + Math.random() * 9000);
 
@@ -79,7 +84,7 @@ const register = asyncHandler(async (req, res) => {
   }
 
   //Check if user already exists
-  const existingUser = await User.findOne({email});
+  const existingUser = await UserModal.findOne({email});
   if (existingUser) {
     return res.status(400).json({message: 'User already exists'});
   }
@@ -89,7 +94,7 @@ const register = asyncHandler(async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, salt);
 
   //Create new user
-  const newUser = new User({
+  const newUser = new UserModal({
     username,
     email,
     password: hashedPassword,
@@ -124,14 +129,14 @@ const login = asyncHandler(async (req, res) => {
   }
 
   //Check if user exists
-  const existingUser = await User.findOne({email});
+  const existingUser = await UserModal.findOne({email});
   if (!existingUser) {
     return res.status(400).json({message: 'Invalid credentials'});
   }
   //Validate password
   const isMatch = await bcrypt.compare(password, existingUser.password);
   if (!isMatch) {
-    return res.status(400).json({message: 'Invalid eamil or password'});
+    return res.status(400).json({message: 'Invalid email or password'});
   }
   res.status(200).json({
     message: 'Login successful',
@@ -169,12 +174,12 @@ const forgotPassword = asyncHandler(async (req, res) => {
     html: `<h1>${randomPassword}</h1>`, // HTML body
   };
 
-  const user = await UserModel.findOne({email});
+  const user = await UserModal.findOne({email});
   if (user) {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(`${randomPassword}`, salt);
 
-    await UserModel.findByIdAndUpdate(user._id, {
+    await User.findByIdAndUpdate(user._id, {
       password: hashedPassword,
       isChangePassword: true,
     });

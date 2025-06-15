@@ -16,15 +16,20 @@ app.use(cors());
 
 //api
 app.use('/auth', authRouter);
-app.use('/pts', ptRouter);
-app.use('/client', clientRouter);
+app.use('/api/pts', ptRouter);
+app.use('/api/client', clientRouter);
 
 connectDB();
 
-app.listen(PORT, err => {
+// Bind to all interfaces for development (needed for iOS Simulator)
+// In production, use proper reverse proxy (nginx) with HTTPS
+app.listen(PORT, '0.0.0.0', err => {
   if (err) {
     console.error('Error starting server:', err);
   } else {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on:`);
+    console.log(`  - Local: http://localhost:${PORT}`);
+    console.log(`  - Network: http://10.255.179.65:${PORT}`);
+    console.log(`  ℹ️  For iOS Simulator, use localhost. For real device, use network IP.`);
   }
 });
