@@ -192,7 +192,7 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   const ptUser = await User.findOne({_id: ptId, role: 'pt'});
   if (!ptUser) {
     res.status(404);
-    throw new Error('Không tìm thấy Personal Trainer này.');
+    throw new Error('Personal Trainer not found.');
   }
 
   const queryOptions = {
@@ -233,41 +233,41 @@ const createBookingRequest = asyncHandler(async (req, res) => {
 
   if (!ptId || !availabilitySlotId) {
     res.status(400);
-    throw new Error('Vui lòng cung cấp ID của PT và ID của khung giờ rảnh.');
+    throw new Error('Please provide PT ID and availability slot ID.');
   }
 
   const ptUser = await User.findById(ptId);
   if (!ptUser || ptUser.role !== 'pt') {
     res.status(404);
-    throw new Error('Không tìm thấy Personal Trainer này.');
+    throw new Error('Personal Trainer not found.');
   }
 
   const ptProfile = await PTProfile.findOne({user: ptId});
   if (!ptProfile || typeof ptProfile.hourlyRate !== 'number') {
     res.status(400);
     throw new Error(
-      'PT này chưa cập nhật thông tin giá hoặc hồ sơ không đầy đủ.',
+      'PT has not updated pricing information or profile is incomplete.',
     );
   }
 
   const slot = await Availability.findById(availabilitySlotId);
   if (!slot) {
     res.status(404);
-    throw new Error('Khung giờ bạn chọn không tồn tại.');
+    throw new Error('Time slot not found.');
   }
   if (slot.pt.toString() !== ptId) {
     res.status(400);
-    throw new Error('Khung giờ này không thuộc về PT bạn đã chọn.');
+    throw new Error('This time slot does not belong to the selected PT.');
   }
   if (slot.status !== 'available') {
     res.status(400);
     throw new Error(
-      `Khung giờ này hiện không có sẵn (trạng thái: ${slot.status}).`,
+      `This time slot is not available (status: ${slot.status}).`,
     );
   }
   if (new Date(slot.startTime) < new Date()) {
     res.status(400);
-    throw new Error('Không thể đặt lịch cho khung giờ đã qua.');
+    throw new Error('Cannot book a time slot in the past.');
   }
 
   // Kiểm tra xem client có đặt trùng lịch của chính mình không (với bất kỳ PT nào)
@@ -281,7 +281,7 @@ const createBookingRequest = asyncHandler(async (req, res) => {
   if (existingClientBooking) {
     res.status(400);
     throw new Error(
-      'Bạn đã có một lịch đặt khác trùng với khoảng thời gian này.',
+      'You already have a booking that conflicts with this time slot.',
     );
   }
 
@@ -402,11 +402,11 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
 
   if (!booking) {
     res.status(404);
-    throw new Error('Không tìm thấy lịch đặt.');
+    throw new Error('Booking not found.');
   }
   if (booking.client.toString() !== req.user._id.toString()) {
     res.status(403);
-    throw new Error('Bạn không có quyền hủy lịch đặt này.');
+    throw new Error('You do not have permission to cancel this booking.');
   }
 
   const now = new Date();
@@ -420,14 +420,14 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
   ) {
     res.status(400);
     throw new Error(
-      `Không thể hủy lịch đặt này vì đã quá gần giờ hẹn (phải hủy trước ${hoursBeforeAllowedToCancel} tiếng).`,
+      `Cannot cancel this booking as it's too close to the appointment time (must cancel at least ${hoursBeforeAllowedToCancel} hours in advance).`,
     );
   }
 
   if (!['pending_confirmation', 'confirmed'].includes(booking.status)) {
     res.status(400);
     throw new Error(
-      `Không thể hủy lịch đặt đang ở trạng thái "${booking.status}".`,
+      `Cannot cancel booking with status "${booking.status}".`,
     );
   }
 
