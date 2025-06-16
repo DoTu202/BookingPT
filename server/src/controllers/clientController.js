@@ -1,4 +1,5 @@
 const asyncHandler = require('express-async-handler');
+const bcrypt = require('bcrypt');
 const User = require('../models/userModel');
 const PTProfile = require('../models/PTProfileModel'); // Hoặc tên model PTProfile của bạn
 const Availability = require('../models/AvailabilityModel'); // Hoặc tên model Availability của bạn
@@ -192,7 +193,7 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   const ptUser = await User.findOne({_id: ptId, role: 'pt'});
   if (!ptUser) {
     res.status(404);
-    throw new Error('Personal Trainer not found.');
+    throw new Error('Không tìm thấy Personal Trainer này.');
   }
 
   const queryOptions = {
@@ -233,44 +234,44 @@ const createBookingRequest = asyncHandler(async (req, res) => {
 
   if (!ptId || !availabilitySlotId) {
     res.status(400);
-    throw new Error('Please provide PT ID and availability slot ID.');
+    throw new Error('Vui lòng cung cấp ID của PT và ID của khung giờ rảnh.');
   }
 
   const ptUser = await User.findById(ptId);
   if (!ptUser || ptUser.role !== 'pt') {
     res.status(404);
-    throw new Error('Personal Trainer not found.');
+    throw new Error('Không tìm thấy Personal Trainer này.');
   }
 
   const ptProfile = await PTProfile.findOne({user: ptId});
   if (!ptProfile || typeof ptProfile.hourlyRate !== 'number') {
     res.status(400);
     throw new Error(
-      'PT has not updated pricing information or profile is incomplete.',
+      'PT này chưa cập nhật thông tin giá hoặc hồ sơ không đầy đủ.',
     );
   }
 
   const slot = await Availability.findById(availabilitySlotId);
   if (!slot) {
     res.status(404);
-    throw new Error('Time slot not found.');
+    throw new Error('Khung giờ bạn chọn không tồn tại.');
   }
   if (slot.pt.toString() !== ptId) {
     res.status(400);
-    throw new Error('This time slot does not belong to the selected PT.');
+
   }
   if (slot.status !== 'available') {
     res.status(400);
     throw new Error(
-      `This time slot is not available (status: ${slot.status}).`,
+
     );
   }
   if (new Date(slot.startTime) < new Date()) {
     res.status(400);
-    throw new Error('Cannot book a time slot in the past.');
+  
   }
 
-  // Kiểm tra xem client có đặt trùng lịch của chính mình không (với bất kỳ PT nào)
+  // Kiểm tra xem client có đặt trùng lịch của chính mình không
   const existingClientBooking = await Booking.findOne({
     client: clientId,
     status: {$in: ['pending_confirmation', 'confirmed']},
@@ -281,7 +282,7 @@ const createBookingRequest = asyncHandler(async (req, res) => {
   if (existingClientBooking) {
     res.status(400);
     throw new Error(
-      'You already have a booking that conflicts with this time slot.',
+      'Bạn đã có một lịch đặt khác trùng với khoảng thời gian này.',
     );
   }
 
@@ -402,11 +403,11 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
 
   if (!booking) {
     res.status(404);
-    throw new Error('Booking not found.');
+    throw new Error('Không tìm thấy lịch đặt.');
   }
   if (booking.client.toString() !== req.user._id.toString()) {
     res.status(403);
-    throw new Error('You do not have permission to cancel this booking.');
+    throw new Error('Bạn không có quyền hủy lịch đặt này.');
   }
 
   const now = new Date();
@@ -420,14 +421,14 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
   ) {
     res.status(400);
     throw new Error(
-      `Cannot cancel this booking as it's too close to the appointment time (must cancel at least ${hoursBeforeAllowedToCancel} hours in advance).`,
+      `Không thể hủy lịch đặt này vì đã quá gần giờ hẹn (phải hủy trước ${hoursBeforeAllowedToCancel} tiếng).`,
     );
   }
 
   if (!['pending_confirmation', 'confirmed'].includes(booking.status)) {
     res.status(400);
     throw new Error(
-      `Cannot cancel booking with status "${booking.status}".`,
+      `Không thể hủy lịch đặt đang ở trạng thái "${booking.status}".`,
     );
   }
 
@@ -463,6 +464,222 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
     .json({message: 'Lịch đặt đã được hủy thành công.', data: updatedBooking});
 });
 
+// Client Profile Management APIs
+
+// Get client profile
+const getClientProfile = asyncHandler(async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const user = await User.findById(userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.status(200).json({
+      message: 'Successfully retrieved client profile',
+      data: user
+    });
+  } catch (error) {
+    console.error('Error getting client profile:', error);
+    res.status(500).json({ message: 'Failed to get profile' });
+  }
+});
+
+// Update client profile
+const updateClientProfile = asyncHandler(async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { username, email, phoneNumber, dob } = req.body;
+    
+    // Validate email uniqueness if changed
+    if (email) {
+      const existingUser = await User.findOne({ 
+        email: email, 
+        _id: { $ne: userId } 
+      });
+      if (existingUser) {
+        return res.status(400).json({ 
+          message: 'Email already exists' 
+        });
+      }
+    }
+    
+    // Validate username uniqueness if changed
+    if (username) {
+      const existingUser = await User.findOne({ 
+        username: username, 
+        _id: { $ne: userId } 
+      });
+      if (existingUser) {
+        return res.status(400).json({ 
+          message: 'Username already exists' 
+        });
+      }
+    }
+    
+    const updateData = {};
+    if (username) updateData.username = username;
+    if (email) updateData.email = email;
+    if (phoneNumber) updateData.phoneNumber = phoneNumber;
+    if (dob) updateData.dob = new Date(dob);
+    
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updateData,
+      { new: true, runValidators: true }
+    ).select('-password');
+    
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.status(200).json({
+      message: 'Profile updated successfully',
+      data: updatedUser
+    });
+  } catch (error) {
+    console.error('Error updating client profile:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        details: error.message 
+      });
+    }
+    res.status(500).json({ message: 'Failed to update profile' });
+  }
+});
+
+// Change password
+const changePassword = asyncHandler(async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ 
+        message: 'Current password and new password are required' 
+      });
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        message: 'New password must be at least 6 characters long' 
+      });
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({ 
+        message: 'Current password is incorrect' 
+      });
+    }
+    
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+    
+    // Update password
+    await User.findByIdAndUpdate(userId, { 
+      password: hashedNewPassword 
+    });
+    
+    res.status(200).json({
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    console.error('Error changing password:', error);
+    res.status(500).json({ message: 'Failed to change password' });
+  }
+});
+
+// Upload profile photo
+const uploadProfilePhoto = asyncHandler(async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { photoUrl } = req.body;
+    
+    if (!photoUrl) {
+      return res.status(400).json({ 
+        message: 'Photo URL is required' 
+      });
+    }
+    
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { photo: photoUrl },
+      { new: true, runValidators: true }
+    ).select('-password');
+    
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.status(200).json({
+      message: 'Profile photo updated successfully',
+      data: updatedUser
+    });
+  } catch (error) {
+    console.error('Error uploading profile photo:', error);
+    res.status(500).json({ message: 'Failed to upload photo' });
+  }
+});
+
+// Delete account
+const deleteAccount = asyncHandler(async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { password } = req.body;
+    
+    if (!password) {
+      return res.status(400).json({ 
+        message: 'Password is required to delete account' 
+      });
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(400).json({ 
+        message: 'Password is incorrect' 
+      });
+    }
+    
+    // Check for active bookings
+    const activeBookings = await Booking.find({
+      client: userId,
+      status: { $in: ['pending_confirmation', 'confirmed'] }
+    });
+    
+    if (activeBookings.length > 0) {
+      return res.status(400).json({ 
+        message: 'Cannot delete account with active bookings. Please cancel all bookings first.' 
+      });
+    }
+    
+    // Delete user account
+    await User.findByIdAndDelete(userId);
+    
+    res.status(200).json({
+      message: 'Account deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ message: 'Failed to delete account' });
+  }
+});
+
 module.exports = {
   searchPTs,
   viewPTProfile,
@@ -470,5 +687,10 @@ module.exports = {
   createBookingRequest,
   getClientBookings,
   cancelBookingByClient,
+  getClientProfile,
+  updateClientProfile,
+  changePassword,
+  uploadProfilePhoto,
+  deleteAccount,
   // reviewPT (nếu bạn triển khai)
 };
