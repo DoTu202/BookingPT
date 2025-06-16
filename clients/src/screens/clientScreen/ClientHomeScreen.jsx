@@ -56,7 +56,7 @@ const ClientHomeScreen = ({navigation}) => {
       setLoading(true);
       setError(null);
       
-      // Call API to get PT list
+
       const response = await ptApi.searchPTs({
         limit: 8 // Limit to 8 featured trainers
       });
@@ -82,14 +82,20 @@ const ClientHomeScreen = ({navigation}) => {
   };
 
   const renderPTItem = ({item}) => {
+    // Convert location object to string
+    const locationString = item.location && typeof item.location === 'object' 
+      ? `${item.location.district}, ${item.location.city}` 
+      : (item.location || 'Ha Noi');
+
     return (
       <PtItem 
-        type="card" 
+        type="card"
+        size="medium" // Use medium size for featured trainers
         item={{
           _id: item._id,
           title: `${item.user?.username || 'Personal Trainer'}`,
           description: item.bio || 'Professional Personal Trainer',
-          location: `${item.location?.district || ''}, ${item.location?.city || ''}`,
+          location: locationString, // Convert object to string
           imageURL: item.user?.photoUrl || '',
           rating: item.rating || 0,
           hourlyRate: item.hourlyRate || 0,
@@ -268,11 +274,17 @@ const ClientHomeScreen = ({navigation}) => {
           </View>
         ) : (
           <FlatList
+            key="featured-trainers-v3" // Force re-render với key unique
             horizontal
             showsHorizontalScrollIndicator={false}
             data={ptList}
-            keyExtractor={(item) => item._id}
+            keyExtractor={(item) => `${item._id}-card-v3`} // Update keyExtractor
             renderItem={renderPTItem}
+            contentContainerStyle={{
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+            }}
+            ItemSeparatorComponent={() => <View style={{width: 4}} />}
             ListEmptyComponent={() => (
               <View style={{padding: 20, alignItems: 'center'}}>
                 <TextComponent text="No trainers available" color={appColors.gray} />

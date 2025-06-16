@@ -20,6 +20,7 @@ import { Star1, Location } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
 import moment from 'moment';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PTDetailScreen = ({ navigation, route }) => {
   // Get PT data from navigation params
@@ -69,12 +70,16 @@ const PTDetailScreen = ({ navigation, route }) => {
 
       // Set PT profile
       setPtProfile(ptData);
+
+      //const today = moment().format('YYYY-MM-DD');
+      //setSelectedDate(today);
       
-      // Set default date to today
-      const today = moment().format('YYYY-MM-DD');
-      setSelectedDate(today);
+      // Set default date to first available date (July 10, 2025 - defense period)
+      const defenseStartDate = moment('2025-07-10').format('YYYY-MM-DD');
+      setSelectedDate(defenseStartDate);
       
       console.log('PTDetailScreen - Successfully initialized:', ptData.user.username);
+    
       
     } catch (error) {
       console.error('Error initializing PT data:', error);
@@ -88,6 +93,18 @@ const PTDetailScreen = ({ navigation, route }) => {
   const loadAvailability = async () => {
     try {
       console.log('Loading availability for:', ptProfile.user._id, 'on', selectedDate);
+      
+      // Debug token
+      const authData = await AsyncStorage.getItem('auth');
+      console.log('Auth data in PTDetailScreen:', authData ? 'exists' : 'not found');
+      if (authData) {
+        try {
+          const auth = JSON.parse(authData);
+          console.log('Token exists:', !!auth.token || !!auth.accessToken || !!auth.accesstoken);
+        } catch (e) {
+          console.log('Auth parse error:', e);
+        }
+      }
       
       const response = await ptApi.getPTAvailability(ptProfile.user._id, {
         startDate: selectedDate,
@@ -376,14 +393,15 @@ const PTDetailScreen = ({ navigation, route }) => {
           <SpaceComponent height={12} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.dateContainer}>
-              {[0, 1, 2, 3, 4, 5, 6].map((dayOffset) => {
-                const date = moment().add(dayOffset, 'days');
+              {/* Defense period dates: July 10-22, 2025 */}
+              {Array.from({length: 13}, (_, index) => {
+                const date = moment('2025-07-10').add(index, 'days');
                 const dateStr = date.format('YYYY-MM-DD');
                 const isSelected = selectedDate === dateStr;
                 
                 return (
                   <TouchableOpacity
-                    key={dayOffset}
+                    key={index}
                     style={[styles.dateItem, isSelected && styles.selectedDateItem]}
                     onPress={() => setSelectedDate(dateStr)}
                   >
@@ -397,6 +415,11 @@ const PTDetailScreen = ({ navigation, route }) => {
                       size={16}
                       font="Poppins-SemiBold"
                       color={isSelected ? appColors.white : appColors.black}
+                    />
+                    <TextComponent
+                      text={date.format('MMM')}
+                      size={10}
+                      color={isSelected ? appColors.white : appColors.gray}
                     />
                   </TouchableOpacity>
                 );

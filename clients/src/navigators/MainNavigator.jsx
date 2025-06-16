@@ -14,10 +14,14 @@ import {
   ChatScreen,
 } from '../screens/commonScreen';
 
+import {PTClientsScreen} from '../screens/ptScreen';
+
 import {
   PTDetailScreen,
   PaymentScreen,
   ClientProfileScreen,
+  EditProfileScreen,
+  ChangePasswordScreen,
   SearchPtScreen,
   ClientBookingsScreen,
 } from '../screens/clientScreen';
@@ -73,6 +77,17 @@ const MainNavigator = () => {
               title: 'Chat',
             }}
           />
+
+          <Stack.Screen
+            name="PTClients"
+            component={PTClientsScreen}
+            options={{
+              headerShown: true,
+              title: 'My Clients',
+              headerTintColor: appColors.primary,
+              headerBackTitleVisible: false,
+            }}
+          />
         </>
       ) : (
         //CLIENT FLOW
@@ -88,19 +103,7 @@ const MainNavigator = () => {
             component={SearchPtScreen}
             options={{
               headerShown: false,
-              cardStyleInterpolator: ({current}) => ({
-                cardStyle: {
-                  opacity: current.progress,
-                  transform: [
-                    {
-                      translateX: current.progress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [300, 0],
-                      }),
-                    },
-                  ],
-                },
-              }),
+              gestureEnabled: true,
             }}
           />
 
@@ -185,6 +188,22 @@ const MainNavigator = () => {
           <Stack.Screen
             name="ClientBookings"
             component={ClientBookingsScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+
+          <Stack.Screen
+            name="EditProfileScreen"
+            component={EditProfileScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+
+          <Stack.Screen
+            name="ChangePasswordScreen"
+            component={ChangePasswordScreen}
             options={{
               headerShown: false,
             }}

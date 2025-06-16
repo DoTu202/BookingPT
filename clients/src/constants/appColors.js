@@ -13,6 +13,7 @@ const  appColors = {
     primary2: '#6366F1',
     primaryLight: '#FAB47C',
     yellow: '#FFD700',
+    success: '#28a745',
     
 };
 

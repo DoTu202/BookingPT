@@ -48,33 +48,38 @@ const PTTabNavigator = () => {
 
           return (
             <IconComponent
-              size={size}
+              size={focused ? 24 : 22}
               color={color}
-              variant={focused ? 'Bold' : 'Outline'}
+              strokeWidth={focused ? 2.5 : 2}
             />
           );
         },
+        tabBarItemStyle: ({focused}) => ({
+          ...styles.tabBarItemStyle,
+          backgroundColor: focused ? appColors.primary + '15' : 'transparent',
+        }),
         tabBarActiveTintColor: appColors.primary,
         tabBarInactiveTintColor: appColors.gray,
         tabBarLabelStyle: {
           fontSize: 11,
           fontFamily: fontFamilies.medium,
-          marginBottom: Platform.OS === 'ios' ? 0 : 5, // ✅ Adjust for Android
+          marginBottom: Platform.OS === 'ios' ? 0 : 5,
+          marginTop: 4,
         },
         tabBarStyle: [
           styles.tabBarStyle,
           {
             paddingBottom:
               Platform.OS === 'ios'
-                ? Math.max(insets.bottom - 10, 10) // ✅ Dynamic safe area
-                : 10,
+                ? Math.max(insets.bottom - 5, 8)
+                : 8,
+            paddingTop: 8,
             height:
               Platform.OS === 'ios'
-                ? 85 + Math.max(insets.bottom - 20, 0) // ✅ Dynamic height
-                : 70,
+                ? 90 + Math.max(insets.bottom - 15, 0)
+                : 75,
           },
         ],
-        tabBarItemStyle: styles.tabBarItemStyle,
       })}>
       <Tab.Screen
         name="PTHome"
@@ -120,25 +125,28 @@ export default PTTabNavigator;
 const styles = StyleSheet.create({
   tabBarStyle: {
     backgroundColor: appColors.white,
-    borderTopWidth: 0.5,
-    borderTopColor: appColors.gray4,
+    borderTopWidth: 0,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -2,
+      height: -4,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 10,
-    borderTopLeftRadius: 20, 
-    borderTopRightRadius: 20,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 15,
+    borderTopLeftRadius: 24, 
+    borderTopRightRadius: 24,
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
+    paddingHorizontal: 8,
   },
   tabBarItemStyle: {
-    paddingTop: 8, 
-    marginBottom: 4,
+    paddingTop: 4,
+    paddingBottom: 4,
+    marginHorizontal: 4,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
   },
 });
