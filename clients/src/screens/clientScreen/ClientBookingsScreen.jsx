@@ -20,18 +20,37 @@ import { Calendar, Clock, User, More, Refresh2 } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
 import moment from 'moment';
+import { useSelector } from 'react-redux';
+import { authSelector } from '../../redux/reducers/authReducer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ClientBookingsScreen = ({ navigation }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const currentUser = useSelector(authSelector);
+
   useEffect(() => {
+    console.log('Current user data:', currentUser);
     loadBookings();
-  }, []);
+  }, [currentUser]);
 
   const loadBookings = async () => {
     try {
+      console.log('=== BOOKING REQUEST DEBUG ===');
+      console.log('Current user before API call:', currentUser);
+      console.log('User role:', currentUser?.role);
+      console.log('User ID:', currentUser?.id);
+      
+      // Check AsyncStorage token
+      const authData = await AsyncStorage.getItem('auth');
+      if (authData) {
+        const parsedAuth = JSON.parse(authData);
+        console.log('Token from storage:', parsedAuth.accesstoken || parsedAuth.token);
+        console.log('Role from storage:', parsedAuth.role);
+      }
+      
       setLoading(true);
       const response = await ptApi.getMyBookings();
       

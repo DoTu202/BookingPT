@@ -1,6 +1,6 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {Text} from 'react-native';
+import {Text, View} from 'react-native';
 import {Home, Calendar, Clock, DollarSign, User} from 'lucide-react-native';
 import appColors from '../constants/appColors';
 import {StyleSheet, Platform} from 'react-native';
@@ -12,7 +12,10 @@ import {
   PTHomeScreen,
   PTEarningScreen,
   PTProfileScreen,
+  PTProfileViewScreen,
+  ProfileTabScreen
 } from '../screens/ptScreen';
+
 
 const Tab = createBottomTabNavigator();
 
@@ -47,17 +50,18 @@ const PTTabNavigator = () => {
           }
 
           return (
-            <IconComponent
-              size={focused ? 24 : 22}
-              color={color}
-              strokeWidth={focused ? 2.5 : 2}
-            />
+            <View style={[
+              styles.iconContainer,
+              focused && styles.iconContainerFocused
+            ]}>
+              <IconComponent
+                size={focused ? 24 : 22}
+                color={color}
+                strokeWidth={focused ? 2.5 : 2}
+              />
+            </View>
           );
         },
-        tabBarItemStyle: ({focused}) => ({
-          ...styles.tabBarItemStyle,
-          backgroundColor: focused ? appColors.primary + '15' : 'transparent',
-        }),
         tabBarActiveTintColor: appColors.primary,
         tabBarInactiveTintColor: appColors.gray,
         tabBarLabelStyle: {
@@ -111,7 +115,7 @@ const PTTabNavigator = () => {
       />
       <Tab.Screen
         name="PTProfile"
-        component={PTProfileScreen}
+        component={ProfileTabScreen}
         options={{
           tabBarLabel: 'Profile',
         }}
@@ -148,5 +152,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     borderRadius: 12,
     backgroundColor: 'transparent',
+  },
+  iconContainer: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  iconContainerFocused: {
+    backgroundColor: appColors.primary + '15',
   },
 });

@@ -65,7 +65,7 @@ const ClientProfileScreen = ({ navigation }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => { /* ... Logic to delete account ... */ },
+          onPress: () => {},
         },
       ]
     );
@@ -124,7 +124,7 @@ const ClientProfileScreen = ({ navigation }) => {
           id: 'logout',
           title: 'Logout',
           icon: LogoutCurve,
-          color: appColors.danger, // THAY ĐỔI: Thêm màu để định dạng mục nguy hiểm
+          color: appColors.danger, 
           onPress: handleLogout,
         },
         {
@@ -138,9 +138,9 @@ const ClientProfileScreen = ({ navigation }) => {
     }
   ];
 
-  // THAY ĐỔI: Hàm render một item trong menu, được thiết kế lại hoàn toàn
+
   const renderMenuItem = (item) => {
-    const IconComponent = item.icon; // Lấy component Icon từ item
+    const IconComponent = item.icon; 
     const iconColor = item.color || appColors.primary;
 
     return (
@@ -171,7 +171,12 @@ const ClientProfileScreen = ({ navigation }) => {
         <TextComponent text="Profile" size={22} font={fontFamilies.bold} color={appColors.white}/>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        bounces={true}
+      >
         {/* THAY ĐỔI: Profile Card được thiết kế lại để nằm trên cùng */}
         <View style={styles.profileSection}>
             <View style={styles.profileCard}>
@@ -226,7 +231,7 @@ const ClientProfileScreen = ({ navigation }) => {
             </View>
         ))}
 
-        <SpaceComponent height={40} />
+        <SpaceComponent height={120} />
       </ScrollView>
     </View>
   );
@@ -234,11 +239,15 @@ const ClientProfileScreen = ({ navigation }) => {
 
 export default ClientProfileScreen;
 
-// THAY ĐỔI: Toàn bộ stylesheet được viết lại để phù hợp với thiết kế mới
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.lightGray, // Nền xám nhạt để làm nổi bật thẻ trắng
+    backgroundColor: appColors.lightGray, 
+  },
+  scrollContent: {
+    paddingBottom: 120,
+    flexGrow: 1,
   },
   header: {
     backgroundColor: appColors.primary,
@@ -250,7 +259,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   profileSection: {
-    backgroundColor: appColors.white, // Phần profile có nền trắng liền với header
+    backgroundColor: appColors.white, 
     paddingBottom: 24,
   },
   profileCard: {

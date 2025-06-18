@@ -14,7 +14,8 @@ import {
   ChatScreen,
 } from '../screens/commonScreen';
 
-import {PTClientsScreen} from '../screens/ptScreen';
+import {PTClientsScreen, PTProfileScreen} from '../screens/ptScreen';
+
 
 import {
   PTDetailScreen,
@@ -86,6 +87,15 @@ const MainNavigator = () => {
               title: 'My Clients',
               headerTintColor: appColors.primary,
               headerBackTitleVisible: false,
+            }}
+          />
+
+          <Stack.Screen
+            name="PTProfileScreen"
+            component={PTProfileScreen}
+            options={{
+              headerShown: false,
+              gestureEnabled: true,
             }}
           />
         </>

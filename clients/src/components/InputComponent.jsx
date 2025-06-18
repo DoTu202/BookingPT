@@ -11,7 +11,9 @@ const InputComponent = props => {
   const {
     value,
     onChange,
+    onChangeText, // Add support for onChangeText
     affix,
+    prefix, // Add support for prefix (alias for affix)
     suffix,
     placeholder,
     isPassword,
@@ -19,10 +21,14 @@ const InputComponent = props => {
     type,
     isOtp,
     maxLength,
-    onEnd
+    onEnd,
+    ...otherProps // Pass through other props like multiline, numberOfLines, style
   } = props;
   const [isShowPass, setIsShowPass] = useState(isPassword ?? false);
   const [isFocused, setIsFocused] = useState(false);
+
+  // Use prefix or affix
+  const prefixIcon = prefix || affix;
 
   return (
     <View
@@ -37,17 +43,19 @@ const InputComponent = props => {
         style={[
           styles.input, 
           {backgroundColor: 'transparent'},
-          isOtp && styles.otpText
+          isOtp && styles.otpText,
+          otherProps.style // Allow custom style override
         ]}
         placeholder={placeholder ?? ''}
         value={value}
-        onChangeText={val => onChange(val)}
+        onChangeText={val => (onChangeText || onChange)?.(val)} // Support both props
         secureTextEntry={isShowPass}
         placeholderTextColor={appColors.placeholder}
         keyboardType={type || (isOtp ? 'numeric' : 'default')}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         maxLength={maxLength}
+        {...otherProps} // Pass through other TextInput props like multiline, numberOfLines
         textAlign={isOtp ? 'center' : 'left'} //OTP
         autoCapitalize="none"
         onEndEditing={onEnd}
@@ -57,7 +65,7 @@ const InputComponent = props => {
       {!isOtp && (
         <TouchableOpacity
           onPress={
-            isPassword ? () => setIsShowPass(!isShowPass) : () => onChange('')
+            isPassword ? () => setIsShowPass(!isShowPass) : () => (onChangeText || onChange)?.('')
           }>
           {isPassword ? (
             <EyeSlash size={22} color={appColors.gray} />

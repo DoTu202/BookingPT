@@ -4,11 +4,13 @@ import {
   View,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   Alert,
   Modal,
+  Platform,
 } from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   SectionComponent,
   RowComponent,
@@ -36,6 +38,8 @@ const PTAvailabilityScreen = ({ navigation }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingSlot, setEditingSlot] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [newSlot, setNewSlot] = useState({
     startTime: '',
     endTime: '',
@@ -233,7 +237,7 @@ const PTAvailabilityScreen = ({ navigation }) => {
           const isSelected = date.toDateString() === selectedDate.toDateString();
           return (
             <TouchableOpacity
-              key={index}
+              key={date.toDateString()}
               style={[
                 styles.dateButton,
                 isSelected && styles.selectedDateButton
@@ -263,11 +267,12 @@ const PTAvailabilityScreen = ({ navigation }) => {
       visible={showAddModal}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={() => setShowAddModal(false)}
+      onRequestClose={handleModalClose}
     >
-      <View style={styles.modalContainer}>
+    <SafeAreaView style={styles.modalContainer}>
+  
         <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={() => setShowAddModal(false)}>
+          <TouchableOpacity onPress={handleModalClose}>
             <TextComponent
               text="Cancel"
               size={16}
@@ -290,7 +295,7 @@ const PTAvailabilityScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.modalContent}>
+        <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
           <SectionComponent>
             <TextComponent
               text="Date"
@@ -318,11 +323,17 @@ const PTAvailabilityScreen = ({ navigation }) => {
               color={appColors.black}
             />
             <SpaceComponent height={8} />
-            <InputComponent
-              value={newSlot.startTime}
-              onChangeText={(text) => setNewSlot({ ...newSlot, startTime: text })}
-              placeholder="08:00"
-            />
+            <TouchableOpacity 
+              style={styles.timeInput}
+              onPress={() => setShowStartTimePicker(true)}
+            >
+              <TextComponent
+                text={newSlot.startTime || "Select start time"}
+                size={16}
+                color={newSlot.startTime ? appColors.black : appColors.gray}
+              />
+              <Clock size={20} color={appColors.primary} />
+            </TouchableOpacity>
           </SectionComponent>
 
           <SectionComponent>
@@ -333,34 +344,120 @@ const PTAvailabilityScreen = ({ navigation }) => {
               color={appColors.black}
             />
             <SpaceComponent height={8} />
-            <InputComponent
-              value={newSlot.endTime}
-              onChangeText={(text) => setNewSlot({ ...newSlot, endTime: text })}
-              placeholder="09:00"
-            />
+            <TouchableOpacity 
+              style={styles.timeInput}
+              onPress={() => setShowEndTimePicker(true)}
+            >
+              <TextComponent
+                text={newSlot.endTime || "Select end time"}
+                size={16}
+                color={newSlot.endTime ? appColors.black : appColors.gray}
+              />
+              <Clock size={20} color={appColors.primary} />
+            </TouchableOpacity>
           </SectionComponent>
-        </View>
-      </View>
+        </ScrollView>
+
+        {/* Time Pickers */}
+        {showStartTimePicker && (
+          <DateTimePicker
+            value={createTimeFromString(newSlot.startTime)}
+            mode="time"
+            is24Hour={false}
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleStartTimeChange}
+          />
+        )}
+        
+        {showEndTimePicker && (
+          <DateTimePicker
+            value={createTimeFromString(newSlot.endTime)}
+            mode="time"
+            is24Hour={false}
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleEndTimeChange}
+          />
+        )}
+      </SafeAreaView>
     </Modal>
   );
 
+  const resetModal = () => {
+    setEditingSlot(null);
+    setNewSlot({
+      startTime: '',
+      endTime: '',
+      date: '',
+    });
+    setShowStartTimePicker(false);
+    setShowEndTimePicker(false);
+  };
+
+  const handleModalClose = () => {
+    setShowAddModal(false);
+    resetModal();
+  };
+
+  const formatTimeForInput = (time) => {
+    if (!time) return '';
+    const date = new Date(time);
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  const handleStartTimeChange = (event, selectedTime) => {
+    if (Platform.OS === 'android') {
+      setShowStartTimePicker(false);
+    }
+    if (selectedTime) {
+      const timeString = formatTimeForInput(selectedTime);
+      setNewSlot({ ...newSlot, startTime: timeString });
+    }
+  };
+
+  const handleEndTimeChange = (event, selectedTime) => {
+    if (Platform.OS === 'android') {
+      setShowEndTimePicker(false);
+    }
+    if (selectedTime) {
+      const timeString = formatTimeForInput(selectedTime);
+      setNewSlot({ ...newSlot, endTime: timeString });
+    }
+  };
+
+  const createTimeFromString = (timeString) => {
+    if (!timeString) return new Date();
+    const [hours, minutes] = timeString.split(':');
+    const date = new Date();
+    date.setHours(parseInt(hours) || 8, parseInt(minutes) || 0, 0, 0);
+    return date;
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
       
       {/* Header */}
       <View style={styles.header}>
         <RowComponent justify="space-between">
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft size={24} color={appColors.white} />
+            <ArrowLeft size={24} color={appColors.white} style={{marginTop: 40}} />
           </TouchableOpacity>
           <TextComponent
             text="My Availability"
             size={20}
             font="Poppins-Bold"
             color={appColors.white}
+            styles={{marginTop: 40}}
+            
           />
-          <TouchableOpacity onPress={() => setShowAddModal(true)}>
+          <TouchableOpacity onPress={() => {
+            resetModal();
+            setShowAddModal(true);
+          }}>
             <Add size={24} color={appColors.white} />
           </TouchableOpacity>
         </RowComponent>
@@ -390,7 +487,7 @@ const PTAvailabilityScreen = ({ navigation }) => {
         <SectionComponent>
           {availabilitySlots.length > 0 ? (
             availabilitySlots.map((slot, index) => (
-              <View key={slot.id}>
+              <View key={slot._id || slot.id || `slot-${index}`}>
                 <AvailabilitySlot slot={slot} />
                 {index < availabilitySlots.length - 1 && <SpaceComponent height={12} />}
               </View>
@@ -417,7 +514,10 @@ const PTAvailabilityScreen = ({ navigation }) => {
               <ButtonComponent
                 text="Add First Slot"
                 type="primary"
-                onPress={() => setShowAddModal(true)}
+                onPress={() => {
+                  resetModal();
+                  setShowAddModal(true);
+                }}
               />
             </View>
           )}
@@ -439,13 +539,16 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: appColors.primary,
     paddingHorizontal: 20,
-    paddingTop: 20,
     paddingBottom: 20,
+    paddingTop: 20,
+    height: 140,
+    borderRadius: 20,
+
   },
   content: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 60,
   },
   dateSelector: {
     marginBottom: 20,
@@ -505,6 +608,16 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: appColors.gray2,
     borderRadius: 8,
+  },
+  timeInput: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: appColors.gray2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: appColors.gray3,
   },
 });
 

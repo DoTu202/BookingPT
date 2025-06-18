@@ -9,8 +9,8 @@ import {
   Modal,
   TextInput,
   StatusBar,
-  SafeAreaView,
 } from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {
   SectionComponent,
   RowComponent,

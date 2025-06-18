@@ -57,44 +57,20 @@ const ptApi = {
 
   // Dashboard/Stats APIs
   getDashboardStats: async () => {
+    const url = '/api/pt/dashboard/stats';
+    return axiosClient.get(url);
+  },
+
+  getTodayBookings: async () => {
+    const url = '/api/pt/dashboard/today-bookings';
+    return axiosClient.get(url);
+  },
+
+  getRecentClients: async () => {
     try {
-      const [bookingsResponse, profileResponse] = await Promise.all([
-        ptApi.getBookings(),
-        ptApi.getProfile()
-      ]);
-
-      const bookings = bookingsResponse.data?.data || [];
-      const profile = profileResponse.data?.data || {};
-
-      // Calculate stats
-      const today = new Date().toISOString().split('T')[0];
-      const todayBookings = bookings.filter(booking => 
-        booking.date === today && booking.status === 'confirmed'
-      ).length;
-
-      const thisMonth = new Date().getMonth();
-      const thisYear = new Date().getFullYear();
-      const monthlyEarnings = bookings
-        .filter(booking => {
-          const bookingDate = new Date(booking.date);
-          return bookingDate.getMonth() === thisMonth &&
-                 bookingDate.getFullYear() === thisYear &&
-                 booking.status === 'completed';
-        })
-        .reduce((total, booking) => total + (booking.price || 0), 0);
-
-      const uniqueClients = new Set(
-        bookings.map(booking => booking.client?._id || booking.clientId)
-      ).size;
-
-      const upcomingBookings = bookings
-        .filter(booking => {
-          const bookingDate = new Date(booking.date);
-          const today = new Date();
-          return bookingDate >= today && booking.status === 'confirmed';
-        })
-        .slice(0, 3);
-
+      const response = await ptApi.getBookings();
+      const bookings = response.data?.data || [];
+      
       // Process recent clients
       const clientsMap = {};
       bookings.forEach(booking => {
@@ -104,11 +80,11 @@ const ptApi = {
         if (clientId && client) {
           if (!clientsMap[clientId]) {
             clientsMap[clientId] = {
-              id: clientId,
-              name: client.fullName || client.name || 'Unknown Client',
+              _id: clientId,
+              username: client.fullName || client.name || 'Unknown Client',
               totalSessions: 0,
               totalSpent: 0,
-              lastBookingDate: null,
+              lastSession: null,
             };
           }
           
@@ -120,30 +96,88 @@ const ptApi = {
           
           // Track latest booking
           const bookingDate = new Date(booking.date);
-          if (!clientsMap[clientId].lastBookingDate || bookingDate > clientsMap[clientId].lastBookingDate) {
-            clientsMap[clientId].lastBookingDate = bookingDate;
+          if (!clientsMap[clientId].lastSession || bookingDate > new Date(clientsMap[clientId].lastSession)) {
+            clientsMap[clientId].lastSession = booking.date;
           }
         }
       });
 
-      // Get recent clients (sorted by last booking date)
+      // Get recent clients (sorted by last session date)
       const recentClients = Object.values(clientsMap)
-        .sort((a, b) => (b.lastBookingDate || 0) - (a.lastBookingDate || 0))
+        .sort((a, b) => new Date(b.lastSession || 0) - new Date(a.lastSession || 0))
         .slice(0, 5);
 
+      return { data: recentClients };
+    } catch (error) {
+      console.error('Error getting recent clients:', error);
+      return { data: [] };
+    }
+  },
+
+  getRecentReviews: async () => {
+    try {
+      // This would typically call a reviews endpoint
+      // For now, return empty array as this endpoint may not exist yet
+      return { data: [] };
+    } catch (error) {
+      console.error('Error getting recent reviews:', error);
+      return { data: [] };
+    }
+  },
+
+  getNotifications: async () => {
+    try {
+      // This would typically call a notifications endpoint
+      // For now, return empty array as this endpoint may not exist yet
+      return { data: [] };
+    } catch (error) {
+      console.error('Error getting notifications:', error);
+      return { data: [] };
+    }
+  },
+
+  // Earnings APIs
+  getEarningsStats: async (period = 'month') => {
+    try {
+      const response = await ptApi.getBookings();
+      const bookings = response.data?.data || [];
+      
+      const completedBookings = bookings.filter(b => b.status === 'completed');
+      
+      const now = new Date();
+      let startDate;
+      
+      switch (period) {
+        case 'week':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay());
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear(), 0, 1);
+          break;
+        default: // month
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+      
+      const periodBookings = completedBookings.filter(booking => {
+        const bookingDate = new Date(booking.date);
+        return bookingDate >= startDate;
+      });
+      
+      const totalEarnings = periodBookings.reduce((total, booking) => total + (booking.price || 0), 0);
+      const totalSessions = periodBookings.length;
+      const averagePerSession = totalSessions > 0 ? totalEarnings / totalSessions : 0;
+      
       return {
         data: {
-          todayBookings,
-          monthlyEarnings,
-          totalClients: uniqueClients,
-          rating: profile.rating || 0,
-          upcomingBookings,
-          recentClients,
-          recentActivity: []
+          totalEarnings,
+          totalSessions,
+          averagePerSession,
+          period,
+          bookings: periodBookings
         }
       };
     } catch (error) {
-      console.error('Error getting dashboard stats:', error);
+      console.error('Error getting earnings stats:', error);
       throw error;
     }
   },
