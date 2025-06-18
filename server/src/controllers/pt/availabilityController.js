@@ -12,9 +12,35 @@ const addAvailability = asyncHandler(async (req, res) => {
     });
   }
 
+  // Validate and parse time format
+  console.log('=== BACKEND AVAILABILITY DEBUG ===');
+  console.log('Received data:', { date, startTime, endTime });
+  
+  // Ensure time format is HH:MM
+  const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+  if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
+    return res.status(400).json({
+      message: 'Invalid time format. Expected HH:MM',
+    });
+  }
+
   // Combine date with time to create full Date objects
-  const _startTime = new Date(`${date}T${startTime}:00`);
-  const _endTime = new Date(`${date}T${endTime}:00`);
+  const startDateTime = `${date}T${startTime}:00.000Z`;
+  const endDateTime = `${date}T${endTime}:00.000Z`;
+  
+  console.log('DateTime strings:', { startDateTime, endDateTime });
+  
+  const _startTime = new Date(startDateTime);
+  const _endTime = new Date(endDateTime);
+  
+  console.log('Parsed dates:', { _startTime, _endTime });
+  
+  // Check if dates are valid
+  if (isNaN(_startTime.getTime()) || isNaN(_endTime.getTime())) {
+    return res.status(400).json({
+      message: 'Invalid date or time format',
+    });
+  }
 
   if (_endTime <= _startTime) {
     return res.status(400).json({
@@ -28,6 +54,8 @@ const addAvailability = asyncHandler(async (req, res) => {
   }
 
   // Check if the PT is already booked or unavailable during this time
+  console.log('Checking for overlapping slots...');
+  
   const overlappingAvailability = await Availability.findOne({
     pt: ptId,
     $or: [
@@ -43,12 +71,18 @@ const addAvailability = asyncHandler(async (req, res) => {
       },
     ],
   });
+  
+  console.log('Overlapping availability found:', overlappingAvailability);
+  
   if (overlappingAvailability) {
+    console.log('Blocking creation due to overlap');
     return res.status(400).json({
       message: 'This time slot is already booked or unavailable',
     });
   }
 
+  console.log('No overlap found, creating new availability...');
+  
   const newAvailability = new Availability({
     pt: ptId,
     startTime: _startTime,
@@ -56,7 +90,10 @@ const addAvailability = asyncHandler(async (req, res) => {
     status: 'available',
   });
 
+  console.log('Saving new availability:', newAvailability);
   await newAvailability.save();
+  console.log('Successfully saved availability with ID:', newAvailability._id);
+  
   res.status(201).json({
     message: 'Availability added successfully',
     data: newAvailability,
@@ -97,22 +134,77 @@ const updateAvailability = asyncHandler(async (req, res) => {
   let _startTime = availability.startTime;
   let _endTime = availability.endTime;
 
+  console.log('=== UPDATE AVAILABILITY DEBUG ===');
+  console.log('Received data:', { date, startTime, endTime, status });
+  
   // If date and time are provided, combine them
   if (date && startTime) {
-    _startTime = new Date(`${date}T${startTime}:00`);
+    // Validate time format
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(startTime)) {
+      return res.status(400).json({
+        message: 'Invalid start time format. Expected HH:MM',
+      });
+    }
+    const startDateTime = `${date}T${startTime}:00.000Z`;
+    _startTime = new Date(startDateTime);
+    if (isNaN(_startTime.getTime())) {
+      return res.status(400).json({
+        message: 'Invalid start date or time format',
+      });
+    }
   } else if (startTime) {
     // If only time is provided, use existing date
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(startTime)) {
+      return res.status(400).json({
+        message: 'Invalid start time format. Expected HH:MM',
+      });
+    }
     const existingDate = availability.startTime.toISOString().split('T')[0];
-    _startTime = new Date(`${existingDate}T${startTime}:00`);
+    const startDateTime = `${existingDate}T${startTime}:00.000Z`;
+    _startTime = new Date(startDateTime);
+    if (isNaN(_startTime.getTime())) {
+      return res.status(400).json({
+        message: 'Invalid start date or time format',
+      });
+    }
   }
 
   if (date && endTime) {
-    _endTime = new Date(`${date}T${endTime}:00`);
+    // Validate time format
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(endTime)) {
+      return res.status(400).json({
+        message: 'Invalid end time format. Expected HH:MM',
+      });
+    }
+    const endDateTime = `${date}T${endTime}:00.000Z`;
+    _endTime = new Date(endDateTime);
+    if (isNaN(_endTime.getTime())) {
+      return res.status(400).json({
+        message: 'Invalid end date or time format',
+      });
+    }
   } else if (endTime) {
     // If only time is provided, use existing date
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(endTime)) {
+      return res.status(400).json({
+        message: 'Invalid end time format. Expected HH:MM',
+      });
+    }
     const existingDate = availability.endTime.toISOString().split('T')[0];
-    _endTime = new Date(`${existingDate}T${endTime}:00`);
+    const endDateTime = `${existingDate}T${endTime}:00.000Z`;
+    _endTime = new Date(endDateTime);
+    if (isNaN(_endTime.getTime())) {
+      return res.status(400).json({
+        message: 'Invalid end date or time format',
+      });
+    }
   }
+  
+  console.log('Parsed dates:', { _startTime, _endTime });
 
   if (_endTime <= _startTime) {
     res.status(400);
@@ -159,7 +251,7 @@ const updateAvailability = asyncHandler(async (req, res) => {
 
 //Get availability for PT
 const getAvailabilitySlots = asyncHandler(async (req, res) => {
-  const {status, startDate, endDate} = req.query;
+  const {status, startDate, endDate, date} = req.query;
   const queryOptions = {pt: req.user._id};
 
   if (status) {
@@ -170,16 +262,26 @@ const getAvailabilitySlots = asyncHandler(async (req, res) => {
     queryOptions.status = status;
   }
 
-  if (startDate) {
-    queryOptions.startTime = {
-      ...queryOptions.startTime,
-      $gte: new Date(startDate),
-    };
-  }
-  if (endDate) {
-    let endOfDay = new Date(endDate);
-    endOfDay.setHours(23, 59, 59, 999);
-    queryOptions.endTime = {...queryOptions.endTime, $lte: endOfDay};
+  // Handle single date parameter (for backward compatibility)
+  if (date && !startDate && !endDate) {
+    const start = new Date(date + 'T00:00:00.000Z');
+    const end = new Date(date + 'T23:59:59.999Z');
+    queryOptions.startTime = {$gte: start, $lte: end};
+  } else {
+    // Handle date range
+    if (startDate) {
+      const start = new Date(startDate + 'T00:00:00.000Z');
+      queryOptions.startTime = {$gte: start};
+    }
+    
+    if (endDate) {
+      const end = new Date(endDate + 'T23:59:59.999Z');
+      if (queryOptions.startTime) {
+        queryOptions.startTime = {...queryOptions.startTime, $lte: end};
+      } else {
+        queryOptions.startTime = {$lte: end};
+      }
+    }
   }
 
   const slots = await Availability.find(queryOptions).sort({startTime: 'asc'});

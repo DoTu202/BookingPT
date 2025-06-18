@@ -199,21 +199,22 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   const queryOptions = {
     pt: ptId,
     status: 'available',
-    startTime: {$gte: new Date()}, // Chỉ lấy các slot trong tương lai
   };
 
   if (startDate) {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    queryOptions.startTime = {...queryOptions.startTime, $gte: start};
+    // Parse date in UTC to avoid timezone issues
+    const start = new Date(startDate + 'T00:00:00.000Z');
+    queryOptions.startTime = {$gte: start};
   }
+  
   if (endDate) {
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-    // startTime phải nhỏ hơn hoặc bằng endDate để slot có ý nghĩa
-    queryOptions.startTime = {...queryOptions.startTime, $lte: end};
-    // endTime có thể được dùng để giới hạn các slot kết thúc trong khoảng này
-    queryOptions.endTime = {...queryOptions.endTime, $lte: end};
+    // Parse date in UTC to avoid timezone issues
+    const end = new Date(endDate + 'T23:59:59.999Z');
+    if (queryOptions.startTime) {
+      queryOptions.startTime = {...queryOptions.startTime, $lte: end};
+    } else {
+      queryOptions.startTime = {$lte: end};
+    }
   }
 
   const slots = await Availability.find(queryOptions).sort({startTime: 'asc'});
@@ -331,7 +332,6 @@ const getClientBookings = asyncHandler(async (req, res) => {
   if (upcoming === 'true') {
     queryOptions['bookingTime.startTime'] = {$gte: new Date()};
     if (!status) {
-      // Nếu chỉ lọc upcoming, thì lấy cả pending và confirmed
       queryOptions.status = {$in: ['pending_confirmation', 'confirmed']};
     }
   }
@@ -345,7 +345,6 @@ const getClientBookings = asyncHandler(async (req, res) => {
   const count = await Booking.countDocuments(queryOptions);
   console.log('Count found:', count);
   
-  // Get bookings với populate đơn giản
   const bookings = await Booking.find(queryOptions)
     .populate('pt', 'username email photoUrl')
     .populate('availabilitySlot', 'startTime endTime')
@@ -374,16 +373,6 @@ const getClientBookings = asyncHandler(async (req, res) => {
       return booking.toObject();
     })
   );
-
-  // Để populate ptProfile, bạn cần đảm bảo có một cách liên kết từ User (PT) đến PTProfile.
-  // Nếu bạn có 1 virtual populate trong UserModel để trỏ đến PTProfile, cách trên sẽ dễ hơn.
-  // Cách khác là query riêng PTProfile sau khi lấy booking nếu cần nhiều thông tin hơn.
-  // Ví dụ đơn giản hơn:
-  // const bookings = await Booking.find(queryOptions)
-  //     .populate('pt', 'username email photoUrl')
-  //     .sort({ 'bookingTime.startTime': upcoming === 'true' ? 'asc' : 'desc' })
-  //     .limit(pageSize)
-  //     .skip(pageSize * (page - 1));
 
   res.status(200).json({
     message: 'Lấy danh sách lịch đặt của bạn thành công.',
