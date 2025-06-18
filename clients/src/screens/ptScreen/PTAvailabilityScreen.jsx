@@ -31,6 +31,7 @@ import {
 } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
+import { formatTime, extractTimeFromISO } from '../../utils/timeUtils';
 
 const PTAvailabilityScreen = ({ navigation }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -55,19 +56,28 @@ const PTAvailabilityScreen = ({ navigation }) => {
       setLoading(true);
       const dateString = selectedDate.toISOString().split('T')[0];
       
+      console.log('=== LOADING AVAILABILITY ===');
+      console.log('Loading slots for date:', dateString);
+      
       const response = await ptApi.getAvailabilitySlots({
         date: dateString
       });
       
+      console.log('Load response:', response.data);
+      
       if (response.data && response.data.data) {
+        console.log('Setting slots from response.data.data:', response.data.data);
         setAvailabilitySlots(response.data.data);
       } else if (response.data && Array.isArray(response.data)) {
+        console.log('Setting slots from response.data array:', response.data);
         setAvailabilitySlots(response.data);
       } else {
+        console.log('No slots found, setting empty array');
         setAvailabilitySlots([]);
       }
     } catch (error) {
       console.error('Error loading availability slots:', error);
+      console.error('Error details:', error.response?.data);
       setAvailabilitySlots([]);
     } finally {
       setLoading(false);
@@ -87,11 +97,18 @@ const PTAvailabilityScreen = ({ navigation }) => {
         endTime: newSlot.endTime,
       };
 
+      console.log('=== DEBUG AVAILABILITY ===');
+      console.log('newSlot:', newSlot);
+      console.log('selectedDate:', selectedDate);
+      console.log('slotData being sent:', slotData);
+
       if (editingSlot) {
-        await ptApi.updateAvailabilitySlot(editingSlot._id || editingSlot.id, slotData);
+        const response = await ptApi.updateAvailabilitySlot(editingSlot._id || editingSlot.id, slotData);
+        console.log('Update response:', response.data);
         Alert.alert('Success', 'Availability slot updated successfully');
       } else {
-        await ptApi.addAvailabilitySlot(slotData);
+        const response = await ptApi.addAvailabilitySlot(slotData);
+        console.log('Add response:', response.data);
         Alert.alert('Success', 'Availability slot added successfully');
       }
 
@@ -101,6 +118,7 @@ const PTAvailabilityScreen = ({ navigation }) => {
       await loadAvailabilitySlots();
     } catch (error) {
       console.error('Error saving slot:', error);
+      console.error('Error details:', error.response?.data);
       Alert.alert('Error', 'Failed to save availability slot');
     }
   };
@@ -135,17 +153,6 @@ const PTAvailabilityScreen = ({ navigation }) => {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
-    });
-  };
-
-  const formatTime = (timeString) => {
-    const [hours, minutes] = timeString.split(':');
-    const time = new Date();
-    time.setHours(parseInt(hours), parseInt(minutes));
-    return time.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
     });
   };
 
@@ -208,8 +215,8 @@ const PTAvailabilityScreen = ({ navigation }) => {
               onPress={() => {
                 setEditingSlot(slot);
                 setNewSlot({
-                  startTime: slot.startTime,
-                  endTime: slot.endTime,
+                  startTime: extractTimeFromISO(slot.startTime),
+                  endTime: extractTimeFromISO(slot.endTime),
                   date: slot.date,
                 });
                 setShowAddModal(true);
@@ -248,7 +255,7 @@ const PTAvailabilityScreen = ({ navigation }) => {
                 text={date.getDate().toString()}
                 size={16}
                 font="Poppins-SemiBold"
-                color={isSelected ? appColors.white : appColors.gray}
+                color={isSelected ? appColors.white : appColors.black}
               />
               <TextComponent
                 text={date.toLocaleDateString('en-US', { weekday: 'short' })}
@@ -360,23 +367,49 @@ const PTAvailabilityScreen = ({ navigation }) => {
 
         {/* Time Pickers */}
         {showStartTimePicker && (
-          <DateTimePicker
-            value={createTimeFromString(newSlot.startTime)}
-            mode="time"
-            is24Hour={false}
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleStartTimeChange}
-          />
+          <View>
+            {Platform.OS === 'ios' && (
+              <View style={styles.pickerHeader}>
+                <TouchableOpacity onPress={() => setShowStartTimePicker(false)}>
+                  <TextComponent text="Cancel" size={16} color={appColors.primary} />
+                </TouchableOpacity>
+                <TextComponent text="Select Start Time" size={16} font="Poppins-SemiBold" />
+                <TouchableOpacity onPress={() => setShowStartTimePicker(false)}>
+                  <TextComponent text="Done" size={16} color={appColors.primary} font="Poppins-SemiBold" />
+                </TouchableOpacity>
+              </View>
+            )}
+            <DateTimePicker
+              value={createTimeFromString(newSlot.startTime)}
+              mode="time"
+              is24Hour={true}
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleStartTimeChange}
+            />
+          </View>
         )}
         
         {showEndTimePicker && (
-          <DateTimePicker
-            value={createTimeFromString(newSlot.endTime)}
-            mode="time"
-            is24Hour={false}
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleEndTimeChange}
-          />
+          <View>
+            {Platform.OS === 'ios' && (
+              <View style={styles.pickerHeader}>
+                <TouchableOpacity onPress={() => setShowEndTimePicker(false)}>
+                  <TextComponent text="Cancel" size={16} color={appColors.primary} />
+                </TouchableOpacity>
+                <TextComponent text="Select End Time" size={16} font="Poppins-SemiBold" />
+                <TouchableOpacity onPress={() => setShowEndTimePicker(false)}>
+                  <TextComponent text="Done" size={16} color={appColors.primary} font="Poppins-SemiBold" />
+                </TouchableOpacity>
+              </View>
+            )}
+            <DateTimePicker
+              value={createTimeFromString(newSlot.endTime)}
+              mode="time"
+              is24Hour={true}
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleEndTimeChange}
+            />
+          </View>
         )}
       </SafeAreaView>
     </Modal>
@@ -401,11 +434,12 @@ const PTAvailabilityScreen = ({ navigation }) => {
   const formatTimeForInput = (time) => {
     if (!time) return '';
     const date = new Date(time);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
+    if (isNaN(date.getTime())) return '';
+    
+    // Ensure consistent HH:MM format
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
   };
 
   const handleStartTimeChange = (event, selectedTime) => {
@@ -454,10 +488,13 @@ const PTAvailabilityScreen = ({ navigation }) => {
             styles={{marginTop: 40}}
             
           />
-          <TouchableOpacity onPress={() => {
-            resetModal();
-            setShowAddModal(true);
-          }}>
+          <TouchableOpacity 
+            onPress={() => {
+              resetModal();
+              setShowAddModal(true);
+            }}
+            style={{marginTop: 40}}
+          >
             <Add size={24} color={appColors.white} />
           </TouchableOpacity>
         </RowComponent>
@@ -557,10 +594,15 @@ const styles = StyleSheet.create({
     width: 60,
     height: 70,
     borderRadius: 35,
-    backgroundColor: appColors.gray2,
+    backgroundColor: appColors.white,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   selectedDateButton: {
     backgroundColor: appColors.primary,
@@ -575,9 +617,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: appColors.gray2,
+    backgroundColor: appColors.white,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -606,18 +653,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: appColors.gray2,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
   },
   timeInput: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 12,
-    backgroundColor: appColors.gray2,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: appColors.gray3,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: appColors.gray4,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
   },
 });
 

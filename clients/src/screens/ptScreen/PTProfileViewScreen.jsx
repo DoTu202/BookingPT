@@ -128,10 +128,7 @@ const PTProfileViewScreen = () => {
           style: 'destructive',
           onPress: () => {
             dispatch(removeAuth());
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Login' }],
-            });
+  
           },
         },
       ]
