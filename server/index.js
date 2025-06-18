@@ -16,7 +16,7 @@ app.use(cors());
 
 //api
 app.use('/auth', authRouter);
-app.use('/api/pts', ptRouter);
+app.use('/api/pt', ptRouter);
 app.use('/api/client', clientRouter);
 
 connectDB();
@@ -29,7 +29,6 @@ app.listen(PORT, '0.0.0.0', err => {
   } else {
     console.log(`Server is running on:`);
     console.log(`  - Local: http://localhost:${PORT}`);
-    console.log(`  - Network: http://10.255.179.65:${PORT}`);
-    console.log(`  ℹ️  For iOS Simulator, use localhost. For real device, use network IP.`);
+    console.log(` For iOS Simulator, use localhost. For real device, use network IP.`);
   }
 });

@@ -5,9 +5,10 @@ const {
   authorizeRoles,
 } = require('../middleware/authMiddleware');
 const {
-  getProfile,
-  updatePtProfile,
-} = require('../controllers/pt/profileController');
+  getPtProfile,
+  updatePtProfile: updateProfile,
+  deletePtProfile,
+} = require('../controllers/ptController');
 const {
   addAvailability,
   updateAvailability,
@@ -22,14 +23,20 @@ const {
   markBookingAsCompleted
 } = require('../controllers/pt/bookingPtController');
 
+const {
+  getDashboardStats,
+  getTodayBookings,
+} = require('../controllers/pt/dashboardController');
+
 
 
 const ptRouter = express.Router();
 
 ptRouter.use(authenticateToken, authorizeRoles('pt'));
 
-ptRouter.get('/profile', getProfile);
-ptRouter.put('/profile', updatePtProfile);
+ptRouter.get('/profile', getPtProfile);
+ptRouter.put('/profile', updateProfile);
+ptRouter.delete('/profile', deletePtProfile);
 
 ptRouter.post('/availability', addAvailability);
 ptRouter.put('/availability/:availabilityId', updateAvailability);
@@ -40,6 +47,10 @@ ptRouter.get('/bookings', getPtBookings);
 ptRouter.post('/bookings/:bookingId/confirm', confirmBooking);
 ptRouter.post('/bookings/:bookingId/reject', rejectBooking);
 ptRouter.post('/bookings/:bookingId/complete', markBookingAsCompleted);
+
+// Dashboard routes
+ptRouter.get('/dashboard/stats', getDashboardStats);
+ptRouter.get('/dashboard/today-bookings', getTodayBookings);
 
 
 module.exports = ptRouter;

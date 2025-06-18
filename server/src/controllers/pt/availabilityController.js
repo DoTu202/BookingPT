@@ -3,16 +3,18 @@ const asyncHandler = require('express-async-handler');
 const Booking = require('../../models/bookingModel');
 
 const addAvailability = asyncHandler(async (req, res) => {
-  const {startTime, endTime} = req.body;
+  const {date, startTime, endTime} = req.body;
   const ptId = req.user._id;
 
-  if (!startTime || !endTime) {
+  if (!date || !startTime || !endTime) {
     return res.status(400).json({
-      message: 'Start time and end time are required',
+      message: 'Date, start time and end time are required',
     });
   }
-  const _startTime = new Date(startTime);
-  const _endTime = new Date(endTime);
+
+  // Combine date with time to create full Date objects
+  const _startTime = new Date(`${date}T${startTime}:00`);
+  const _endTime = new Date(`${date}T${endTime}:00`);
 
   if (_endTime <= _startTime) {
     return res.status(400).json({
@@ -64,7 +66,7 @@ const addAvailability = asyncHandler(async (req, res) => {
 //Update availability for PT
 const updateAvailability = asyncHandler(async (req, res) => {
   const {availabilityId} = req.params;
-  const {startTime, endTime, status} = req.body;
+  const {date, startTime, endTime, status} = req.body;
   const ptId = req.user._id;
 
   const availability = await Availability.findOne({
@@ -80,8 +82,8 @@ const updateAvailability = asyncHandler(async (req, res) => {
   }
 
   if (availability.status === 'booked') {
-    const booking = await BookingModel.findOne({
-      availability: availabilityId,
+    const booking = await Booking.findOne({
+      availabilitySlot: availabilityId,
       status: {$in: ['pending', 'confirmed']},
     });
     if (booking) {
@@ -95,8 +97,22 @@ const updateAvailability = asyncHandler(async (req, res) => {
   let _startTime = availability.startTime;
   let _endTime = availability.endTime;
 
-  if (startTime) _startTime = new Date(startTime);
-  if (endTime) _endTime = new Date(endTime);
+  // If date and time are provided, combine them
+  if (date && startTime) {
+    _startTime = new Date(`${date}T${startTime}:00`);
+  } else if (startTime) {
+    // If only time is provided, use existing date
+    const existingDate = availability.startTime.toISOString().split('T')[0];
+    _startTime = new Date(`${existingDate}T${startTime}:00`);
+  }
+
+  if (date && endTime) {
+    _endTime = new Date(`${date}T${endTime}:00`);
+  } else if (endTime) {
+    // If only time is provided, use existing date
+    const existingDate = availability.endTime.toISOString().split('T')[0];
+    _endTime = new Date(`${existingDate}T${endTime}:00`);
+  }
 
   if (_endTime <= _startTime) {
     res.status(400);
