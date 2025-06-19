@@ -8,6 +8,8 @@ import {
   ScrollView,
   FlatList,
   ActivityIndicator,
+  Dimensions,
+  Image,
 } from 'react-native';
 import React, {useState, useEffect} from 'react';
 import {useDispatch} from 'react-redux';
@@ -24,7 +26,8 @@ import {
   TagComponent,
   CategoriesList,
   TagBarComponent,
-  PtItem
+  PtItem,
+  SectionComponent,
 } from '../../components';
 
 import {
@@ -35,6 +38,8 @@ import {
   Sort,
 } from 'iconsax-react-native';
 import {fontFamilies} from '../../constants/fontFamilies';
+
+const { width } = Dimensions.get('window');
 
 
 const ClientHomeScreen = ({navigation}) => {
@@ -109,189 +114,186 @@ const ClientHomeScreen = ({navigation}) => {
   };
 
   return (
-    <View style={[globalStyles.container]}>
-      <StatusBar barStyle={'light-content'} />
-      <View
-        style={{
-          backgroundColor: appColors.primary,
-          height: 180 + (Platform.OS === 'ios' ? 16 : 0),
-          borderBottomLeftRadius: 40,
-          borderBottomRightRadius: 40,
-          padding: Platform.OS === 'android' ? StatusBar.currentHeight : 70,
-          paddingHorizontal: 20,
-        }}>
-        <View style={{paddingHorizontal: 16}}>
-          <RowComponent justify="space-between" styles={{alignItems: 'center'}}>
-            {/* Left side - Menu button */}
-            <View style={{width: 100, alignItems: 'flex-start'}}>
-              <TouchableOpacity onPress={() => navigation.openDrawer()}>
-                <HambergerMenu color={appColors.white} size={24} />
-              </TouchableOpacity>
-            </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
+      
+      {/* Header Section */}
+      <View style={styles.headerContainer}>
+        <View style={styles.headerContent}>
+          {/* Top Bar */}
+          <RowComponent justify="space-between" styles={styles.topBar}>
+            <TouchableOpacity 
+              onPress={() => navigation.openDrawer()}
+              style={styles.menuButton}
+            >
+              <HambergerMenu color={appColors.white} size={24} />
+            </TouchableOpacity>
 
-            {/* Center - Location */}
-            <View style={{position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 1}}>
-              <RowComponent>
+            <View style={styles.locationContainer}>
+              <RowComponent justify="center">
                 <TextComponent
                   text="Current Location"
                   color={appColors.white}
                   size={12}
+                  font={fontFamilies.regular}
                 />
-                <ArrowDown color={appColors.white} size={16} />
+                <ArrowDown color={appColors.white} size={14} style={styles.locationIcon} />
               </RowComponent>
               <TextComponent
                 text="Cau Giay, Hanoi"
-                flex={0}
                 color={appColors.white}
                 font={fontFamilies.bold}
-                size={14}
+                size={16}
+                styles={styles.locationText}
               />
             </View>
 
-            {/* Right side - Action buttons */}
-            <View style={{width: 100, alignItems: 'flex-end', zIndex: 2}}>
-              <RowComponent>
-                <TouchableOpacity 
-                  onPress={() => {
-                    console.log('📅 Calendar button pressed - navigating to ClientBookings');
-                    navigation.navigate('ClientBookings');
-                  }}
-                  style={{
-                    marginRight: 8,
-                    padding: 4, // Expand touch area
-                    zIndex: 2   // Above location
-                  }}
-                >
-                  <CircleComponent color="rgba(255,255,255,0.2)" size={36}>
-                    <TextComponent text="📅" size={18} />
-                  </CircleComponent>
-                </TouchableOpacity>
-                
-                <CircleComponent color="rgba(255,255,255,0.2)" size={36}>
-                  <View>
-                    <Notification color={appColors.white} size={20} />
-                    <View
-                      style={{
-                        position: 'absolute',
-                        borderRadius: 4,
-                        borderWidth: 1,
-                        width: 6,
-                        height: 6,
-                        backgroundColor: appColors.white,
-                        top: -2,
-                        right: -2,
-                      }}
-                    />
-                  </View>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('ClientBookings')}
+                style={styles.actionButton}
+              >
+                <CircleComponent color="rgba(255,255,255,0.2)" size={40}>
+                  <TextComponent text="📅" size={18} />
                 </CircleComponent>
-              </RowComponent>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={styles.actionButton}>
+                <CircleComponent color="rgba(255,255,255,0.2)" size={40}>
+                  <Notification color={appColors.white} size={20} />
+                  <View style={styles.notificationBadge} />
+                </CircleComponent>
+              </TouchableOpacity>
             </View>
           </RowComponent>
-          <SpaceComponent height={20} />
-          <RowComponent>
-            <RowComponent
-              styles={{flex: 1}}
-              onPress={() =>
-                navigation.navigate('SearchPtScreen', {isFilter: false})
-              }>
-              <SearchNormal1
-                color={appColors.white}
-                size={20}
-                style={{marginRight: 10}}
-              />
-              <View
-                style={{
-                  width: 1,
-                  height: 18,
-                  marginHorizontal: 12,
-                  backgroundColor: appColors.white,
-                }}
-              />
-              <TextComponent
-                text="Search..."
-                color={appColors.white}
-                flex={1}
-              />
-            </RowComponent>
-            <RowComponent
-              onPress={() =>
-                navigation.navigate('SearchPtScreen', {
-                  isFilter: true,
-                })
-              }
-              styles={{
-                backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 100,
-                borderColor: 'rgba(255, 255, 255, 0.3)',
-              }}>
-              <CircleComponent size={20} color="transparent">
-                <Sort size={20} color={appColors.white} />
-              </CircleComponent>
-              <SpaceComponent width={8} />
-              <TextComponent text="Filters" color={appColors.white} />
-            </RowComponent>
-          </RowComponent>
 
-          <SpaceComponent height={40} />
+          {/* Welcome Message */}
+          <View style={styles.welcomeSection}>
+            <TextComponent
+              text={`Hello, ${auth.username || 'User'}! 👋`}
+              color={appColors.white}
+              size={24}
+              font={fontFamilies.bold}
+              styles={styles.welcomeText}
+            />
+            <TextComponent
+              text="Ready for your workout today?"
+              color="rgba(255,255,255,0.8)"
+              size={16}
+              font={fontFamilies.regular}
+              styles={styles.welcomeSubtext}
+            />
+          </View>
+
+          {/* Search Bar */}
+          <TouchableOpacity 
+            style={styles.searchContainer}
+            onPress={() => navigation.navigate('SearchPtScreen', {isFilter: false})}
+          >
+            <SearchNormal1 color={appColors.text2} size={20} style={styles.searchIcon} />
+            <TextComponent
+              text="Search for trainers..."
+              color={appColors.text2}
+              size={16}
+              flex={1}
+              styles={styles.searchText}
+            />
+            <TouchableOpacity
+              onPress={() => navigation.navigate('SearchPtScreen', {isFilter: true})}
+              style={styles.filterButton}
+            >
+              <Sort size={18} color={appColors.primary} />
+            </TouchableOpacity>
+          </TouchableOpacity>
         </View>
-        <View style={{marginBottom: -140}}>
+
+        {/* Categories */}
+        <View style={styles.categoriesContainer}>
           <CategoriesList isFill />
         </View>
       </View>
-          
-      <SpaceComponent height={120} />
-      <ScrollView
-        style={[
-          {
-            flex: 1,
-            paddingTop: 40,
-          },
-        ]}>
-        <TagBarComponent title="Featured Trainers" onPress={() => {}} />
-        {loading ? (
-          <View style={{padding: 20, alignItems: 'center'}}>
-            <ActivityIndicator size="large" color={appColors.primary} />
-            <SpaceComponent height={10} />
-            <TextComponent text="Loading trainers..." color={appColors.gray} />
+
+      {/* Content Section */}
+      <ScrollView 
+        style={styles.contentContainer}
+        contentContainerStyle={styles.contentScrollView}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+      >
+        {/* Quick Stats */}
+        <SectionComponent>
+          <View style={styles.statsContainer}>
+            <View style={styles.statCard}>
+              <TextComponent text="💪" size={24} styles={styles.statIcon} />
+              <TextComponent text="12" size={20} font={fontFamilies.bold} color={appColors.text} />
+              <TextComponent text="Sessions" size={12} color={appColors.text2} />
+            </View>
+            <View style={styles.statCard}>
+              <TextComponent text="🔥" size={24} styles={styles.statIcon} />
+              <TextComponent text="2.4k" size={20} font={fontFamilies.bold} color={appColors.text} />
+              <TextComponent text="Calories" size={12} color={appColors.text2} />
+            </View>
+            <View style={styles.statCard}>
+              <TextComponent text="⏱️" size={24} styles={styles.statIcon} />
+              <TextComponent text="18h" size={20} font={fontFamilies.bold} color={appColors.text} />
+              <TextComponent text="Training" size={12} color={appColors.text2} />
+            </View>
           </View>
-        ) : error ? (
-          <View style={{padding: 20, alignItems: 'center'}}>
-            <TextComponent text={error} color={appColors.danger} />
-            <SpaceComponent height={10} />
-            <TouchableOpacity 
-              onPress={fetchFeaturedPTs}
-              style={{
-                backgroundColor: appColors.primary,
-                paddingHorizontal: 20,
-                paddingVertical: 10,
-                borderRadius: 8
-              }}
-            >
-              <TextComponent text="Retry" color={appColors.white} />
+        </SectionComponent>
+
+        {/* Featured Trainers */}
+        <SectionComponent>
+          <RowComponent justify="space-between" styles={styles.sectionHeader}>
+            <TextComponent
+              text="Featured Trainers"
+              size={20}
+              font={fontFamilies.bold}
+              color={appColors.text}
+            />
+            <TouchableOpacity onPress={() => navigation.navigate('SearchPtScreen')}>
+              <TextComponent
+                text="See All"
+                size={14}
+                font={fontFamilies.medium}
+                color={appColors.primary}
+              />
             </TouchableOpacity>
-          </View>
-        ) : (
-          <FlatList
-            key="featured-trainers-v3" // Force re-render với key unique
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            data={ptList}
-            keyExtractor={(item) => `${item._id}-card-v3`} // Update keyExtractor
-            renderItem={renderPTItem}
-            contentContainerStyle={{
-              paddingHorizontal: 10,
-              paddingVertical: 4,
-            }}
-            ItemSeparatorComponent={() => <View style={{width: 4}} />}
-            ListEmptyComponent={() => (
-              <View style={{padding: 20, alignItems: 'center'}}>
-                <TextComponent text="No trainers available" color={appColors.gray} />
-              </View>
-            )}
-          />
-        )}
+          </RowComponent>
+
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={appColors.primary} />
+              <TextComponent text="Loading trainers..." color={appColors.text2} styles={styles.loadingText} />
+            </View>
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <TextComponent text={error} color={appColors.danger} styles={styles.errorText} />
+              <TouchableOpacity 
+                onPress={fetchFeaturedPTs}
+                style={styles.retryButton}
+              >
+                <TextComponent text="Retry" color={appColors.white} font={fontFamilies.medium} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={ptList}
+              keyExtractor={(item) => `featured-${item._id}`}
+              renderItem={renderPTItem}
+              contentContainerStyle={styles.trainersList}
+              ItemSeparatorComponent={() => <View style={styles.trainerSeparator} />}
+              ListEmptyComponent={() => (
+                <View style={styles.emptyContainer}>
+                  <TextComponent text="No trainers available" color={appColors.text2} />
+                </View>
+              )}
+            />
+          )}
+        </SectionComponent>
+
+        <SpaceComponent height={100} />
       </ScrollView>
     </View>
   );
@@ -299,4 +301,177 @@ const ClientHomeScreen = ({navigation}) => {
 
 export default ClientHomeScreen;
 
-const styles = StyleSheet.create({});
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: appColors.gray5,
+  },
+  
+  // Header Styles
+  headerContainer: {
+    backgroundColor: appColors.primary,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    paddingBottom: 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+  },
+  headerContent: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  menuButton: {
+    padding: 8,
+    width: 70, // Fixed width to balance layout
+  },
+  locationContainer: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  locationIcon: {
+    marginLeft: 4,
+  },
+  locationText: {
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 70, // Fixed width to balance layout
+    justifyContent: 'flex-end',
+  },
+  actionButton: {
+    marginLeft: 8,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: appColors.warning,
+    borderWidth: 1,
+    borderColor: appColors.white,
+  },
+  
+  // Welcome Section
+  welcomeSection: {
+    marginBottom: 20,
+  },
+  welcomeText: {
+    marginBottom: 4,
+  },
+  welcomeSubtext: {
+    opacity: 0.9,
+  },
+  
+  // Search Bar
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: appColors.white,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 20,
+    shadowColor: appColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchText: {
+    flex: 1,
+  },
+  filterButton: {
+    padding: 8,
+    backgroundColor: `${appColors.primary}15`,
+    borderRadius: 12,
+  },
+  
+  categoriesContainer: {
+    marginTop: 10,
+    marginBottom: -30,
+  },
+  
+  contentContainer: {
+    flex: 1,
+    marginTop: 40,
+  },
+  contentScrollView: {
+    paddingBottom: 100,
+  },
+  
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: appColors.white,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    shadowColor: appColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statIcon: {
+    marginBottom: 4,
+  },
+  
+  sectionHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  errorText: {
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: appColors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  
+  // Trainers List
+  trainersList: {
+    paddingHorizontal: 4,
+    paddingVertical: 8,
+  },
+  trainerSeparator: {
+    width: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+});

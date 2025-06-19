@@ -42,11 +42,11 @@ const PtItem = (props: Props) => {
     const screenWidth = Dimensions.get('window').width;
     switch (size) {
       case 'small':
-        return screenWidth * 0.45; // 45% for small cards (thon hơn nữa)
+        return screenWidth * 0.45; 
       case 'large':
-        return screenWidth * 0.65;  // 65% for large cards (thon hơn nữa)
+        return screenWidth * 0.65;  
       default:
-        return screenWidth * 0.55;  // 55% for medium cards (thon hơn nữa)
+        return screenWidth * 0.55;  
     }
   };
 
@@ -57,11 +57,11 @@ const PtItem = (props: Props) => {
     const screenWidth = Dimensions.get('window').width;
     switch (size) {
       case 'small':
-        return screenWidth * 0.45; // 45% for small cards (thon hơn nữa)
+        return screenWidth * 0.45; 
       case 'large':
-        return screenWidth * 0.65;  // 65% for large cards (thon hơn nữa)
+        return screenWidth * 0.65;  
       default:
-        return screenWidth * 0.55;  // 55% for medium cards (thon hơn nữa)
+        return screenWidth * 0.55;  
     }
   };
 
@@ -227,7 +227,7 @@ const PtItem = (props: Props) => {
             <SpaceComponent width={2} />
             <TextComponent
               text={item.location}
-              size={2} 
+              size={size === 'small' ? 11 : 12} 
               numberOfLines={1}
               color={appColors.gray}
               styles={{textAlign: 'center', maxWidth: getNumericCardWidth() - 40}}
@@ -329,7 +329,7 @@ const PtItem = (props: Props) => {
             
             {/* Experience */}
             {item.experienceYears && item.experienceYears > 0 && (
-              <View style={styles.bulletSeparator}>
+              <>
                 <TextComponent
                   text="•"
                   size={12}
@@ -342,12 +342,12 @@ const PtItem = (props: Props) => {
                   color={appColors.gray}
                   font="medium"
                 />
-              </View>
+              </>
             )}
             
             {/* Main Specialization */}
             {item.specializations && item.specializations.length > 0 && (
-              <View style={styles.bulletSeparator}>
+              <>
                 <TextComponent
                   text="•"
                   size={12}
@@ -362,7 +362,7 @@ const PtItem = (props: Props) => {
                     font="medium"
                   />
                 </View>
-              </View>
+              </>
             )}
           </View>
         </View>

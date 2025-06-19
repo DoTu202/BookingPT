@@ -173,30 +173,35 @@ const SearchPtScreen = ({navigation, route}) => {
   };
 
   const renderPTItem = ({item}) => {
+    // Validate item data
+    if (!item || !item._id) {
+      console.warn('Invalid PT item data:', item);
+      return null;
+    }
+
     // Convert location object to string
     const locationString = item.location && typeof item.location === 'object' 
       ? `${item.location.district}, ${item.location.city}` 
       : (item.location || 'Ha Noi');
 
+    // Ensure all required data exists
+    const ptItemData = {
+      _id: item._id,
+      title: item.user?.fullName || item.user?.username || 'Personal Trainer',
+      description: item.bio || item.description || 'Professional Personal Trainer',
+      location: locationString, // Convert object to string
+      imageURL: item.user?.photoUrl || item.profileImage || item.avatar || '',
+      rating: parseFloat(item.rating) || 0,
+      hourlyRate: parseInt(item.hourlyRate) || 0,
+      specializations: Array.isArray(item.specializations) ? item.specializations : [],
+      experienceYears: parseInt(item.experienceYears) || 0,
+      ptData: item,
+    };
+
     return (
       <PtItem
         type="list"
-        item={{
-          _id: item._id,
-          title:
-            item.user?.fullName || item.user?.username || 'Personal Trainer',
-          description:
-            item.bio || item.description || 'Professional Personal Trainer',
-          location: locationString, // Convert object to string
-          imageURL: item.user?.photoUrl || item.profileImage || item.avatar || '',
-          rating: parseFloat(item.rating) || 0,
-          hourlyRate: parseInt(item.hourlyRate) || 0,
-          specializations: Array.isArray(item.specializations)
-            ? item.specializations
-            : [],
-          experienceYears: parseInt(item.experienceYears) || 0,
-          ptData: item,
-        }}
+        item={ptItemData}
         onPress={() => navigation.navigate('PTDetailScreen', {item})}
       />
     );
