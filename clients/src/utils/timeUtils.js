@@ -4,42 +4,35 @@
  */
 
 /**
- * Format time to display format (12-hour format with AM/PM)
- * Handles Date objects, ISO strings and time strings without timezone conversion issues
- * @param {string|Date} timeInput - Either Date object, ISO string (2025-06-19T19:40:00.000Z) or time string (19:40)
+ * Format time string to display format (12-hour format with AM/PM)
+ * Handles both ISO strings and time strings without timezone conversion issues
+ * @param {string} timeString - Either ISO string (2025-06-19T19:40:00.000Z) or time string (19:40)
  * @returns {string} - Formatted time (7:40 PM)
  */
-export const formatTime = (timeInput) => {
-  if (!timeInput) return '';
-  
-  let date;
-  
-  // If it's already a Date object, use it directly
-  if (timeInput instanceof Date) {
-    date = timeInput;
-  } else if (typeof timeInput === 'string') {
-    // Check if it's an ISO date string (from backend)
-    if (timeInput.includes('T') || timeInput.includes('Z')) {
-      // For ISO strings, extract hours/minutes directly without timezone conversion
-      const isoDate = new Date(timeInput);
-      // Get UTC hours and minutes to avoid timezone conversion
-      const utcHours = isoDate.getUTCHours();
-      const utcMinutes = isoDate.getUTCMinutes();
-      
-      // Create a new date object with local timezone but same hours/minutes
-      date = new Date();
-      date.setHours(utcHours, utcMinutes, 0, 0);
-    } else {
-      // It's a time string like "19:00"
-      const [hours, minutes] = timeInput.split(':');
-      date = new Date();
-      date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    }
-  } else {
-    // Fallback for unexpected input types
-    return '';
+export const formatTime = (timeString) => {
+  if (!timeString) return '';
+
+  // Defensive: if input is a Date, convert to ISO string
+  if (timeString instanceof Date) {
+    timeString = timeString.toISOString();
   }
-  
+  // Defensive: ensure string
+  if (typeof timeString !== 'string') {
+    timeString = String(timeString);
+  }
+
+  let date;
+  if (timeString.includes('T') || timeString.includes('Z')) {
+    const isoDate = new Date(timeString);
+    const utcHours = isoDate.getUTCHours();
+    const utcMinutes = isoDate.getUTCMinutes();
+    date = new Date();
+    date.setHours(utcHours, utcMinutes, 0, 0);
+  } else {
+    const [hours, minutes] = timeString.split(':');
+    date = new Date();
+    date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+  }
   return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -48,30 +41,22 @@ export const formatTime = (timeInput) => {
 };
 
 /**
- * Extract 24-hour time string from ISO datetime or Date object
- * @param {string|Date} input - ISO datetime string or Date object
+ * Extract 24-hour time string from ISO datetime
+ * @param {string} isoString - ISO datetime string
  * @returns {string} - Time in HH:MM format (19:40)
  */
-export const extractTimeFromISO = (input) => {
-  if (!input) return '';
-  
-  let date;
-  
-  // If it's a Date object, use it directly
-  if (input instanceof Date) {
-    date = input;
-  } else if (typeof input === 'string') {
-    // If it's already a time string, return as is
-    if (!input.includes('T') && !input.includes('Z')) {
-      return input;
-    }
-    // Extract time from ISO string
-    date = new Date(input);
-  } else {
-    return '';
+export const extractTimeFromISO = (isoString) => {
+  if (!isoString) return '';
+  if (isoString instanceof Date) {
+    isoString = isoString.toISOString();
   }
-  
-  // Extract time using UTC to avoid timezone conversion
+  if (typeof isoString !== 'string') {
+    isoString = String(isoString);
+  }
+  if (!isoString.includes('T') && !isoString.includes('Z')) {
+    return isoString;
+  }
+  const date = new Date(isoString);
   const hours = date.getUTCHours().toString().padStart(2, '0');
   const minutes = date.getUTCMinutes().toString().padStart(2, '0');
   return `${hours}:${minutes}`;

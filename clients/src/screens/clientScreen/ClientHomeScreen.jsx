@@ -29,6 +29,8 @@ import {
   PtItem,
   SectionComponent,
 } from '../../components';
+import HeaderNotificationButton from '../../components/HeaderNotificationButton';
+import NotificationBadge from '../../components/NotificationBadge';
 
 import {
   ArrowDown,
@@ -37,6 +39,7 @@ import {
   SearchNormal1,
   Sort,
 } from 'iconsax-react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import {fontFamilies} from '../../constants/fontFamilies';
 
 const { width } = Dimensions.get('window');
@@ -158,10 +161,22 @@ const ClientHomeScreen = ({navigation}) => {
                 </CircleComponent>
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.actionButton}>
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('Notifications')}
+                style={styles.actionButton}
+              >
                 <CircleComponent color="rgba(255,255,255,0.2)" size={40}>
-                  <Notification color={appColors.white} size={20} />
-                  <View style={styles.notificationBadge} />
+                  <View style={styles.notificationIconContainer}>
+                    <Icon 
+                      name="notifications" 
+                      size={20} 
+                      color={appColors.white} 
+                    />
+                    <NotificationBadge 
+                      size={14} 
+                      style={styles.notificationBadge}
+                    />
+                  </View>
                 </CircleComponent>
               </TouchableOpacity>
             </View>
@@ -460,6 +475,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
+  },
+  notificationIconContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    zIndex: 1,
   },
   
   // Trainers List

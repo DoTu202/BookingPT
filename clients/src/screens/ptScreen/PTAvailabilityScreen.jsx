@@ -32,7 +32,6 @@ import {
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
 import { formatTime, extractTimeFromISO } from '../../utils/timeUtils';
-import { fontFamilies } from '../../constants/fontFamilies';
 
 const PTAvailabilityScreen = ({ navigation }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -483,8 +482,8 @@ const PTAvailabilityScreen = ({ navigation }) => {
           </TouchableOpacity>
           <TextComponent
             text="My Availability"
-            size={18}
-            font={fontFamilies.semiBold}
+            size={20}
+            font="Poppins-Bold"
             color={appColors.white}
             styles={{marginTop: 40}}
             
@@ -581,7 +580,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     height: 140,
     borderRadius: 20,
-    fontFamily: fontFamilies.semibold,
 
   },
   content: {

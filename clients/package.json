@@ -20,6 +20,7 @@
     "@react-navigation/stack": "^7.2.10",
     "@reduxjs/toolkit": "^2.7.0",
     "axios": "^1.8.4",
+    "date-fns": "^4.1.0",
     "iconsax-react-native": "^0.0.8",
     "lucide-react-native": "^0.511.0",
     "moment": "^2.30.1",

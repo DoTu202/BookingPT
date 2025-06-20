@@ -31,6 +31,7 @@ import appColors from '../../constants/appColors';
 import { fontFamilies } from '../../constants/fontFamilies';
 import ptApi from '../../apis/ptApi';
 import LoadingModal from '../../modals/LoadingModal';
+import HeaderNotificationButton from '../../components/HeaderNotificationButton';
 
 const { width } = Dimensions.get('window');
 
@@ -189,9 +190,13 @@ const PTHomeScreen = () => {
           <Text style={styles.greeting}>{getGreeting()},</Text>
           <Text style={styles.userName}>{auth.username || auth.email || 'PT'}</Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+        
+        <View style={styles.headerActions}>
+          <HeaderNotificationButton color={appColors.white}  />
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -393,6 +398,10 @@ const styles = StyleSheet.create({
     borderBottomColor: appColors.primary,
     height: 140,
     borderRadius: 20,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   greeting: {
     fontSize: 14,

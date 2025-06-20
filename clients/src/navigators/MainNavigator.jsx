@@ -12,6 +12,7 @@ import {
   NotificationScreen,
   ReviewScreen,
   ChatScreen,
+  ChatListScreen,
 } from '../screens/commonScreen';
 
 import {PTClientsScreen, PTProfileScreen} from '../screens/ptScreen';
@@ -65,8 +66,7 @@ const MainNavigator = () => {
             name="Notifications"
             component={NotificationScreen}
             options={{
-              headerShown: true,
-              title: 'Notifications',
+              headerShown: false,
             }}
           />
 
@@ -76,6 +76,14 @@ const MainNavigator = () => {
             options={{
               headerShown: true,
               title: 'Chat',
+            }}
+          />
+
+          <Stack.Screen
+            name="ChatListScreen"
+            component={ChatListScreen}
+            options={{
+              headerShown: false,
             }}
           />
 
@@ -172,8 +180,7 @@ const MainNavigator = () => {
             name="Notifications"
             component={NotificationScreen}
             options={{
-              headerShown: true,
-              title: 'Notifications',
+              headerShown: false,
             }}
           />
 
@@ -214,6 +221,14 @@ const MainNavigator = () => {
           <Stack.Screen
             name="ChangePasswordScreen"
             component={ChangePasswordScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+
+          <Stack.Screen
+            name="ChatListScreen"
+            component={ChatListScreen}
             options={{
               headerShown: false,
             }}

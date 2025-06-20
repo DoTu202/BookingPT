@@ -523,6 +523,16 @@ const PTDetailScreen = ({ navigation, route }) => {
               disable={true}
             />
           )}
+          
+          <SpaceComponent height={12} />
+          
+          {/* Chat Button */}
+          <ButtonComponent
+            text="Chat with this PT"
+            type="outline"
+            onPress={() => navigation.navigate('ChatListScreen')}
+            textColor={appColors.primary}
+          />
         </SectionComponent>
 
         <SpaceComponent height={30} />

@@ -242,7 +242,7 @@ const PTBookingsScreen = () => {
           )}
         </View>
 
-        {(canConfirmOrReject || canMarkCompleted) && (
+        {(canConfirmOrReject || canMarkCompleted || item.client) && (
           <View style={styles.actionButtons}>
             {canConfirmOrReject && (
               <>
@@ -280,6 +280,19 @@ const PTBookingsScreen = () => {
                   color={appColors.white}
                 />
                 <Text style={styles.actionButtonText}>Complete</Text>
+              </TouchableOpacity>
+            )}
+            
+            {item.client && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.chatButton]}
+                onPress={() => navigation.navigate('ChatListScreen')}>
+                <MaterialIcons
+                  name="chat"
+                  size={16}
+                  color={appColors.white}
+                />
+                <Text style={styles.actionButtonText}>Chat</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -504,6 +517,9 @@ const styles = StyleSheet.create({
   },
   completeButton: {
     backgroundColor: appColors.primary,
+  },
+  chatButton: {
+    backgroundColor: appColors.secondary,
   },
   actionButtonText: {
     fontSize: 12,

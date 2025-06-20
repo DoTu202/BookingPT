@@ -5,7 +5,7 @@ import {appInfo} from '../constants/appInfos';
 
 const axiosClient = axios.create({
   baseURL: appInfo.BASE_URL,  
-  timeout: 10000, // 10 seconds timeout
+  timeout: 10000, 
   paramSerializer: params => queryString.stringify(params),
 });
 

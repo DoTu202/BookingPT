@@ -1,469 +1,357 @@
-import React, {useState, useEffect} from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
   StyleSheet,
+  Text,
+  View,
   FlatList,
   TextInput,
   TouchableOpacity,
+  Alert,
   KeyboardAvoidingView,
   Platform,
-  StatusBar,
-  Image,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {ArrowLeft, Send2} from 'iconsax-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import chatApi from '../../apis/chatApi';
+import { authSelector } from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
-import {EvolveULogo} from '../../components';
 
-// Import ảnh mặc định từ assets
-import DefaultAvatar from '../../../assets/images/Main.png';
-
-const ChatScreen = ({route, navigation}) => {
-  // Get conversation info from route params
-  const conversationData = route?.params?.conversation || {
-    id: 1,
-    name: 'EvolveU Team',
-    avatar: null, // Sẽ sử dụng ảnh mặc định
-    isOnline: true,
-  };
-
+const ChatScreen = ({ navigation, route }) => {
+  const { chatRoomId, otherUser } = route.params;
+  const auth = useSelector(authSelector);
+  
   const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
 
-  // Auto welcome message when user enters chat
-  useEffect(() => {
-    const welcomeMessages = [
-      {
-        id: '1',
-        text: `Hello! Welcome to ${conversationData.name}'s chat! 👋`,
-        sender: 'other',
-        timestamp: new Date(),
-        isWelcome: true,
-      },
-      {
-        id: '2',
-        text: "I'm here to help you with your fitness journey. How can I assist you today?",
-        sender: 'other',
-        timestamp: new Date(Date.now() + 1000),
-        isWelcome: true,
-      },
-    ];
-
-    // Simulate typing effect for welcome messages
-    setTimeout(() => {
-      setMessages([welcomeMessages[0]]);
-    }, 500);
-
-    setTimeout(() => {
-      setMessages(welcomeMessages);
-    }, 2000);
-  }, [conversationData.name]);
-
-  const sendMessage = () => {
-    if (inputText.trim()) {
-      const newMessage = {
-        id: Date.now().toString(),
-        text: inputText.trim(),
-        sender: 'me',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, newMessage]);
-      setInputText('');
-
-      // Show typing indicator
-      setIsTyping(true);
-
-      // Simulate trainer response
-      setTimeout(() => {
-        setIsTyping(false);
-        const responses = [
-          "Thanks for your message! I'll get back to you shortly.",
-          'That sounds great! Let me help you with that.',
-          'Perfect! When would be the best time for your training session?',
-          'I understand. Let me create a personalized plan for you.',
-          "Excellent question! Here's what I recommend...",
-        ];
-
-        const randomResponse =
-          responses[Math.floor(Math.random() * responses.length)];
-
-        const response = {
-          id: (Date.now() + 1).toString(),
-          text: randomResponse,
-          sender: 'other',
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, response]);
-      }, 1500);
+  // Lấy tin nhắn từ API
+  const loadMessages = async () => {
+    try {
+      setLoading(true);
+      const response = await chatApi.getMessages(auth.accesstoken, chatRoomId);
+      
+      if (response.success) {
+        setMessages(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      Alert.alert('Error', 'Cannot load messages');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const renderMessage = ({item, index}) => {
-    const isLastMessage = index === messages.length - 1;
-    const showAvatar =
-      item.sender === 'other' &&
-      (index === messages.length - 1 ||
-        messages[index + 1]?.sender !== 'other');
+  // Gửi tin nhắn mới
+  const sendMessage = async () => {
+    if (!newMessage.trim()) return;
 
+    const messageText = newMessage.trim();
+    setNewMessage('');
+
+    try {
+      setSending(true);
+      const response = await chatApi.sendMessage(auth.accesstoken, chatRoomId, messageText);
+      
+      if (response.success) {
+        // Thêm tin nhắn mới vào đầu danh sách
+        setMessages(prev => [response.data, ...prev]);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      Alert.alert('Error', 'Cannot send message');
+      setNewMessage(messageText); // Khôi phục tin nhắn nếu lỗi
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Định dạng thời gian tin nhắn
+  const formatMessageTime = (date) => {
+    if (!date) return '';
+    
+    const messageDate = new Date(date);
+    const now = new Date();
+    const diffInDays = Math.floor((now - messageDate) / (1000 * 60 * 60 * 24));
+    
+    if (diffInDays === 0) {
+      // Hôm nay: chỉ hiển thị giờ
+      return messageDate.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    } else if (diffInDays === 1) {
+      // Hôm qua
+      return 'Yesterday';
+    } else {
+      // Ngày khác
+      return messageDate.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      });
+    }
+  };
+
+  // Render một tin nhắn
+  const renderMessage = ({ item }) => {
+    const isMyMessage = item.sender === auth.id;
+    
     return (
-      <View
-        style={[
-          styles.messageContainer,
-          item.sender === 'me'
-            ? styles.myMessageContainer
-            : styles.otherMessageContainer,
+      <View style={[
+        styles.messageContainer,
+        isMyMessage ? styles.myMessage : styles.otherMessage
+      ]}>
+        <View style={[
+          styles.messageBubble,
+          isMyMessage ? styles.myBubble : styles.otherBubble
         ]}>
-        {/* Avatar for other person's messages */}
-        {item.sender === 'other' && (
-          <View style={styles.avatarContainer}>
-            {showAvatar ? (
-              conversationData.avatar ? (
-                <Image
-                  source={{uri: conversationData.avatar}}
-                  style={styles.messageAvatar}
-                />
-              ) : (
-                <EvolveULogo width={28} height={28} color={appColors.primary} />
-              )
-            ) : (
-              <View style={styles.avatarSpacer} />
-            )}
-          </View>
-        )}
-
-        <View
-          style={[
-            styles.messageBubble,
-            item.sender === 'me' ? styles.myMessage : styles.otherMessage,
-            item.isWelcome && styles.welcomeMessage,
+          <Text style={[
+            styles.messageText,
+            isMyMessage ? styles.myMessageText : styles.otherMessageText
           ]}>
-          <Text
-            style={[
-              styles.messageText,
-              item.sender === 'me'
-                ? styles.myMessageText
-                : styles.otherMessageText,
-            ]}>
-            {item.text}
+            {item.content}
           </Text>
-          <Text
-            style={[
-              styles.timestamp,
-              item.sender === 'me' ? styles.myTimestamp : styles.otherTimestamp,
-            ]}>
-            {item.timestamp.toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+          <Text style={[
+            styles.timeText,
+            isMyMessage ? styles.myTimeText : styles.otherTimeText
+          ]}>
+            {formatMessageTime(item.createdAt)}
           </Text>
         </View>
       </View>
     );
   };
 
-  const renderTypingIndicator = () => {
-    if (!isTyping) return null;
-
-    return (
-      <View style={[styles.messageContainer, styles.otherMessageContainer]}>
-        <View style={styles.avatarContainer}>
-          <Image
-            source={
-              conversationData.avatar
-                ? {uri: conversationData.avatar}
-                : DefaultAvatar
-            }
-            style={styles.messageAvatar}
-            defaultSource={DefaultAvatar}
-          />
-        </View>
-        <View
-          style={[
-            styles.messageBubble,
-            styles.otherMessage,
-            styles.typingBubble,
-          ]}>
-          <View style={styles.typingIndicator}>
-            <View style={[styles.typingDot, styles.typingDot1]} />
-            <View style={[styles.typingDot, styles.typingDot2]} />
-            <View style={[styles.typingDot, styles.typingDot3]} />
-          </View>
-        </View>
-      </View>
-    );
-  };
+  useEffect(() => {
+    loadMessages();
+  }, [chatRoomId]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-
-      {/* Custom Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}>
-          <ArrowLeft size={24} color={appColors.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.headerInfo}
-          onPress={() => {
-            // Navigate to trainer profile
-            console.log('Navigate to trainer profile');
-          }}>
-          <View style={styles.headerAvatarContainer}>
-            <EvolveULogo width={40} height={40} color={appColors.white} />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView 
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Icon name="arrow-back" size={24} color="white" />
+          </TouchableOpacity>
+          
+          <View style={styles.headerInfo}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {otherUser.username.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <Text style={styles.headerTitle}>{otherUser.username}</Text>
           </View>
+        </View>
 
-          <View style={styles.nameContainer}>
-            <Text style={styles.trainerName}>{conversationData.name}</Text>
-            <Text style={styles.onlineStatus}>
-              {conversationData.isOnline ? 'Online' : 'Last seen recently'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      <KeyboardAvoidingView
-        style={styles.chatContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {/* Messages List */}
         <FlatList
-          data={[...messages]}
+          data={messages}
+          keyExtractor={(item) => item._id}
           renderItem={renderMessage}
-          keyExtractor={item => item.id}
           style={styles.messagesList}
-          contentContainerStyle={styles.messagesContent}
+          contentContainerStyle={styles.messagesContainer}
+          inverted // Hiển thị tin nhắn mới nhất ở dưới cùng
           showsVerticalScrollIndicator={false}
-          ListFooterComponent={renderTypingIndicator}
+          ListEmptyComponent={
+            !loading && (
+              <View style={styles.emptyContainer}>
+                <Icon name="chat-bubble-outline" size={48} color={appColors.gray} />
+                <Text style={styles.emptyText}>No messages yet</Text>
+                <Text style={styles.emptySubtext}>Say hello to start the conversation!</Text>
+              </View>
+            )
+          }
         />
 
-        {/* Input Area */}
+        {/* Input */}
         <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.textInput}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Type a message..."
-              placeholderTextColor={appColors.gray}
-              multiline
-              maxLength={500}
+          <TextInput
+            style={styles.textInput}
+            placeholder="Type a message..."
+            placeholderTextColor={appColors.gray}
+            value={newMessage}
+            onChangeText={setNewMessage}
+            multiline
+            maxLength={500}
+          />
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              (!newMessage.trim() || sending) && styles.sendButtonDisabled
+            ]}
+            onPress={sendMessage}
+            disabled={!newMessage.trim() || sending}
+          >
+            <Icon 
+              name="send" 
+              size={20} 
+              color={(!newMessage.trim() || sending) ? appColors.gray : 'white'} 
             />
-            <TouchableOpacity
-              style={[styles.sendButton, {opacity: inputText.trim() ? 1 : 0.5}]}
-              onPress={sendMessage}
-              disabled={!inputText.trim()}>
-              <Send2 size={20} color={appColors.white} />
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
-export default ChatScreen;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f5f5',
   },
   header: {
     backgroundColor: appColors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: Platform.OS === 'ios' ? 44 : 12,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   backButton: {
     padding: 8,
-    marginRight: 4,
+    marginRight: 8,
   },
   headerInfo: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-  },
-  headerAvatarContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  headerOnlineIndicator: {
-    position: 'absolute',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#4CAF50',
-    borderWidth: 2,
-    borderColor: appColors.primary,
-    bottom: 0,
-    right: 0,
-  },
-  nameContainer: {
     flex: 1,
   },
-  trainerName: {
-    color: appColors.white,
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  onlineStatus: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  chatContainer: {
-    flex: 1,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
   },
   messagesList: {
     flex: 1,
-    paddingHorizontal: 16,
   },
-  messagesContent: {
-    paddingVertical: 16,
+  messagesContainer: {
+    padding: 16,
+    flexGrow: 1,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    transform: [{ scaleY: -1 }], // Đảo ngược để hiển thị đúng với inverted FlatList
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: appColors.gray,
+    marginTop: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: appColors.gray,
+    textAlign: 'center',
+    marginTop: 4,
   },
   messageContainer: {
-    flexDirection: 'row',
-    marginVertical: 2,
-    alignItems: 'flex-end',
-  },
-  myMessageContainer: {
-    justifyContent: 'flex-end',
-  },
-  otherMessageContainer: {
-    justifyContent: 'flex-start',
-  },
-  avatarContainer: {
-    width: 32,
-    alignItems: 'center',
-  },
-  messageAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  avatarSpacer: {
-    width: 28,
-    height: 28,
-  },
-  messageBubble: {
-    maxWidth: '75%',
-    padding: 12,
-    borderRadius: 16,
-    marginHorizontal: 8,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   myMessage: {
-    backgroundColor: appColors.primary,
-    borderBottomRightRadius: 4,
-    alignSelf: 'flex-end',
+    alignItems: 'flex-end',
   },
   otherMessage: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderBottomLeftRadius: 4,
-    marginLeft: 4,
+    alignItems: 'flex-start',
   },
-  welcomeMessage: {
-    backgroundColor: '#e8f5e8',
-    borderColor: '#4CAF50',
+  messageBubble: {
+    maxWidth: '80%',
+    padding: 12,
+    borderRadius: 16,
+  },
+  myBubble: {
+    backgroundColor: appColors.primary,
+    borderBottomRightRadius: 4,
+  },
+  otherBubble: {
+    backgroundColor: 'white',
+    borderBottomLeftRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   messageText: {
     fontSize: 16,
     lineHeight: 20,
+    marginBottom: 4,
   },
   myMessageText: {
-    color: '#fff',
+    color: 'white',
   },
   otherMessageText: {
-    color: appColors.black,
+    color: appColors.text,
   },
-  timestamp: {
+  timeText: {
     fontSize: 11,
-    marginTop: 4,
+    opacity: 0.7,
   },
-  myTimestamp: {
-    color: 'rgba(255,255,255,0.8)',
+  myTimeText: {
+    color: 'white',
     textAlign: 'right',
   },
-  otherTimestamp: {
+  otherTimeText: {
     color: appColors.gray,
   },
-  typingBubble: {
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    width: 70,
-  },
-  typingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#9E9E9E',
-    marginHorizontal: 3,
-  },
-  typingDot1: {
-    opacity: 0.6,
-  },
-  typingDot2: {
-    opacity: 0.8,
-  },
-  typingDot3: {
-    opacity: 1,
-  },
   inputContainer: {
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e1e5e9',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  inputWrapper: {
     flexDirection: 'row',
+    padding: 16,
     alignItems: 'flex-end',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#e1e5e9',
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
   },
   textInput: {
     flex: 1,
+    borderWidth: 1,
+    borderColor: appColors.lightGray,
+    borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxHeight: 100,
+    paddingVertical: 10,
     fontSize: 16,
-    color: appColors.black,
+    maxHeight: 100,
+    marginRight: 8,
+    backgroundColor: '#f8f9fa',
   },
   sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: appColors.primary,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+  },
+  sendButtonDisabled: {
+    backgroundColor: appColors.lightGray,
   },
 });
+
+export default ChatScreen;
