@@ -1,6 +1,7 @@
 const Booking = require('../../models/bookingModel');
 const asyncHandler = require('express-async-handler');
 const Availability = require('../../models/AvailabilityModel');
+const { createNotification } = require('../notificationController');
 
 
 const getPtBookings = asyncHandler(async (req, res) => {
@@ -55,8 +56,21 @@ const confirmBooking = asyncHandler(async (req, res) => {
         // Hiện tại, chỉ log warning.
     }
     const updatedBooking = await booking.save();
-    // TODO: Gửi thông báo cho Client
-    res.status(200).json({ message: 'Lịch đặt đã được xác nhận.', data: updatedBooking });
+    
+    // Send notification to client
+    try {
+        await createNotification({
+            recipient: booking.client,
+            sender: req.user._id,
+            type: 'booking_confirmed',
+            message: `Your booking has been confirmed by ${req.user.username}`,
+            relatedBooking: booking._id
+        });
+    } catch (error) {
+        console.error('Error sending confirmation notification:', error);
+    }
+    
+    res.status(200).json({ message: 'Booking confirmed successfully.', data: updatedBooking });
 });
 
 // @desc    PT từ chối một lịch đặt từ client
@@ -84,8 +98,21 @@ const rejectBooking = asyncHandler(async (req, res) => {
     }
 
     const updatedBooking = await booking.save();
-    // TODO: Gửi thông báo cho Client
-    res.status(200).json({ message: 'Lịch đặt đã bị từ chối.', data: updatedBooking });
+    
+    // Send notification to client
+    try {
+        await createNotification({
+            recipient: booking.client,
+            sender: req.user._id,
+            type: 'booking_rejected',
+            message: `Your booking has been rejected by ${req.user.username}`,
+            relatedBooking: booking._id
+        });
+    } catch (error) {
+        console.error('Error sending rejection notification:', error);
+    }
+    
+    res.status(200).json({ message: 'Booking rejected successfully.', data: updatedBooking });
 });
 
 // @desc    PT đánh dấu một buổi tập đã hoàn thành
@@ -110,8 +137,21 @@ const markBookingAsCompleted = asyncHandler(async (req, res) => {
 
     booking.status = 'completed';
     const updatedBooking = await booking.save();
-    // TODO: Gửi thông báo cho client, có thể yêu cầu đánh giá (review)
-    res.status(200).json({ message: 'Buổi tập đã được đánh dấu hoàn thành.', data: updatedBooking });
+    
+    // Send notification to client
+    try {
+        await createNotification({
+            recipient: booking.client,
+            sender: req.user._id,
+            type: 'booking_completed_pt',
+            message: `Your session with ${req.user.username} has been completed. Please leave a review!`,
+            relatedBooking: booking._id
+        });
+    } catch (error) {
+        console.error('Error sending completion notification:', error);
+    }
+    
+    res.status(200).json({ message: 'Session marked as completed successfully.', data: updatedBooking });
 });
 
 module.exports = {

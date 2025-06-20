@@ -2,7 +2,8 @@ const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcrypt');
 const User = require('../models/userModel');
 const PTProfile = require('../models/PTProfileModel'); // Hoặc tên model PTProfile của bạn
-const Availability = require('../models/AvailabilityModel'); // Hoặc tên model Availability của bạn
+const Availability = require('../models/AvailabilityModel');
+const { createNotification } = require('./notificationController'); // Hoặc tên model Availability của bạn
 const Booking = require('../models/bookingModel');
 
 // @desc    Client tìm kiếm PTs
@@ -302,12 +303,21 @@ const createBookingRequest = asyncHandler(async (req, res) => {
 
   const createdBooking = await newBooking.save();
   
-  // slot.status = 'booked';
-  // await slot.save();
-  // TODO: Gửi thông báo cho PT về yêu cầu đặt lịch mới
+  // Send notification to PT
+  try {
+    await createNotification({
+      recipient: ptId,
+      sender: clientId,
+      type: 'new_booking_request',
+      message: `New booking request from ${req.user.username}`,
+      relatedBooking: createdBooking._id
+    });
+  } catch (error) {
+    console.error('Error sending booking notification:', error);
+  }
+  
   res.status(201).json({
-    message:
-      'Yêu cầu đặt lịch của bạn đã được gửi thành công và đang chờ PT xác nhận.',
+    message: 'Your booking request has been sent successfully and is waiting for PT confirmation.',
     data: createdBooking,
   });
 });
