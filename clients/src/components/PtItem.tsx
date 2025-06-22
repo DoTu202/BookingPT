@@ -35,33 +35,29 @@ interface Props {
 const PtItem = (props: Props) => {
   const {item, type, size = 'medium', onPress} = props;
 
-  // Define sizes based on prop
   const getCardWidth = () => {
     if (type === 'list') return '100%';
-    
+
     const screenWidth = Dimensions.get('window').width;
     switch (size) {
       case 'small':
-        return screenWidth * 0.45; 
+        return screenWidth * 0.45;
       case 'large':
-        return screenWidth * 0.65;  
+        return screenWidth * 0.65;
       default:
-        return screenWidth * 0.55;  
+        return screenWidth * 0.55;
     }
   };
-
-  // Debug log
-  console.log('PtItem render:', {type, size, cardWidth: getCardWidth()});
 
   const getNumericCardWidth = () => {
     const screenWidth = Dimensions.get('window').width;
     switch (size) {
       case 'small':
-        return screenWidth * 0.45; 
+        return screenWidth * 0.45;
       case 'large':
-        return screenWidth * 0.65;  
+        return screenWidth * 0.65;
       default:
-        return screenWidth * 0.55;  
+        return screenWidth * 0.55;
     }
   };
 
@@ -70,43 +66,54 @@ const PtItem = (props: Props) => {
     return `${(price / 1000).toFixed(0)}K VND`;
   };
 
-  // Debug log để kiểm tra props
-  console.log('PtItem render:', { type, size, itemTitle: item.title });
+  console.log('PtItem render:', {type, size, itemTitle: item.title});
   if (type === 'card') {
     console.log('Card width:', getCardWidth());
   }
 
   const renderSpecializations = () => {
     if (!item.specializations || item.specializations.length === 0) return null;
-    
-    const maxSpecs = type === 'list' ? 2 : (size === 'small' ? 2 : 3);
-    
+
+    const maxSpecs = type === 'list' ? 2 : size === 'small' ? 2 : 3;
+
     return (
-      <View style={[styles.specializationsContainer, type === 'list' && styles.specializationsListContainer]}>
+      <View
+        style={[
+          styles.specializationsContainer,
+          type === 'list' && styles.specializationsListContainer,
+        ]}>
         {item.specializations.slice(0, maxSpecs).map((spec, index) => (
           <View
             key={index}
             style={[
               styles.specializationTag,
               type === 'list' && styles.specializationTagList,
-              { 
-                paddingHorizontal: type === 'list' ? 6 : (size === 'small' ? 6 : 8),
-                paddingVertical: type === 'list' ? 2 : (size === 'small' ? 2 : 3),
-              }
+              {
+                paddingHorizontal:
+                  type === 'list' ? 6 : size === 'small' ? 6 : 8,
+                paddingVertical: type === 'list' ? 2 : size === 'small' ? 2 : 3,
+              },
             ]}>
             <TextComponent
-              text={spec.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-              size={type === 'list' ? 9 : (size === 'small' ? 9 : 10)}
+              text={spec
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, l => l.toUpperCase())}
+              size={type === 'list' ? 9 : size === 'small' ? 9 : 10}
               color={appColors.primary}
               font="medium"
             />
           </View>
         ))}
         {item.specializations.length > maxSpecs && (
-          <View style={[styles.specializationTag, styles.moreTag, type === 'list' && styles.specializationTagList]}>
+          <View
+            style={[
+              styles.specializationTag,
+              styles.moreTag,
+              type === 'list' && styles.specializationTagList,
+            ]}>
             <TextComponent
               text={`+${item.specializations.length - maxSpecs}`}
-              size={type === 'list' ? 9 : (size === 'small' ? 9 : 10)}
+              size={type === 'list' ? 9 : size === 'small' ? 9 : 10}
               color={appColors.gray}
               font="medium"
             />
@@ -117,36 +124,31 @@ const PtItem = (props: Props) => {
   };
 
   const renderCardType = () => (
-    <TouchableOpacity 
+    <TouchableOpacity
       onPress={() => onPress && onPress(item.ptData || item)}
       style={[
         styles.cardContainer,
         {
           width: getCardWidth(),
-          backgroundColor: appColors.white, 
-        }
+          backgroundColor: appColors.white,
+        },
       ]}
-      activeOpacity={0.9}
-    >
-      {/* Avatar and Info Section */}
+      activeOpacity={0.9}>
       <View style={styles.cardContent}>
-        {/* Avatar Section - Top */}
         <View style={styles.cardAvatarContainer}>
           <Image
             source={
-              item.imageURL 
+              item.imageURL
                 ? {uri: item.imageURL}
                 : require('../../assets/images/default.png')
             }
             style={styles.cardAvatar}
           />
-          
-          {/* Favorite Button */}
+
           <TouchableOpacity style={styles.cardFavoriteButton}>
             <Heart size={14} color={appColors.gray} />
           </TouchableOpacity>
-          
-          {/* Rating Badge on Avatar */}
+
           {item.rating && item.rating > 0 && (
             <View style={styles.cardRatingBadge}>
               <Star1 size={10} color={appColors.yellow} variant="Bold" />
@@ -163,12 +165,10 @@ const PtItem = (props: Props) => {
 
         <SpaceComponent height={12} />
 
-        {/* Information Section */}
         <View style={styles.cardInfoContainer}>
-          {/* Row 1: Name */}
-          <TextComponent 
-            text={item.title} 
-            size={size === 'small' ? 14 : 15} 
+          <TextComponent
+            text={item.title}
+            size={size === 'small' ? 14 : 15}
             numberOfLines={1}
             font="bold"
             color={appColors.gray2}
@@ -177,11 +177,10 @@ const PtItem = (props: Props) => {
 
           <SpaceComponent height={4} />
 
-          {/* Row 2: Description */}
-          <TextComponent 
-            text={item.description} 
-            size={size === 'small' ? 11 : 12} 
-            numberOfLines={1} 
+          <TextComponent
+            text={item.description}
+            size={size === 'small' ? 11 : 12}
+            numberOfLines={1}
             color={appColors.gray}
             styles={{textAlign: 'center', lineHeight: 16}}
           />
@@ -198,19 +197,19 @@ const PtItem = (props: Props) => {
                 font="medium"
               />
             )}
-            
-            {item.specializations && item.specializations.length > 0 && item.experienceYears && (
-              <TextComponent
-                text=" • "
-                size={11}
-                color={appColors.gray}
-              />
-            )}
-            
+
+            {item.specializations &&
+              item.specializations.length > 0 &&
+              item.experienceYears && (
+                <TextComponent text=" • " size={11} color={appColors.gray} />
+              )}
+
             {item.specializations && item.specializations.length > 0 && (
               <View style={styles.cardInlineSpecTag}>
                 <TextComponent
-                  text={item.specializations[0].replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                  text={item.specializations[0]
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase())}
                   size={size === 'small' ? 9 : 10}
                   color={appColors.primary}
                   font="medium"
@@ -221,22 +220,27 @@ const PtItem = (props: Props) => {
 
           <SpaceComponent height={6} />
 
-          {/* Row 4: Location */}
-          <RowComponent styles={{justifyContent: 'center', alignItems: 'center'}}>
-            <Location size={size === 'small' ? 11 : 12} color={appColors.gray} />
+          <RowComponent
+            styles={{justifyContent: 'center', alignItems: 'center'}}>
+            <Location
+              size={size === 'small' ? 11 : 12}
+              color={appColors.gray}
+            />
             <SpaceComponent width={2} />
             <TextComponent
               text={item.location}
-              size={size === 'small' ? 11 : 12} 
+              size={size === 'small' ? 11 : 12}
               numberOfLines={1}
               color={appColors.gray}
-              styles={{textAlign: 'center', maxWidth: getNumericCardWidth() - 40}}
+              styles={{
+                textAlign: 'center',
+                maxWidth: getNumericCardWidth() - 40,
+              }}
             />
           </RowComponent>
 
           <SpaceComponent height={8} />
 
-          {/* Row 5: Price (in đậm) */}
           <View style={styles.cardPriceContainer}>
             <TextComponent
               text={formatPrice(item.hourlyRate || 0)}
@@ -251,23 +255,20 @@ const PtItem = (props: Props) => {
   );
 
   const renderListType = () => (
-    <TouchableOpacity 
+    <TouchableOpacity
       onPress={() => onPress && onPress(item.ptData || item)}
       style={styles.listContainer}
-      activeOpacity={0.8}
-    >
-      {/* Avatar Section - Left */}
+      activeOpacity={0.8}>
       <View style={styles.avatarContainer}>
         <Image
           source={
-            item.imageURL 
+            item.imageURL
               ? {uri: item.imageURL}
               : require('../../assets/images/default.png')
           }
           style={styles.avatar}
         />
-        
-        {/* Rating Badge on Avatar */}
+
         {item.rating && item.rating > 0 && (
           <View style={styles.avatarRatingBadge}>
             <Star1 size={10} color={appColors.yellow} variant="Bold" />
@@ -282,13 +283,11 @@ const PtItem = (props: Props) => {
         )}
       </View>
 
-      {/* Information Section - Right */}
       <View style={styles.listContentContainer}>
-        {/* Row 1: Name & Favorite */}
         <View style={styles.listRowContainer}>
-          <TextComponent 
-            text={item.title} 
-            size={16} 
+          <TextComponent
+            text={item.title}
+            size={16}
             numberOfLines={1}
             font="bold"
             color={appColors.gray2}
@@ -299,18 +298,16 @@ const PtItem = (props: Props) => {
           </TouchableOpacity>
         </View>
 
-        {/* Row 2: Description */}
         <View style={styles.listRowContainer}>
-          <TextComponent 
-            text={item.description} 
-            size={13} 
-            numberOfLines={1} 
+          <TextComponent
+            text={item.description}
+            size={13}
+            numberOfLines={1}
             color={appColors.gray}
             styles={{lineHeight: 18}}
           />
         </View>
 
-        {/* Row 3: Rating/Experience & Specializations (cùng 1 hàng) */}
         <View style={styles.listRowContainer}>
           <View style={styles.ratingExperienceRow}>
             {/* Rating */}
@@ -326,8 +323,7 @@ const PtItem = (props: Props) => {
                 />
               </View>
             )}
-            
-            {/* Experience */}
+
             {item.experienceYears && item.experienceYears > 0 && (
               <>
                 <TextComponent
@@ -344,8 +340,7 @@ const PtItem = (props: Props) => {
                 />
               </>
             )}
-            
-            {/* Main Specialization */}
+
             {item.specializations && item.specializations.length > 0 && (
               <>
                 <TextComponent
@@ -356,7 +351,9 @@ const PtItem = (props: Props) => {
                 />
                 <View style={styles.inlineSpecTag}>
                   <TextComponent
-                    text={item.specializations[0].replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    text={item.specializations[0]
+                      .replace(/_/g, ' ')
+                      .replace(/\b\w/g, l => l.toUpperCase())}
                     size={11}
                     color={appColors.primary}
                     font="medium"
@@ -377,7 +374,10 @@ const PtItem = (props: Props) => {
               size={12}
               numberOfLines={1}
               color={appColors.gray}
-              styles={{lineHeight: 16, maxWidth: Dimensions.get('window').width - 150}}
+              styles={{
+                lineHeight: 16,
+                maxWidth: Dimensions.get('window').width - 150,
+              }}
             />
           </RowComponent>
         </View>
@@ -397,17 +397,12 @@ const PtItem = (props: Props) => {
     </TouchableOpacity>
   );
 
-  return (
-    <>
-      {type === 'card' ? renderCardType() : renderListType()}
-    </>
-  );
+  return <>{type === 'card' ? renderCardType() : renderListType()}</>;
 };
 
 export default PtItem;
 
 const styles = StyleSheet.create({
-  // Card Styles - Refactored
   cardContainer: {
     backgroundColor: appColors.white,
     borderRadius: 16,
@@ -421,7 +416,7 @@ const styles = StyleSheet.create({
     elevation: 4,
     paddingVertical: 20,
     paddingHorizontal: 10,
-    minHeight: 260, // Tăng height thêm nữa để dài hơn
+    minHeight: 260,
   },
   cardContent: {
     flex: 1,
