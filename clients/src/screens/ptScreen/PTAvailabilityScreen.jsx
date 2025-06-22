@@ -32,6 +32,7 @@ import {
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
 import { formatTime, extractTimeFromISO } from '../../utils/timeUtils';
+import { fontFamilies } from '../../constants/fontFamilies';
 
 const PTAvailabilityScreen = ({ navigation }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -56,7 +57,7 @@ const PTAvailabilityScreen = ({ navigation }) => {
       setLoading(true);
       const dateString = selectedDate.toISOString().split('T')[0];
       
-      console.log('=== LOADING AVAILABILITY ===');
+      console.log('loading availability');
       console.log('Loading slots for date:', dateString);
       
       const response = await ptApi.getAvailabilitySlots({
@@ -97,7 +98,6 @@ const PTAvailabilityScreen = ({ navigation }) => {
         endTime: newSlot.endTime,
       };
 
-      console.log('=== DEBUG AVAILABILITY ===');
       console.log('newSlot:', newSlot);
       console.log('selectedDate:', selectedDate);
       console.log('slotData being sent:', slotData);
@@ -482,8 +482,8 @@ const PTAvailabilityScreen = ({ navigation }) => {
           </TouchableOpacity>
           <TextComponent
             text="My Availability"
-            size={20}
-            font="Poppins-Bold"
+            size={18}
+            font={fontFamilies.semiBold}
             color={appColors.white}
             styles={{marginTop: 40}}
             

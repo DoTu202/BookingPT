@@ -37,7 +37,6 @@ axiosClient.interceptors.request.use(async config => {
 
 axiosClient.interceptors.response.use(
   res => {
-    // Return full response object for flexibility
     return res;
   },
   async error => {
@@ -49,27 +48,21 @@ axiosClient.interceptors.response.use(
       try {
         await AsyncStorage.removeItem('auth');
         console.log('Token expired - cleared auth data');
-        // You might want to redirect to login screen here
-        // But we can't import navigation here, so we'll throw a specific error
         throw new Error('Token expired');
       } catch (storageError) {
         console.log('Error clearing auth data:', storageError);
       }
     }
 
-    // Better error handling
     if (error.response) {
-      // Server responded with error status
       const message =
         error.response.data?.message ||
         error.response.statusText ||
         'Server Error';
       throw new Error(message);
     } else if (error.request) {
-      // Request was made but no response received
       throw new Error('Network Error - No response from server');
     } else {
-      // Something else happened
       throw new Error(error.message || 'Unknown error occurred');
     }
   },

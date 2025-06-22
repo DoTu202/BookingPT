@@ -9,6 +9,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
@@ -129,9 +130,10 @@ const ChatScreen = ({ navigation, route }) => {
   }, [chatRoomId]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
       <KeyboardAvoidingView 
-        style={styles.container}
+        style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Header */}
@@ -200,7 +202,8 @@ const ChatScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+      <SafeAreaView edges={['bottom']} />
+    </View>
   );
 };
 
@@ -209,10 +212,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  keyboardContainer: {
+    flex: 1,
+  },
   header: {
     backgroundColor: appColors.primary,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: Platform.OS === 'ios' ? 60 : 45,
+    paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomLeftRadius: 20,

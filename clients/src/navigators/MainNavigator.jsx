@@ -8,7 +8,6 @@ import PTTabNavigator from './PTTabNavigator';
 import DrawerNavigator from './DrawerNavigator';
 
 import {
-  BookingDetailScreen,
   NotificationScreen,
   ReviewScreen,
   ChatScreen,
@@ -52,7 +51,7 @@ const MainNavigator = () => {
           />
 
           {/* PT Specific Screens */}
-          <Stack.Screen
+          {/* <Stack.Screen
             name="BookingDetail"
             component={BookingDetailScreen}
             options={{
@@ -60,7 +59,7 @@ const MainNavigator = () => {
               title: 'Booking Details',
               headerBackTitleVisible: false,
             }}
-          />
+          /> */}
 
           <Stack.Screen
             name="Notifications"
@@ -165,7 +164,7 @@ const MainNavigator = () => {
             }}
           />
 
-          <Stack.Screen
+          {/* <Stack.Screen
             name="BookingDetail"
             component={BookingDetailScreen}
             options={{
@@ -173,7 +172,7 @@ const MainNavigator = () => {
               title: 'Booking Details',
               backgroundColor: appColors.primary,
             }}
-          />
+          /> */}
 
           {/* client common screen  */}
           <Stack.Screen

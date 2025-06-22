@@ -1,7 +1,6 @@
 import { appInfo } from '../constants/appInfos';
 
 const notificationApi = {
-  // Get all notifications
   getNotifications: async (token, page = 1, limit = 20, isRead = undefined) => {
     try {
       let url = `${appInfo.BASE_URL}/api/notifications?page=${page}&limit=${limit}`;

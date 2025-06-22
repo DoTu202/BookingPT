@@ -1,9 +1,4 @@
 /**
- * Time formatting utilities to handle timezone-safe time display
- * Ensures consistent time display regardless of timezone differences
- */
-
-/**
  * Format time string to display format (12-hour format with AM/PM)
  * Handles both ISO strings and time strings without timezone conversion issues
  * @param {string} timeString - Either ISO string (2025-06-19T19:40:00.000Z) or time string (19:40)

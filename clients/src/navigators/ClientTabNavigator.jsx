@@ -8,7 +8,8 @@ import { fontFamilies } from '../constants/fontFamilies';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Import Client Screens
-import { ClientHomeScreen, MessagesScreen, ClientBookingsScreen, ProgressScreen, ClientProfileScreen } from '../screens/clientScreen';
+import { ClientHomeScreen, ClientBookingsScreen, ProgressScreen, ClientProfileScreen } from '../screens/clientScreen';
+import { ChatListScreen } from '../screens/commonScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -18,7 +19,7 @@ const ClientTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: route.name === 'ClientBookings', // Show header only for ClientBookings
+        headerShown: route.name === 'ClientBookings', 
         headerTitle: route.name === 'ClientBookings' ? 'My Bookings' : '',
         headerTintColor: appColors.white,
         headerStyle: {
@@ -105,7 +106,7 @@ const ClientTabNavigator = () => {
       
       <Tab.Screen 
         name="Messages" 
-        component={MessagesScreen}
+        component={ChatListScreen}
         options={{
           tabBarLabel: 'Messages',
         }}

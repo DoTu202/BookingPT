@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
@@ -14,6 +16,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import chatApi from '../../apis/chatApi';
 import { authSelector } from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
+import { fontFamilies } from '../../constants/fontFamilies';
 
 const ChatListScreen = ({ navigation }) => {
   const auth = useSelector(authSelector);
@@ -110,7 +113,8 @@ const ChatListScreen = ({ navigation }) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
         <View style={styles.header}>
           <TouchableOpacity 
             onPress={() => navigation.goBack()}
@@ -124,12 +128,14 @@ const ChatListScreen = ({ navigation }) => {
           <ActivityIndicator size="large" color={appColors.primary} />
           <Text style={styles.loadingText}>Loading chats...</Text>
         </View>
-      </SafeAreaView>
+        <SafeAreaView edges={['bottom']} />
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
       <View style={styles.header}>
         <TouchableOpacity 
           onPress={() => navigation.goBack()}
@@ -157,7 +163,8 @@ const ChatListScreen = ({ navigation }) => {
           contentContainerStyle={styles.listContainer}
         />
       )}
-    </SafeAreaView>
+      <SafeAreaView edges={['bottom']} />
+    </View>
   );
 };
 
@@ -169,18 +176,19 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: appColors.primary,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: Platform.OS === 'ios' ? 60 : 45,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderRadius: 20,
+    height: 140,
   },
   backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20, 
+    fontFamily: fontFamilies.bold,
     color: 'white',
     flex: 1,
     textAlign: 'center',
@@ -190,6 +198,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 16,
@@ -201,6 +210,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
+    backgroundColor: '#f5f5f5',
   },
   emptyTitle: {
     fontSize: 20,

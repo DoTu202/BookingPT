@@ -97,7 +97,6 @@ const PTProfileViewScreen = () => {
 
   const loadStats = async () => {
     try {
-      // Load dashboard stats for profile stats section
       const response = await ptApi.getDashboardStats();
       if (response.data?.success) {
         const dashboardData = response.data.data;

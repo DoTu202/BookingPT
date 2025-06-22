@@ -62,10 +62,8 @@ const activityData = [
     duration: '60 mins',
   },
 ];
-// --- KẾT THÚC DỮ LIỆU MẪU ---
 
 
-// --- COMPONENT CON CHO CÁC THẺ CHỈ SỐ ---
 const StatCard = ({icon, value, unit, name, change}) => (
   <CardComponent styles={styles.statCard}>
     <RowComponent>
@@ -90,7 +88,7 @@ const StatCard = ({icon, value, unit, name, change}) => (
   </CardComponent>
 );
 
-// --- COMPONENT CON CHO CÁC MỤC HOẠT ĐỘNG ---
+
 const ActivityItem = ({item}) => {
     let icon;
     if (item.icon === 'weight') {
@@ -118,7 +116,6 @@ const ActivityItem = ({item}) => {
     )
 }
 
-// --- MÀN HÌNH CHÍNH ---
 const ProgressScreen = ({navigation}) => {
 
   const [hasData, setHasData] = useState(true); 
@@ -189,9 +186,8 @@ export default ProgressScreen;
 const styles = StyleSheet.create({
     header: {
         backgroundColor: appColors.primary,
-        height: 120,
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
+        height: 140,
+        borderRadius: 20,
         paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 50,
         paddingHorizontal: 20,
         justifyContent: 'center'

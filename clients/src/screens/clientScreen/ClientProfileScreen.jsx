@@ -211,7 +211,7 @@ const ClientProfileScreen = ({ navigation }) => {
         <View style={styles.headerContent}>
           <TextComponent 
             text="My Profile" 
-            size={24} 
+            size={20} 
             font={fontFamilies.bold} 
             color={appColors.white}
           />
@@ -384,6 +384,8 @@ const styles = StyleSheet.create({
   headerContent: {
     paddingHorizontal: 16,
     paddingVertical: 20,
+    alignItems: 'center', 
+    justifyContent: 'center',
   },
   scrollView: {
     flex: 1,

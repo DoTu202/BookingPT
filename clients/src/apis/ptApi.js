@@ -66,6 +66,12 @@ const ptApi = {
     return axiosClient.get(url);
   },
 
+  // Earnings APIs
+  getEarningsData: async (period = 'monthly') => {
+    const url = '/api/pt/earnings';
+    return axiosClient.get(url, { params: { period } });
+  },
+
   getRecentClients: async () => {
     try {
       const response = await ptApi.getBookings();
@@ -182,7 +188,6 @@ const ptApi = {
     }
   },
 
-  // Original PT management functions (Legacy - for backward compatibility)
   setAvailability: (data, token) => {
     const url = '/pts/availability';
     return axiosClient.post(url, data, {
