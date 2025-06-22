@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
 
-// Simple Chat Room Schema - just PT and Client
+
 const chatRoomSchema = new mongoose.Schema({
-  // Two participants: PT and Client
+
   ptUser: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -14,7 +14,6 @@ const chatRoomSchema = new mongoose.Schema({
     required: true
   },
   
-  // Last message for preview
   lastMessage: {
     content: String,
     sender: {
@@ -30,7 +29,7 @@ const chatRoomSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Simple Message Schema
+
 const messageSchema = new mongoose.Schema({
   chatRoom: {
     type: mongoose.Schema.Types.ObjectId,

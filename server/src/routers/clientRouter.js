@@ -21,7 +21,7 @@ const {
 } = require('../controllers/clientController');
 
 router.get('/pt', searchPTs);
-router.get('/trainers', searchPTs); // Alias for better naming
+router.get('/trainers', searchPTs); 
 
 router.get('/pt/:ptId/profile', authenticateToken, viewPTProfile);
 

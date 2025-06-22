@@ -20,14 +20,12 @@ const getPtBookings = asyncHandler(async (req, res) => {
 
     const bookings = await Booking.find(queryOptions)
         .populate('client', 'username email photoUrl')
-        .populate('availabilitySlot', 'startTime endTime') // Có thể không cần nếu bookingTime đã đủ
+        .populate('availabilitySlot', 'startTime endTime') 
         .sort({ 'bookingTime.startTime': 'desc' });
     res.status(200).json({ message: 'Lấy danh sách lịch đặt của PT thành công.', count: bookings.length, data: bookings });
 });
 
-// @desc    PT xác nhận một lịch đặt từ client
-// @route   POST /api/pts/bookings/:bookingId/confirm
-// @access  Private (PT only)
+
 const confirmBooking = asyncHandler(async (req, res) => {
     const { bookingId } = req.params;
     const booking = await Booking.findById(bookingId);
@@ -51,9 +49,6 @@ const confirmBooking = asyncHandler(async (req, res) => {
         await slot.save();
     } else if (!slot) {
         console.warn(`Slot ${booking.availabilitySlot} cho booking ${bookingId} không tìm thấy khi xác nhận.`);
-        // Cân nhắc: Nếu slot không còn, booking này có nên được confirm không?
-        // Hoặc có thể tạo lại 1 slot 'booked' tương ứng với bookingTime?
-        // Hiện tại, chỉ log warning.
     }
     const updatedBooking = await booking.save();
     
@@ -73,9 +68,7 @@ const confirmBooking = asyncHandler(async (req, res) => {
     res.status(200).json({ message: 'Booking confirmed successfully.', data: updatedBooking });
 });
 
-// @desc    PT từ chối một lịch đặt từ client
-// @route   POST /api/pts/bookings/:bookingId/reject
-// @access  Private (PT only)
+
 const rejectBooking = asyncHandler(async (req, res) => {
     const { bookingId } = req.params;
     const booking = await Booking.findById(bookingId);
@@ -115,9 +108,7 @@ const rejectBooking = asyncHandler(async (req, res) => {
     res.status(200).json({ message: 'Booking rejected successfully.', data: updatedBooking });
 });
 
-// @desc    PT đánh dấu một buổi tập đã hoàn thành
-// @route   POST /api/pts/bookings/:bookingId/complete
-// @access  Private (PT only)
+
 const markBookingAsCompleted = asyncHandler(async (req, res) => {
     const { bookingId } = req.params;
     const booking = await Booking.findById(bookingId);

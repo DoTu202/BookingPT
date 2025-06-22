@@ -31,6 +31,5 @@ app.listen(PORT, '0.0.0.0', err => {
   } else {
     console.log(`Server is running on:`);
     console.log(`  - Local: http://localhost:${PORT}`);
-    console.log(` For iOS Simulator, use localhost. For real device, use network IP.`);
   }
 });

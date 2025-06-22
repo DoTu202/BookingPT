@@ -59,7 +59,7 @@ bookingSchema.pre('save', function(next) {
     next();
 });
 
-// Indexes
+
 bookingSchema.index({ client: 1, "bookingTime.startTime": -1 });
 bookingSchema.index({ pt: 1, "bookingTime.startTime": -1 });
 bookingSchema.index({ availabilitySlot: 1 });

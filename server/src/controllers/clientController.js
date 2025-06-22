@@ -23,7 +23,7 @@ const searchPTs = asyncHandler(async (req, res) => {
   const pageSize = parseInt(req.query.pageSize) || 10;
   const page = parseInt(req.query.pageNumber) || 1;
 
-  // --- Xây dựng điều kiện tìm kiếm cho PTProfile ---
+  // 
   const profileQueryConditions = {};
 
   if (specialization) {
@@ -48,18 +48,16 @@ const searchPTs = asyncHandler(async (req, res) => {
     };
   }
 
-  // --- Lọc User có vai trò 'pt' và khớp tên (nếu có) ---
+  // pt & client same username; 
   const userQueryConditions = {role: 'pt'};
   if (name) {
     userQueryConditions.username = {$regex: name, $options: 'i'};
   }
 
-  // Lấy danh sách ID của các User PT khớp điều kiện tên (nếu có)
   let ptUserIds = (await User.find(userQueryConditions).select('_id')).map(
     user => user._id,
   );
 
-  // Nếu tìm theo tên mà không có PT nào, thì không cần tìm profile nữa
   if (name && ptUserIds.length === 0) {
     return res
       .status(200)
@@ -72,12 +70,10 @@ const searchPTs = asyncHandler(async (req, res) => {
       });
   }
 
-  // Áp dụng filter user ID vào profileQuery (nếu có user IDs từ filter tên)
   if (ptUserIds.length > 0) {
     profileQueryConditions.user = {$in: ptUserIds};
   }
 
-  // --- Lọc PTs dựa trên ngày rảnh (availableDate) ---
   if (availableDate) {
     const searchDate = new Date(availableDate);
     const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
@@ -92,7 +88,6 @@ const searchPTs = asyncHandler(async (req, res) => {
       startTime: {$lte: endOfDay},
       endTime: {$gte: startOfDay},
     };
-    // Nếu đã có danh sách PT ID từ các filter khác, chỉ tìm availability của các PT đó
     if (ptIdsCurrentlyInQuery && ptIdsCurrentlyInQuery.length > 0) {
       availabilityQuery.pt = {$in: ptIdsCurrentlyInQuery};
     }
@@ -112,7 +107,6 @@ const searchPTs = asyncHandler(async (req, res) => {
           message: 'Don not find any PTs available on the selected date.',
         });
     }
-    // Cập nhật lại điều kiện user cho profileQuery
     profileQueryConditions.user = {$in: availablePTsFromSlots};
   }
 
@@ -129,7 +123,7 @@ const searchPTs = asyncHandler(async (req, res) => {
       });
   }
 
-  let sortOptions = {averageRating: -1}; // Mặc định sắp xếp theo đánh giá giảm dần
+  let sortOptions = {averageRating: -1}; 
   if (sortBy === 'hourlyRate') {
     sortOptions = {hourlyRate: order === 'desc' ? -1 : 1};
   } else if (sortBy === 'experienceYears') {
@@ -137,7 +131,7 @@ const searchPTs = asyncHandler(async (req, res) => {
   }
 
   const ptProfiles = await PTProfile.find(profileQueryConditions)
-    .populate('user', 'username email photoUrl') // Chỉ populate thông tin User cần thiết
+    .populate('user', 'username email photoUrl') 
     .limit(pageSize)
     .skip(pageSize * (page - 1))
     .sort(sortOptions);
@@ -151,9 +145,7 @@ const searchPTs = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Client xem hồ sơ chi tiết của một PT
-// @route   GET /api/clients/pts/:ptId/profile
-// @access  Private (Authenticated users)
+
 const viewPTProfile = asyncHandler(async (req, res) => {
   const {ptId} = req.params;
 
@@ -166,8 +158,7 @@ const viewPTProfile = asyncHandler(async (req, res) => {
   const profile = await PTProfile.findOne({user: ptId}).populate(
     'user',
     'username email photoUrl phoneNumber dob role imageGallery',
-  ); // Populate imageGallery
-  // .populate('reviews.client', 'username photoUrl'); // Nếu bạn nhúng reviews và muốn populate client của review
+  ); 
 
   if (!profile) {
     return res.status(200).json({
@@ -184,9 +175,7 @@ const viewPTProfile = asyncHandler(async (req, res) => {
   res.status(200).json(profile);
 });
 
-// @desc    Client xem các khung giờ rảnh của một PT cụ thể
-// @route   GET /api/clients/pts/:ptId/availability
-// @access  Private (Authenticated users)
+
 const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   const {ptId} = req.params;
   const {startDate, endDate} = req.query;
@@ -203,13 +192,11 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   };
 
   if (startDate) {
-    // Parse date in UTC to avoid timezone issues
     const start = new Date(startDate + 'T00:00:00.000Z');
     queryOptions.startTime = {$gte: start};
   }
   
   if (endDate) {
-    // Parse date in UTC to avoid timezone issues
     const end = new Date(endDate + 'T23:59:59.999Z');
     if (queryOptions.startTime) {
       queryOptions.startTime = {...queryOptions.startTime, $lte: end};
@@ -227,9 +214,6 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Client tạo một yêu cầu đặt lịch với PT
-// @route   POST /api/clients/bookings
-// @access  Private (Client only)
 const createBookingRequest = asyncHandler(async (req, res) => {
   const {ptId, availabilitySlotId, notesFromClient} = req.body;
   const clientId = req.user._id;
@@ -273,7 +257,7 @@ const createBookingRequest = asyncHandler(async (req, res) => {
   
   }
 
-  // Kiểm tra xem client có đặt trùng lịch của chính mình không
+
   const existingClientBooking = await Booking.findOne({
     client: clientId,
     status: {$in: ['pending_confirmation', 'confirmed']},
@@ -303,7 +287,7 @@ const createBookingRequest = asyncHandler(async (req, res) => {
 
   const createdBooking = await newBooking.save();
   
-  // Send notification to PT
+
   try {
     await createNotification({
       recipient: ptId,
@@ -322,11 +306,9 @@ const createBookingRequest = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Client xem danh sách các lịch đã đặt của mình
-// @route   GET /api/clients/my-bookings
-// @access  Private (Client only)
+
 const getClientBookings = asyncHandler(async (req, res) => {
-  const {status, upcoming} = req.query; // Filter theo trạng thái hoặc sắp tới
+  const {status, upcoming} = req.query; 
   const pageSize = parseInt(req.query.pageSize) || 10;
   const page = parseInt(req.query.pageNumber) || 1;
 
@@ -365,7 +347,7 @@ const getClientBookings = asyncHandler(async (req, res) => {
   console.log('Bookings found:', bookings.length);
   console.log('First booking:', bookings[0]);
 
-  // Sau đó query riêng PTProfile cho mỗi PT trong bookings
+
   const enrichedBookings = await Promise.all(
     bookings.map(async (booking) => {
       if (booking.pt && booking.pt._id) {
@@ -393,9 +375,6 @@ const getClientBookings = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Client hủy một lịch đặt của mình
-// @route   POST /api/clients/bookings/:bookingId/cancel
-// @access  Private (Client only)
 const cancelBookingByClient = asyncHandler(async (req, res) => {
   const {bookingId} = req.params;
   const booking = await Booking.findById(bookingId);
@@ -434,22 +413,18 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
   const originalStatus = booking.status;
   booking.status = 'cancelled_by_client';
 
-  // Giải phóng lại slot availability nếu booking đó đã chiếm slot
   if (
     originalStatus === 'pending_confirmation' ||
     originalStatus === 'confirmed'
   ) {
     const slot = await Availability.findById(booking.availabilitySlot);
-    // Chỉ giải phóng nếu slot đó vẫn đang 'booked' bởi booking này
-    // và không có booking nào khác (pending/confirmed) cho slot này (hiếm khi xảy ra nếu logic đúng)
     if (slot && slot.status === 'booked') {
       const otherBookingsForSlot = await Booking.findOne({
         availabilitySlot: slot._id,
-        _id: {$ne: booking._id}, // Các booking khác cho slot này
+        _id: {$ne: booking._id}, 
         status: {$in: ['pending_confirmation', 'confirmed']},
       });
       if (!otherBookingsForSlot) {
-        // Nếu không có booking nào khác đang active cho slot này
         slot.status = 'available';
         await slot.save();
       }
@@ -457,15 +432,13 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
   }
 
   const updatedBooking = await booking.save();
-  // TODO: Gửi thông báo cho PT về việc client hủy lịch
   res
     .status(200)
     .json({message: 'Lịch đặt đã được hủy thành công.', data: updatedBooking});
 });
 
-// Client Profile Management APIs
 
-// Get client profile
+
 const getClientProfile = asyncHandler(async (req, res) => {
   try {
     const userId = req.user.id;
@@ -691,5 +664,4 @@ module.exports = {
   changePassword,
   uploadProfilePhoto,
   deleteAccount,
-  // reviewPT (nếu bạn triển khai)
 };

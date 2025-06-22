@@ -145,7 +145,6 @@ const login = asyncHandler(async (req, res) => {
       email: existingUser.email,
       username: existingUser.username,
       accesstoken: getJsonWebToken(existingUser.email, existingUser._id, existingUser.role),
-      fcmTokens: existingUser.fcmTokens ?? [],
       photoUrl: existingUser.photoUrl ?? '',
       role: existingUser.role,
     },
