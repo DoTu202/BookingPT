@@ -9,7 +9,6 @@ const clientRouter = require('./src/routers/clientRouter');
 const notificationRouter = require('./src/routers/notificationRouter');
 const chatRouter = require('./src/routers/chatRouter');
 
-
 dotenv.config();
 const PORT = process.env.PORT || 3001; 
 
@@ -30,6 +29,6 @@ app.listen(PORT, '0.0.0.0', err => {
     console.error('Error starting server:', err);
   } else {
     console.log(`Server is running on:`);
-    console.log(`  - Local: http://localhost:${PORT}`);
+    console.log(`Local: http://localhost:${PORT}`);
   }
 });

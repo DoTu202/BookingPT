@@ -5,10 +5,8 @@ const PTProfile = require('../models/PTProfileModel'); // Hoặc tên model PTPr
 const Availability = require('../models/AvailabilityModel');
 const { createNotification } = require('./notificationController'); // Hoặc tên model Availability của bạn
 const Booking = require('../models/bookingModel');
+const timeUtils = require('../utils/timeUtils');
 
-
-// @route   GET /api/clients/pts
-// @access  Private (Authenticated users - bất kỳ ai đăng nhập cũng có thể tìm)
 const searchPTs = asyncHandler(async (req, res) => {
   const {
     specialization,
@@ -75,9 +73,7 @@ const searchPTs = asyncHandler(async (req, res) => {
   }
 
   if (availableDate) {
-    const searchDate = new Date(availableDate);
-    const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(searchDate.setHours(23, 59, 59, 999));
+    const { startOfDay, endOfDay } = timeUtils.getDateRange(availableDate);
 
     const ptIdsCurrentlyInQuery = profileQueryConditions.user
       ? profileQueryConditions.user.$in
@@ -158,7 +154,7 @@ const viewPTProfile = asyncHandler(async (req, res) => {
 
   const profile = await PTProfile.findOne({user: ptId}).populate(
     'user',
-    'username email photoUrl phoneNumber dob role imageGallery', //re-check imageGallery
+    'username email photoUrl phoneNumber dob role imageGallery', 
   ); 
 
   if (!profile) {
@@ -193,25 +189,32 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   };
 
   if (startDate) {
-    const start = new Date(startDate + 'T00:00:00.000Z');
-    queryOptions.startTime = {$gte: start};
+    const startOfDay = timeUtils.getStartOfDay(startDate);
+    queryOptions.startTime = {$gte: startOfDay};
   }
   
   if (endDate) {
-    const end = new Date(endDate + 'T23:59:59.999Z');
+    const endOfDay = timeUtils.getEndOfDay(endDate);
     if (queryOptions.startTime) {
-      queryOptions.startTime = {...queryOptions.startTime, $lte: end};
+      queryOptions.startTime = {...queryOptions.startTime, $lte: endOfDay};
     } else {
-      queryOptions.startTime = {$lte: end};
+      queryOptions.startTime = {$lte: endOfDay};
     }
   }
 
   const slots = await Availability.find(queryOptions).sort({startTime: 'asc'});
 
+  // Format times for consistent display
+  const formattedSlots = slots.map(slot => ({
+    ...slot.toObject(),
+    startTime: timeUtils.formatDateTime(slot.startTime, 'YYYY-MM-DD HH:mm'),
+    endTime: timeUtils.formatDateTime(slot.endTime, 'YYYY-MM-DD HH:mm'),
+  }));
+
   res.status(200).json({
     message: 'PT availability retrieved successfully.',
-    count: slots.length,
-    data: slots,
+    count: formattedSlots.length,
+    data: formattedSlots,
   });
 });
 
@@ -253,7 +256,7 @@ const createBookingRequest = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error('Time slot is no longer available.');
   }
-  if (new Date(slot.startTime) < new Date()) {
+  if (timeUtils.isInPast(slot.startTime)) {
     res.status(400);
     throw new Error('Cannot book past time slots.');
   }
@@ -315,10 +318,6 @@ const getClientBookings = asyncHandler(async (req, res) => {
   const pageSize = parseInt(req.query.pageSize) || 10;
   const page = parseInt(req.query.pageNumber) || 1;
 
-  console.log('=== Debug getClientBookings ===');
-  console.log('User ID:', req.user._id);
-  console.log('Query params:', req.query);
-
   const queryOptions = {client: req.user._id};
 
   if (status) {
@@ -330,15 +329,12 @@ const getClientBookings = asyncHandler(async (req, res) => {
       queryOptions.status = {$in: ['pending_confirmation', 'confirmed']};
     }
   }
-
-  console.log('Query options:', queryOptions);
   
   if (upcoming === 'false') {
     queryOptions['bookingTime.startTime'] = {$lt: new Date()};
   }
 
   const count = await Booking.countDocuments(queryOptions);
-  console.log('Count found:', count);
   
   const bookings = await Booking.find(queryOptions)
     .populate('pt', 'username email photoUrl')
@@ -346,9 +342,6 @@ const getClientBookings = asyncHandler(async (req, res) => {
     .limit(pageSize)
     .skip(pageSize * (page - 1))
     .sort({'bookingTime.startTime': upcoming === 'true' ? 'asc' : 'desc'});
-
-  console.log('Bookings found:', bookings.length);
-  console.log('First booking:', bookings[0]);
 
 
   const enrichedBookings = await Promise.all(
@@ -386,11 +379,11 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
 
   if (!booking) {
     res.status(404);
-    throw new Error('Không tìm thấy lịch đặt.');
+    throw new Error('Booking not found');
   }
   if (booking.client.toString() !== req.user._id.toString()) {
     res.status(403);
-    throw new Error('Bạn không có quyền hủy lịch đặt này.');
+    throw new Error('You are not authorized to cancel this booking.');
   }
 
   const now = new Date();

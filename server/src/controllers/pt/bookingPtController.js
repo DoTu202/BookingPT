@@ -2,6 +2,7 @@ const Booking = require('../../models/bookingModel');
 const asyncHandler = require('express-async-handler');
 const Availability = require('../../models/AvailabilityModel');
 const { createNotification } = require('../notificationController');
+const timeUtils = require('../../utils/timeUtils');
 
 
 const getPtBookings = asyncHandler(async (req, res) => {
@@ -12,9 +13,7 @@ const getPtBookings = asyncHandler(async (req, res) => {
         queryOptions.status = status;
     }
     if (date) {
-        const searchDate = new Date(date);
-        const startOfDay = new Date(searchDate.setHours(0, 0, 0, 0));
-        const endOfDay = new Date(searchDate.setHours(23, 59, 59, 999));
+        const { startOfDay, endOfDay } = timeUtils.getDateRange(date);
         queryOptions['bookingTime.startTime'] = { $gte: startOfDay, $lte: endOfDay };
     }
 
@@ -22,7 +21,21 @@ const getPtBookings = asyncHandler(async (req, res) => {
         .populate('client', 'username email photoUrl')
         .populate('availabilitySlot', 'startTime endTime') 
         .sort({ 'bookingTime.startTime': 'desc' });
-    res.status(200).json({ message: 'PT bookings retrieved successfully.', count: bookings.length, data: bookings });
+
+    // Format booking times for consistent display
+    const formattedBookings = bookings.map(booking => ({
+        ...booking.toObject(),
+        bookingTime: {
+            startTime: timeUtils.formatDateTime(booking.bookingTime.startTime, 'YYYY-MM-DD HH:mm'),
+            endTime: timeUtils.formatDateTime(booking.bookingTime.endTime, 'YYYY-MM-DD HH:mm'),
+        }
+    }));
+
+    res.status(200).json({ 
+        message: 'PT bookings retrieved successfully.', 
+        count: formattedBookings.length, 
+        data: formattedBookings 
+    });
 });
 
 
@@ -122,7 +135,7 @@ const markBookingAsCompleted = asyncHandler(async (req, res) => {
     if (booking.status !== 'confirmed') {
         res.status(400); throw new Error(`Only confirmed bookings can be marked as completed. Current status: "${booking.status}".`);
     }
-    if (new Date(booking.bookingTime.endTime) > new Date()) {
+    if (timeUtils.isInFuture(booking.bookingTime.endTime)) {
         res.status(400); throw new Error('Cannot mark session as completed before it ends.');
     }
 

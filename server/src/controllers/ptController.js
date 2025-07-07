@@ -54,11 +54,6 @@ const updatePtProfile = async (req, res) => {
       workingHours,
     } = req.body;
 
-    console.log('=== BACKEND DEBUG ===');
-    console.log('Received data:', req.body);
-    console.log('specialization:', specialization);
-    console.log('experience:', experience);
-
     // Check if profile exists
     let ptProfile = await PTProfile.findOne({ user: ptId });
 
@@ -77,7 +72,6 @@ const updatePtProfile = async (req, res) => {
       await ptProfile.save();
     } else {
       // Create new profile
-      console.log('Creating new profile with specializations:', specialization);
       ptProfile = new PTProfile({
         user: ptId,
         specializations: specialization !== undefined ? specialization : [],
