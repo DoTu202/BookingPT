@@ -20,8 +20,7 @@ const {
   deleteAccount,
 } = require('../controllers/clientController');
 
-router.get('/pt', searchPTs);
-router.get('/trainers', searchPTs); 
+router.get('/pt', searchPTs); 
 
 router.get('/pt/:ptId/profile', authenticateToken, viewPTProfile);
 
@@ -51,6 +50,7 @@ router.post(
   authorizeRoles('client'),
   cancelBookingByClient,
 );
+
 
 // Client Profile Management Routes
 router.get(

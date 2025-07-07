@@ -9,9 +9,9 @@ const clientRouter = require('./src/routers/clientRouter');
 const notificationRouter = require('./src/routers/notificationRouter');
 const chatRouter = require('./src/routers/chatRouter');
 
-dotenv.config();
 
-const PORT = 3001;
+dotenv.config();
+const PORT = process.env.PORT || 3001; 
 
 app.use(express.json());
 app.use(cors());

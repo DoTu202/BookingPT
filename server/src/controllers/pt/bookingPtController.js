@@ -22,7 +22,7 @@ const getPtBookings = asyncHandler(async (req, res) => {
         .populate('client', 'username email photoUrl')
         .populate('availabilitySlot', 'startTime endTime') 
         .sort({ 'bookingTime.startTime': 'desc' });
-    res.status(200).json({ message: 'Lấy danh sách lịch đặt của PT thành công.', count: bookings.length, data: bookings });
+    res.status(200).json({ message: 'PT bookings retrieved successfully.', count: bookings.length, data: bookings });
 });
 
 
@@ -31,24 +31,24 @@ const confirmBooking = asyncHandler(async (req, res) => {
     const booking = await Booking.findById(bookingId);
 
     if (!booking) {
-        res.status(404); throw new Error('Không tìm thấy lịch đặt.');
+        res.status(404); throw new Error('Booking not found.');
     }
     if (booking.pt.toString() !== req.user._id.toString()) {
-        res.status(403); throw new Error('Bạn không có quyền thao tác với lịch đặt này.');
+        res.status(403); throw new Error('You are not authorized to modify this booking.');
     }
     if (booking.status !== 'pending_confirmation') {
-        res.status(400); throw new Error(`Lịch đặt đang ở trạng thái "${booking.status}", không thể xác nhận.`);
+        res.status(400); throw new Error(`Booking is currently in "${booking.status}" status, cannot confirm.`);
     }
 
     booking.status = 'confirmed';
 
 
     const slot = await Availability.findById(booking.availabilitySlot);
-    if (slot && slot.status !== 'booked') { // Đảm bảo slot vẫn đang bị chiếm bởi booking này
+    if (slot && slot.status !== 'booked') { // Only update the slot if it is not already booked
         slot.status = 'booked';
         await slot.save();
     } else if (!slot) {
-        console.warn(`Slot ${booking.availabilitySlot} cho booking ${bookingId} không tìm thấy khi xác nhận.`);
+        console.warn(`Slot ${booking.availabilitySlot} for booking ${bookingId} not found when confirming.`);
     }
     const updatedBooking = await booking.save();
     
@@ -74,18 +74,18 @@ const rejectBooking = asyncHandler(async (req, res) => {
     const booking = await Booking.findById(bookingId);
 
     if (!booking) {
-        res.status(404); throw new Error('Không tìm thấy lịch đặt.');
+        res.status(404); throw new Error('Booking not found.');
     }
     if (booking.pt.toString() !== req.user._id.toString()) {
-        res.status(403); throw new Error('Bạn không có quyền thao tác với lịch đặt này.');
+        res.status(403); throw new Error('You are not authorized to modify this booking.');
     }
 
     if (booking.status !== 'pending_confirmation') {
-        res.status(400); throw new Error(`Lịch đặt đang ở trạng thái "${booking.status}", không thể từ chối.`);
+        res.status(400); throw new Error(`Booking is currently in "${booking.status}" status, cannot reject.`);
     }
     booking.status = 'rejected_by_pt';
     const slot = await Availability.findById(booking.availabilitySlot);
-    if (slot && slot.status === 'booked') { // Chỉ giải phóng slot nếu nó đang bị booking này chiếm
+    if (slot && slot.status === 'booked') { // Only free the slot if it is currently booked by this booking
         slot.status = 'available';
         await slot.save();
     }
@@ -114,16 +114,16 @@ const markBookingAsCompleted = asyncHandler(async (req, res) => {
     const booking = await Booking.findById(bookingId);
 
     if (!booking) {
-        res.status(404); throw new Error('Không tìm thấy lịch đặt.');
+        res.status(404); throw new Error('Booking not found.');
     }
     if (booking.pt.toString() !== req.user._id.toString()) {
-        res.status(403); throw new Error('Bạn không có quyền thao tác với lịch đặt này.');
+        res.status(403); throw new Error('You do not have permission to access this booking.');
     }
     if (booking.status !== 'confirmed') {
-        res.status(400); throw new Error(`Chỉ có thể hoàn thành lịch đặt đã được xác nhận. Trạng thái hiện tại: "${booking.status}".`);
+        res.status(400); throw new Error(`Only confirmed bookings can be marked as completed. Current status: "${booking.status}".`);
     }
     if (new Date(booking.bookingTime.endTime) > new Date()) {
-        res.status(400); throw new Error('Không thể đánh dấu hoàn thành cho buổi tập chưa kết thúc.');
+        res.status(400); throw new Error('Cannot mark session as completed before it ends.');
     }
 
     booking.status = 'completed';

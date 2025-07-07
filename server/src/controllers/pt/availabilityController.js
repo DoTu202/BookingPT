@@ -12,8 +12,7 @@ const addAvailability = asyncHandler(async (req, res) => {
     });
   }
 
-  // Validate and parse time format
-  console.log('=== BACKEND AVAILABILITY DEBUG ===');
+
   console.log('Received data:', { date, startTime, endTime });
   
   // Ensure time format is HH:MM

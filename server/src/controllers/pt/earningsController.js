@@ -23,7 +23,7 @@ const getEarningsData = async (req, res) => {
 
     // Calculate total earnings
     const totalEarnings = completedBookings.reduce((total, booking) => {
-      return total + (booking.price || 0);
+      return total + (booking.priceAtBooking || 0);
     }, 0);
 
     // Calculate total sessions
@@ -55,13 +55,13 @@ const getEarningsData = async (req, res) => {
         return bookingDate >= date && bookingDate < nextDate;
       });
       
-      const dayEarnings = dayBookings.reduce((sum, booking) => sum + (booking.price || 0), 0);
+      const dayEarnings = dayBookings.reduce((sum, booking) => sum + (booking.priceAtBooking || 0), 0);
       
       chartData.push({
         label: date.toLocaleDateString('en-US', { weekday: 'short' }),
         value: dayEarnings,
         sessions: dayBookings.length,
-        date: date.toISOString().split('T')[0] // YYYY-MM-DD format
+        date: date.toISOString().split('T')[0]
       });
     }
 
@@ -72,7 +72,7 @@ const getEarningsData = async (req, res) => {
       date: booking.date,
       startTime: booking.startTime,
       endTime: booking.endTime,
-      amount: booking.price || 0,
+      amount: booking.priceAtBooking || 0,
       status: booking.status
     }));
 

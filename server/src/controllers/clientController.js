@@ -6,7 +6,7 @@ const Availability = require('../models/AvailabilityModel');
 const { createNotification } = require('./notificationController'); // Hoặc tên model Availability của bạn
 const Booking = require('../models/bookingModel');
 
-// @desc    Client tìm kiếm PTs
+
 // @route   GET /api/clients/pts
 // @access  Private (Authenticated users - bất kỳ ai đăng nhập cũng có thể tìm)
 const searchPTs = asyncHandler(async (req, res) => {
@@ -104,7 +104,7 @@ const searchPTs = asyncHandler(async (req, res) => {
           page,
           pages: 0,
           count: 0,
-          message: 'Don not find any PTs available on the selected date.',
+          message: 'Do not find any PTs available on the selected date.',
         });
     }
     profileQueryConditions.user = {$in: availablePTsFromSlots};
@@ -146,6 +146,7 @@ const searchPTs = asyncHandler(async (req, res) => {
 });
 
 
+//
 const viewPTProfile = asyncHandler(async (req, res) => {
   const {ptId} = req.params;
 
@@ -157,7 +158,7 @@ const viewPTProfile = asyncHandler(async (req, res) => {
 
   const profile = await PTProfile.findOne({user: ptId}).populate(
     'user',
-    'username email photoUrl phoneNumber dob role imageGallery',
+    'username email photoUrl phoneNumber dob role imageGallery', //re-check imageGallery
   ); 
 
   if (!profile) {
@@ -169,13 +170,13 @@ const viewPTProfile = asyncHandler(async (req, res) => {
         photoUrl: ptUser.photoUrl,
         role: ptUser.role,
       },
-      message: 'PT này chưa cập nhật hồ sơ chi tiết.',
+      message: 'PT has not created a detailed profile yet.',
     });
   }
   res.status(200).json(profile);
 });
 
-
+//Client get PT Profile details and availability
 const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   const {ptId} = req.params;
   const {startDate, endDate} = req.query;
@@ -183,7 +184,7 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   const ptUser = await User.findOne({_id: ptId, role: 'pt'});
   if (!ptUser) {
     res.status(404);
-    throw new Error('Không tìm thấy Personal Trainer này.');
+    throw new Error('Personal Trainer not found.');
   }
 
   const queryOptions = {
@@ -208,53 +209,53 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   const slots = await Availability.find(queryOptions).sort({startTime: 'asc'});
 
   res.status(200).json({
-    message: 'Lấy lịch rảnh của PT thành công.',
+    message: 'PT availability retrieved successfully.',
     count: slots.length,
     data: slots,
   });
 });
 
+
+//Create booking request 
 const createBookingRequest = asyncHandler(async (req, res) => {
   const {ptId, availabilitySlotId, notesFromClient} = req.body;
   const clientId = req.user._id;
 
   if (!ptId || !availabilitySlotId) {
     res.status(400);
-    throw new Error('Vui lòng cung cấp ID của PT và ID của khung giờ rảnh.');
+    throw new Error('Please provide PT ID and availability slot ID.');
   }
 
   const ptUser = await User.findById(ptId);
   if (!ptUser || ptUser.role !== 'pt') {
     res.status(404);
-    throw new Error('Không tìm thấy Personal Trainer này.');
+    throw new Error('Personal Trainer not found.');
   }
 
   const ptProfile = await PTProfile.findOne({user: ptId});
   if (!ptProfile || typeof ptProfile.hourlyRate !== 'number') {
     res.status(400);
     throw new Error(
-      'PT này chưa cập nhật thông tin giá hoặc hồ sơ không đầy đủ.',
+      'PT has not updated pricing information or profile is incomplete.',
     );
   }
 
   const slot = await Availability.findById(availabilitySlotId);
   if (!slot) {
     res.status(404);
-    throw new Error('Khung giờ bạn chọn không tồn tại.');
+    throw new Error('Selected time slot does not exist.');
   }
   if (slot.pt.toString() !== ptId) {
     res.status(400);
-
+    throw new Error('Time slot does not belong to this PT.');
   }
   if (slot.status !== 'available') {
     res.status(400);
-    throw new Error(
-
-    );
+    throw new Error('Time slot is no longer available.');
   }
   if (new Date(slot.startTime) < new Date()) {
     res.status(400);
-  
+    throw new Error('Cannot book past time slots.');
   }
 
 
@@ -268,7 +269,7 @@ const createBookingRequest = asyncHandler(async (req, res) => {
   if (existingClientBooking) {
     res.status(400);
     throw new Error(
-      'Bạn đã có một lịch đặt khác trùng với khoảng thời gian này.',
+      'You already have another booking that conflicts with this time slot.',
     );
   }
 
@@ -307,6 +308,8 @@ const createBookingRequest = asyncHandler(async (req, res) => {
 });
 
 
+
+// Get client all bookings 
 const getClientBookings = asyncHandler(async (req, res) => {
   const {status, upcoming} = req.query; 
   const pageSize = parseInt(req.query.pageSize) || 10;
@@ -367,7 +370,7 @@ const getClientBookings = asyncHandler(async (req, res) => {
   );
 
   res.status(200).json({
-    message: 'Lấy danh sách lịch đặt của bạn thành công.',
+    message: 'Get client bookings list successfully.',
     data: enrichedBookings,
     page,
     pages: Math.ceil(count / pageSize),
@@ -375,6 +378,8 @@ const getClientBookings = asyncHandler(async (req, res) => {
   });
 });
 
+
+// Client cancel booking
 const cancelBookingByClient = asyncHandler(async (req, res) => {
   const {bookingId} = req.params;
   const booking = await Booking.findById(bookingId);
@@ -390,7 +395,7 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
 
   const now = new Date();
   const bookingStartTime = new Date(booking.bookingTime.startTime);
-  const hoursBeforeAllowedToCancel = 24; // Ví dụ: PT có thể cấu hình điều này
+  const hoursBeforeAllowedToCancel = 24; // Example: PT can configure this
 
   if (
     booking.status === 'confirmed' &&
@@ -399,14 +404,14 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
   ) {
     res.status(400);
     throw new Error(
-      `Không thể hủy lịch đặt này vì đã quá gần giờ hẹn (phải hủy trước ${hoursBeforeAllowedToCancel} tiếng).`,
+      `Cannot cancel this booking because it's too close to the appointment time (must cancel at least ${hoursBeforeAllowedToCancel} hours before).`,
     );
   }
 
   if (!['pending_confirmation', 'confirmed'].includes(booking.status)) {
     res.status(400);
     throw new Error(
-      `Không thể hủy lịch đặt đang ở trạng thái "${booking.status}".`,
+      `Cannot cancel booking in "${booking.status}" status.`,
     );
   }
 
@@ -430,15 +435,14 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
       }
     }
   }
-
   const updatedBooking = await booking.save();
   res
     .status(200)
-    .json({message: 'Lịch đặt đã được hủy thành công.', data: updatedBooking});
+    .json({message: 'Booking cancelled successfully.', data: updatedBooking});
 });
 
 
-
+// Get client profile
 const getClientProfile = asyncHandler(async (req, res) => {
   try {
     const userId = req.user.id;

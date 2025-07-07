@@ -76,8 +76,8 @@ const updatePtProfile = asyncHandler(async (req, res) => {
   if (location !== undefined) profileFields.location = location;
 
   let profile = await PTProfile.findOneAndUpdate(
-    {user: req.user._id}, // Điều kiện tìm kiếm: hồ sơ của PT hiện tại
-    {$set: profileFields}, // Dữ liệu cần cập nhật hoặc chèn
+    {user: req.user._id}, 
+    {$set: profileFields}, 
     {new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true},
   ).populate('user', 'username email photoUrl');
 

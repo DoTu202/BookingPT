@@ -1,7 +1,6 @@
 const { ChatRoom, Message } = require('../models/ChatModel');
 
 const chatController = {
-  // Get or create simple chat room
   getOrCreateChatRoom: async (req, res) => {
     try {
       const { otherUserId } = req.params;
@@ -10,7 +9,7 @@ const chatController = {
       
       // Simple logic: determine who is PT and who is Client
       let ptUserId, clientUserId;
-      if (currentUserRole === 'ot') {
+      if (currentUserRole === 'pt') {
         ptUserId = currentUserId;
         clientUserId = otherUserId;
       } else {
@@ -50,7 +49,7 @@ const chatController = {
       
       // Simple query based on user role
       let query = {};
-      if (userRole === 'ot') {
+      if (userRole === 'pt') {
         query.ptUser = userId;
       } else {
         query.clientUser = userId;

@@ -5,7 +5,7 @@ const Booking = require('../models/bookingModel');
 // Get all notifications for user
 const getNotifications = async (req, res) => {
     try {
-        const userId = req.user._id; // Sử dụng _id thay vì id
+        const userId = req.user._id; 
         const { page = 1, limit = 20, isRead } = req.query;
 
         // Build filter
