@@ -1,7 +1,7 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {Text, View} from 'react-native';
-import {Home, Calendar, Clock, DollarSign, User, MessageCircle} from 'lucide-react-native';
+import {Home2, Calendar, Clock, Messages2, User} from 'iconsax-react-native';
 import appColors from '../constants/appColors';
 import {StyleSheet, Platform} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -31,7 +31,7 @@ const PTTabNavigator = () => {
 
           switch (route.name) {
             case 'PTHome':
-              IconComponent = Home;
+              IconComponent = Home2;
               break;
             case 'PTBookings':
               IconComponent = Calendar;
@@ -40,50 +40,44 @@ const PTTabNavigator = () => {
               IconComponent = Clock;
               break;
             case 'PTMessages':
-              IconComponent = MessageCircle;
+              IconComponent = Messages2;
               break;
             case 'PTProfile':
               IconComponent = User;
               break;
             default:
-              IconComponent = Home;
+              IconComponent = Home2;
           }
 
           return (
-            <View style={[
-              styles.iconContainer,
-              focused && styles.iconContainerFocused
-            ]}>
-              <IconComponent
-                size={focused ? 24 : 22}
-                color={color}
-                strokeWidth={focused ? 2.5 : 2}
-              />
-            </View>
+            <IconComponent
+              size={size}
+              color={color}
+              variant={focused ? 'Bold' : 'Outline'}
+            />
           );
         },
         tabBarActiveTintColor: appColors.primary,
-        tabBarInactiveTintColor: appColors.gray,
+        tabBarInactiveTintColor: appColors.gray2,
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontFamily: fontFamilies.medium,
-          marginBottom: Platform.OS === 'ios' ? 0 : 5,
-          marginTop: 4,
+          marginBottom: Platform.OS === 'ios' ? 0 : 3,
+          marginTop: -2,
         },
         tabBarStyle: [
           styles.tabBarStyle,
           {
-            paddingBottom:
-              Platform.OS === 'ios'
-                ? Math.max(insets.bottom - 5, 8)
-                : 8,
+            paddingBottom: Platform.OS === 'ios' 
+              ? Math.max(insets.bottom - 5, 8) 
+              : 8,
             paddingTop: 8,
-            height:
-              Platform.OS === 'ios'
-                ? 90 + Math.max(insets.bottom - 15, 0)
-                : 75,
+            height: Platform.OS === 'ios' 
+              ? 75 + Math.max(insets.bottom - 15, 0)
+              : 65,
           },
         ],
+        tabBarItemStyle: styles.tabBarItemStyle,
       })}>
       <Tab.Screen
         name="PTHome"
@@ -133,12 +127,12 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -4,
+      height: -3,
     },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 15,
-    borderTopLeftRadius: 24, 
+    borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     position: 'absolute',
     left: 0,
@@ -147,18 +141,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   tabBarItemStyle: {
-    paddingTop: 4,
-    paddingBottom: 4,
-    marginHorizontal: 4,
-    borderRadius: 12,
-    backgroundColor: 'transparent',
-  },
-  iconContainer: {
-    padding: 8,
-    borderRadius: 12,
-    backgroundColor: 'transparent',
-  },
-  iconContainerFocused: {
-    backgroundColor: appColors.primary + '15',
+    paddingTop: 6,
+    paddingHorizontal: 4,
   },
 });

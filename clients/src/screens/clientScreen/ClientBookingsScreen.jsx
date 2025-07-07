@@ -17,7 +17,7 @@ import {
   CardComponent,
   SpaceComponent,
 } from '../../components';
-import { Calendar, Clock, User, More, Refresh2, MessageCircle } from 'iconsax-react-native';
+import { Calendar, Clock, User, More, Refresh2, MessageCircle, CloseCircle } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
 import { timeUtils } from '../../utils/timeUtils';
@@ -283,22 +283,37 @@ const ClientBookingsScreen = ({ navigation }) => {
           <>
             <SpaceComponent height={16} />
             <RowComponent justify="space-between">
-              <ButtonComponent
-                text="Cancel Booking"
-                type="primary"
-                size={12}
-                color={appColors.danger}
+              <TouchableOpacity
+                style={[styles.actionButton, styles.cancelButton]}
                 onPress={() => handleCancelBooking(booking)}
-                styles={{ flex: 0.48, borderRadius: 12 }}
-              />
-              <ButtonComponent
-                text=" Chat"
-                type="primary"
-                size={12}
-                color={appColors.success}
+              >
+                <RowComponent justify="center">
+                  <CloseCircle size={16} color={appColors.white} variant="Bold" />
+                  <SpaceComponent width={8} />
+                  <TextComponent
+                    text="Cancel"
+                    size={13}
+                    color={appColors.white}
+                    font="Poppins-SemiBold"
+                  />
+                </RowComponent>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.actionButton, styles.chatButtonAction]}
                 onPress={() => handleStartChat(booking.pt?._id)}
-                styles={{ flex: 0.48, borderRadius: 12 }}
-              />
+              >
+                <RowComponent justify="center">
+                  <MessageCircle size={16} color={appColors.white} variant="Bold" />
+                  <SpaceComponent width={8} />
+                  <TextComponent
+                    text="Chat"
+                    size={13}
+                    color={appColors.white}
+                    font="Poppins-SemiBold"
+                  />
+                </RowComponent>
+              </TouchableOpacity>
             </RowComponent>
           </>
         )}
@@ -309,11 +324,11 @@ const ClientBookingsScreen = ({ navigation }) => {
             <SpaceComponent height={16} />
             <RowComponent justify="center">
               <TouchableOpacity
-                style={styles.chatButton}
+                style={[styles.actionButton, styles.chatButtonSingle]}
                 onPress={() => handleStartChat(booking.pt?._id)}
               >
                 <RowComponent justify="center">
-                  <MessageCircle size={18} color={appColors.white} />
+                  <MessageCircle size={18} color={appColors.white} variant="Bold" />
                   <SpaceComponent width={8} />
                   <TextComponent
                     text="Chat with PT"
@@ -392,7 +407,6 @@ const ClientBookingsScreen = ({ navigation }) => {
         </SectionComponent>
 
         {(() => {
-          console.log('=== RENDER DEBUG ===');
           console.log('Bookings state length:', bookings.length);
           console.log('Bookings state:', bookings);
           return null;
@@ -531,6 +545,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 60,
   },
+  // Action button styles (similar to PTBookingsScreen)
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+    minHeight: 44,
+  },
+  cancelButton: {
+    backgroundColor: appColors.danger,
+    flex: 0.48,
+    shadowColor: appColors.danger,
+  },
+  chatButtonAction: {
+    backgroundColor: appColors.success,
+    flex: 0.48,
+    shadowColor: appColors.success,
+  },
+  chatButtonSingle: {
+    backgroundColor: appColors.primary,
+    paddingHorizontal: 24,
+    shadowColor: appColors.primary,
+    minWidth: 160,
+  },
+  // Legacy chat button (keep for backward compatibility)
   chatButton: {
     backgroundColor: appColors.primary,
     paddingHorizontal: 24,
