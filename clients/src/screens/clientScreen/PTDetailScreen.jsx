@@ -19,7 +19,7 @@ import {
 import { Star1, Location } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
-import moment from 'moment';
+import { timeUtils } from '../../utils/timeUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PTDetailScreen = ({ navigation, route }) => {
@@ -47,8 +47,6 @@ const PTDetailScreen = ({ navigation, route }) => {
   }, [selectedDate, ptProfile]);
 
   const initializePTData = () => {
-    console.log('PTDetailScreen - Initializing with item:', item);
-    
     try {
       // Validate input data
       if (!item || typeof item !== 'object') {
@@ -72,12 +70,8 @@ const PTDetailScreen = ({ navigation, route }) => {
       setPtProfile(ptData);
 
       // Set default date to today or first reasonable date
-      const today = moment().format('YYYY-MM-DD');
+      const today = timeUtils.formatDate(timeUtils.now());
       setSelectedDate(today);
-      
-      console.log('PTDetailScreen - Successfully initialized:', ptData.user.username);
-      console.log('Default selected date set to:', today);
-    
       
     } catch (error) {
       console.error('Error initializing PT data:', error);
@@ -157,13 +151,12 @@ const PTDetailScreen = ({ navigation, route }) => {
         notesFromClient: `Mobile app booking - Duration: ${sessionDetails.duration}h, Total: ${sessionDetails.totalPrice.toLocaleString()} VND`,
       };
 
-      console.log('Creating booking with data:', bookingData);
       const response = await ptApi.createBooking(bookingData);
       
       if (response.data.success || response.data.message) {
         Alert.alert(
           'Booking Success! ',
-          `Your booking request has been sent successfully!\n\nTrainer: ${ptProfile.user.username}\nTime: ${moment(selectedSlot.startTime).format('HH:mm')} - ${moment(selectedSlot.endTime).format('HH:mm')}\nDate: ${moment(selectedDate).format('dddd, MMM DD')}\nTotal: ${sessionDetails.totalPrice.toLocaleString()} VND\n\nThe trainer will confirm your booking soon.`,
+          `Your booking request has been sent successfully!\n\nTrainer: ${ptProfile.user.username}\nTime: ${timeUtils.formatTime(selectedSlot.startTime)} - ${timeUtils.formatTime(selectedSlot.endTime)}\nDate: ${timeUtils.formatDateWithDay(selectedDate)}\nTotal: ${sessionDetails.totalPrice.toLocaleString()} VND\n\nThe trainer will confirm your booking soon.`,
           [
             {
               text: 'OK',
@@ -178,8 +171,6 @@ const PTDetailScreen = ({ navigation, route }) => {
       }
     } catch (error) {
       console.error('Error creating booking:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
       
       let errorTitle = 'Booking Failed ';
       let errorMessage = 'Failed to create booking. Please try again.';
@@ -187,13 +178,13 @@ const PTDetailScreen = ({ navigation, route }) => {
       if (error.response?.data) {
         const responseData = error.response.data;
         
-        // Check for specific error messages
+  
         if (responseData.message) {
           errorMessage = responseData.message;
           
-          // Handle specific error cases with Vietnamese messages
-          if (errorMessage.includes('trùng với khoảng thời gian') || 
-              errorMessage.includes('lịch đặt khác')) {
+        
+          if (errorMessage.includes('Conflict ') || 
+              errorMessage.includes('')) {
             errorTitle = 'Schedule Conflict ';
             errorMessage = 'You already have a booking that conflicts with this time slot. Please choose a different time.';
           } else if (errorMessage.includes('không có sẵn') || 
@@ -209,7 +200,6 @@ const PTDetailScreen = ({ navigation, route }) => {
             errorTitle = 'Authentication Error ';
             errorMessage = 'Please log in again to continue.';
           } else {
-            // Use server message as is for other Vietnamese messages
             errorMessage = responseData.message;
           }
         } else if (responseData.error) {
@@ -238,9 +228,10 @@ const PTDetailScreen = ({ navigation, route }) => {
   const calculateSessionDetails = (slot) => {
     if (!slot || !ptProfile?.hourlyRate) return { duration: 0, totalPrice: 0 };
     
-    const startTime = moment(slot.startTime);
-    const endTime = moment(slot.endTime);
-    const durationHours = endTime.diff(startTime, 'hours', true); // Get decimal hours
+    // Parse the time strings from backend (format: "YYYY-MM-DD HH:mm")
+    const startTime = timeUtils.parseDateTime(slot.startTime);
+    const endTime = timeUtils.parseDateTime(slot.endTime);
+    const durationHours = endTime.diff(startTime, 'hour', true); // Get decimal hours
     const totalPrice = durationHours * (ptProfile.hourlyRate || 500000);
     
     return {
@@ -385,8 +376,8 @@ const PTDetailScreen = ({ navigation, route }) => {
             <View style={styles.dateContainer}>
               {/* Show dates from today for next 30 days */}
               {Array.from({length: 30}, (_, index) => {
-                const date = moment().add(index, 'days');
-                const dateStr = date.format('YYYY-MM-DD');
+                const date = timeUtils.addTime(timeUtils.now(), index, 'day');
+                const dateStr = timeUtils.formatDate(date);
                 const isSelected = selectedDate === dateStr;
                 
                 return (
@@ -396,18 +387,18 @@ const PTDetailScreen = ({ navigation, route }) => {
                     onPress={() => setSelectedDate(dateStr)}
                   >
                     <TextComponent
-                      text={date.format('ddd')}
+                      text={timeUtils.formatDateTime(date, 'ddd')}
                       size={12}
                       color={isSelected ? appColors.white : appColors.gray}
                     />
                     <TextComponent
-                      text={date.format('DD')}
+                      text={timeUtils.formatDateTime(date, 'DD')}
                       size={16}
                       font="Poppins-SemiBold"
                       color={isSelected ? appColors.white : appColors.black}
                     />
                     <TextComponent
-                      text={date.format('MMM')}
+                      text={timeUtils.formatDateTime(date, 'MMM')}
                       size={10}
                       color={isSelected ? appColors.white : appColors.gray}
                     />
@@ -439,7 +430,7 @@ const PTDetailScreen = ({ navigation, route }) => {
                     onPress={() => setSelectedSlot(slot)}
                   >
                     <TextComponent
-                      text={`${moment(slot.startTime).format('HH:mm')} - ${moment(slot.endTime).format('HH:mm')}`}
+                      text={`${timeUtils.formatTime(slot.startTime)} - ${timeUtils.formatTime(slot.endTime)}`}
                       size={14}
                       color={isSelected ? appColors.white : appColors.black}
                       font={isSelected ? "Poppins-SemiBold" : "Poppins-Regular"}
@@ -472,13 +463,13 @@ const PTDetailScreen = ({ navigation, route }) => {
                     color={appColors.gray}
                   />
                   <TextComponent
-                    text={`${moment(selectedSlot.startTime).format('HH:mm')} - ${moment(selectedSlot.endTime).format('HH:mm')}`}
+                    text={`${timeUtils.formatTime(selectedSlot.startTime)} - ${timeUtils.formatTime(selectedSlot.endTime)}`}
                     size={16}
                     font="Poppins-SemiBold"
                     color={appColors.black}
                   />
                   <TextComponent
-                    text={moment(selectedDate).format('dddd, MMM DD')}
+                    text={timeUtils.formatDateWithDay(selectedDate)}
                     size={14}
                     color={appColors.gray}
                   />

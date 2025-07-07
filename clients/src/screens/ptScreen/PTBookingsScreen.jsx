@@ -16,7 +16,7 @@ import {fontFamilies} from '../../constants/fontFamilies';
 import appColors from '../../constants/appColors';
 import {LoadingModal} from '../../modals';
 import ptApi from '../../apis/ptApi';
-import {formatTime, formatDate} from '../../utils/timeUtils';
+import {timeUtils} from '../../utils/timeUtils';
 import {authSelector} from '../../redux/reducers/authReducer';
 
 const PTBookingsScreen = () => {
@@ -180,21 +180,21 @@ const PTBookingsScreen = () => {
       );
     }
 
-    const startTime = new Date(item.bookingTime.startTime);
-    const endTime = new Date(item.bookingTime.endTime);
+    const startTimeStr = item.bookingTime.startTime;
+    const endTimeStr = item.bookingTime.endTime;
 
-    // Check if dates are valid
-    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+    // Check if time strings are valid
+    if (typeof startTimeStr !== 'string' || typeof endTimeStr !== 'string') {
       return (
         <View style={styles.bookingCard}>
-          <Text style={styles.errorText}>Invalid time</Text>
+          <Text style={styles.errorText}>Invalid time format</Text>
         </View>
       );
     }
 
     const canConfirmOrReject = item.status === 'pending_confirmation';
     const canMarkCompleted =
-      item.status === 'confirmed' && new Date() > endTime;
+      item.status === 'confirmed' && timeUtils.isInPast(endTimeStr);
 
     return (
       <View style={styles.bookingCard}>
@@ -218,8 +218,8 @@ const PTBookingsScreen = () => {
           <View style={styles.detailRow}>
             <MaterialIcons name="schedule" size={16} color={appColors.text2} />
             <Text style={styles.detailText}>
-              {formatDate(startTime)} • {formatTime(startTime)} -{' '}
-              {formatTime(endTime)}
+              {timeUtils.formatDate(startTimeStr)} • {timeUtils.formatTime(startTimeStr)} -{' '}
+              {timeUtils.formatTime(endTimeStr)}
             </Text>
           </View>
 

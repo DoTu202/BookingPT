@@ -19,7 +19,7 @@ import {
 import { Calendar, Clock, User, More, Refresh2 } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
-import moment from 'moment';
+import { timeUtils } from '../../utils/timeUtils';
 import { useSelector } from 'react-redux';
 import { authSelector } from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -141,8 +141,8 @@ const ClientBookingsScreen = ({ navigation }) => {
   };
 
   const renderBookingItem = (booking, index) => {
-    const startTime = moment(booking.bookingTime?.startTime);
-    const endTime = moment(booking.bookingTime?.endTime);
+    const startTime = timeUtils.dayjs(booking.bookingTime?.startTime);
+    const endTime = timeUtils.dayjs(booking.bookingTime?.endTime);
     const canCancel = booking.status === 'pending_confirmation' || booking.status === 'confirmed';
     
     return (
@@ -190,7 +190,7 @@ const ClientBookingsScreen = ({ navigation }) => {
             <Calendar size={16} color={appColors.primary} />
             <SpaceComponent width={8} />
             <TextComponent
-              text={startTime.format('dddd, MMM DD, YYYY')}
+              text={timeUtils.formatDateTime(startTime, 'dddd, MMM DD, YYYY')}
               size={14}
               color={appColors.black}
               font="Poppins-Medium"
@@ -203,14 +203,14 @@ const ClientBookingsScreen = ({ navigation }) => {
             <Clock size={16} color={appColors.primary} />
             <SpaceComponent width={8} />
             <TextComponent
-              text={`${startTime.format('HH:mm')} - ${endTime.format('HH:mm')}`}
+              text={`${timeUtils.formatTime(startTime)} - ${timeUtils.formatTime(endTime)}`}
               size={14}
               color={appColors.black}
               font="Poppins-Medium"
             />
             <View style={styles.durationBadge}>
               <TextComponent
-                text={`${endTime.diff(startTime, 'hours', true)}h`}
+                text={`${endTime.diff(startTime, 'hour', true)}h`}
                 size={12}
                 color={appColors.primary}
                 font="Poppins-SemiBold"

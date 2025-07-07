@@ -31,7 +31,7 @@ import {
 } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
-import { formatTime, extractTimeFromISO } from '../../utils/timeUtils';
+import { timeUtils } from '../../utils/timeUtils';
 import { fontFamilies } from '../../constants/fontFamilies';
 
 const PTAvailabilityScreen = ({ navigation }) => {
@@ -57,28 +57,19 @@ const PTAvailabilityScreen = ({ navigation }) => {
       setLoading(true);
       const dateString = selectedDate.toISOString().split('T')[0];
       
-      console.log('loading availability');
-      console.log('Loading slots for date:', dateString);
-      
       const response = await ptApi.getAvailabilitySlots({
         date: dateString
       });
       
-      console.log('Load response:', response.data);
-      
       if (response.data && response.data.data) {
-        console.log('Setting slots from response.data.data:', response.data.data);
         setAvailabilitySlots(response.data.data);
       } else if (response.data && Array.isArray(response.data)) {
-        console.log('Setting slots from response.data array:', response.data);
         setAvailabilitySlots(response.data);
       } else {
-        console.log('No slots found, setting empty array');
         setAvailabilitySlots([]);
       }
     } catch (error) {
       console.error('Error loading availability slots:', error);
-      console.error('Error details:', error.response?.data);
       setAvailabilitySlots([]);
     } finally {
       setLoading(false);
@@ -92,23 +83,20 @@ const PTAvailabilityScreen = ({ navigation }) => {
         return;
       }
 
+      // Create proper datetime strings in Vietnam timezone
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      
       const slotData = {
-        date: selectedDate.toISOString().split('T')[0],
+        date: dateStr,
         startTime: newSlot.startTime,
         endTime: newSlot.endTime,
       };
 
-      console.log('newSlot:', newSlot);
-      console.log('selectedDate:', selectedDate);
-      console.log('slotData being sent:', slotData);
-
       if (editingSlot) {
-        const response = await ptApi.updateAvailabilitySlot(editingSlot._id || editingSlot.id, slotData);
-        console.log('Update response:', response.data);
+        await ptApi.updateAvailabilitySlot(editingSlot._id || editingSlot.id, slotData);
         Alert.alert('Success', 'Availability slot updated successfully');
       } else {
-        const response = await ptApi.addAvailabilitySlot(slotData);
-        console.log('Add response:', response.data);
+        await ptApi.addAvailabilitySlot(slotData);
         Alert.alert('Success', 'Availability slot added successfully');
       }
 
@@ -180,7 +168,7 @@ const PTAvailabilityScreen = ({ navigation }) => {
             <Clock size={16} color={slot.isBooked ? appColors.white : appColors.primary} />
             <SpaceComponent width={8} />
             <TextComponent
-              text={`${formatTime(slot.startTime)} - ${formatTime(slot.endTime)}`}
+              text={`${timeUtils.formatTime(slot.startTime)} - ${timeUtils.formatTime(slot.endTime)}`}
               size={16}
               font="Poppins-SemiBold"
               color={slot.isBooked ? appColors.white : appColors.black}
@@ -215,8 +203,8 @@ const PTAvailabilityScreen = ({ navigation }) => {
               onPress={() => {
                 setEditingSlot(slot);
                 setNewSlot({
-                  startTime: extractTimeFromISO(slot.startTime),
-                  endTime: extractTimeFromISO(slot.endTime),
+                  startTime: timeUtils.formatTime(slot.startTime),
+                  endTime: timeUtils.formatTime(slot.endTime),
                   date: slot.date,
                 });
                 setShowAddModal(true);
@@ -433,13 +421,14 @@ const PTAvailabilityScreen = ({ navigation }) => {
 
   const formatTimeForInput = (time) => {
     if (!time) return '';
-    const date = new Date(time);
-    if (isNaN(date.getTime())) return '';
     
-    // Ensure consistent HH:MM format
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
+    // If it's already in HH:MM format, return as is
+    if (typeof time === 'string' && time.match(/^\d{2}:\d{2}$/)) {
+      return time;
+    }
+    
+    // Use timeUtils to format time properly
+    return timeUtils.formatTime(time);
   };
 
   const handleStartTimeChange = (event, selectedTime) => {
@@ -447,7 +436,10 @@ const PTAvailabilityScreen = ({ navigation }) => {
       setShowStartTimePicker(false);
     }
     if (selectedTime) {
-      const timeString = formatTimeForInput(selectedTime);
+      // Format time as HH:MM in local timezone
+      const hours = selectedTime.getHours().toString().padStart(2, '0');
+      const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+      const timeString = `${hours}:${minutes}`;
       setNewSlot({ ...newSlot, startTime: timeString });
     }
   };
@@ -457,7 +449,10 @@ const PTAvailabilityScreen = ({ navigation }) => {
       setShowEndTimePicker(false);
     }
     if (selectedTime) {
-      const timeString = formatTimeForInput(selectedTime);
+      // Format time as HH:MM in local timezone
+      const hours = selectedTime.getHours().toString().padStart(2, '0');
+      const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+      const timeString = `${hours}:${minutes}`;
       setNewSlot({ ...newSlot, endTime: timeString });
     }
   };
