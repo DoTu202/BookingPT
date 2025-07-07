@@ -38,8 +38,6 @@ const ClientBookingsScreen = ({ navigation }) => {
 
   const loadBookings = async () => {
     try {
-      console.log('=== BOOKING REQUEST DEBUG ===');
-      console.log('Current user before API call:', currentUser);
       console.log('User role:', currentUser?.role);
       console.log('User ID:', currentUser?.id);
       

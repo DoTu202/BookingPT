@@ -27,12 +27,12 @@ const ChatScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
 
-  // Lấy tin nhắn từ API
+  // Get messages from API
   const loadMessages = async () => {
     try {
       setLoading(true);
       const response = await chatApi.getMessages(auth.accesstoken, chatRoomId);
-      
+
       if (response.success) {
         setMessages(response.data || []);
       }
@@ -44,7 +44,7 @@ const ChatScreen = ({ navigation, route }) => {
     }
   };
 
-  // Gửi tin nhắn mới
+  // Send a new message
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
@@ -56,19 +56,19 @@ const ChatScreen = ({ navigation, route }) => {
       const response = await chatApi.sendMessage(auth.accesstoken, chatRoomId, messageText);
       
       if (response.success) {
-        // Thêm tin nhắn mới vào đầu danh sách
+        // Add the new message to the beginning of the list
         setMessages(prev => [response.data, ...prev]);
       }
     } catch (error) {
       console.error('Error sending message:', error);
       Alert.alert('Error', 'Cannot send message');
-      setNewMessage(messageText); // Khôi phục tin nhắn nếu lỗi
+      setNewMessage(messageText); // Restore the message text if sending fails
     } finally {
       setSending(false);
     }
   };
 
-  // Định dạng thời gian tin nhắn
+  // Format the message time
   const formatMessageTime = (date) => {
     if (!date) return '';
     
@@ -77,17 +77,17 @@ const ChatScreen = ({ navigation, route }) => {
     const diffInDays = Math.floor((now - messageDate) / (1000 * 60 * 60 * 24));
     
     if (diffInDays === 0) {
-      // Hôm nay: chỉ hiển thị giờ
+      // Today: only show hour
       return messageDate.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false
       });
     } else if (diffInDays === 1) {
-      // Hôm qua
+      // Yesterday
       return 'Yesterday';
     } else {
-      // Ngày khác
+      // Other days
       return messageDate.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric'
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    transform: [{ scaleY: -1 }], // Đảo ngược để hiển thị đúng với inverted FlatList
+    transform: [{ scaleY: -1 }], 
   },
   emptyText: {
     fontSize: 16,

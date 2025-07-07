@@ -173,7 +173,6 @@ const SearchPtScreen = ({navigation, route}) => {
   };
 
   const renderPTItem = ({item}) => {
-    // Validate item data
     if (!item || !item._id) {
       console.warn('Invalid PT item data:', item);
       return null;
@@ -189,7 +188,7 @@ const SearchPtScreen = ({navigation, route}) => {
       _id: item._id,
       title: item.user?.fullName || item.user?.username || 'Personal Trainer',
       description: item.bio || item.description || 'Professional Personal Trainer',
-      location: locationString, // Convert object to string
+      location: locationString, 
       imageURL: item.user?.photoUrl || item.profileImage || item.avatar || '',
       rating: parseFloat(item.rating) || 0,
       hourlyRate: parseInt(item.hourlyRate) || 0,

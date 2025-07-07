@@ -4,7 +4,7 @@ interface AuthState {
     id: string;
     accesstoken: string;
     email: string;
-    role: 'client' | 'ot';
+    role: 'client' | 'pt';
     username?: string;
     photo?: string;  
 }

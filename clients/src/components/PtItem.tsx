@@ -66,11 +66,6 @@ const PtItem = (props: Props) => {
     return `${(price / 1000).toFixed(0)}K VND`;
   };
 
-  console.log('PtItem render:', {type, size, itemTitle: item.title});
-  if (type === 'card') {
-    console.log('Card width:', getCardWidth());
-  }
-
   const renderSpecializations = () => {
     if (!item.specializations || item.specializations.length === 0) return null;
 
@@ -95,9 +90,9 @@ const PtItem = (props: Props) => {
               },
             ]}>
             <TextComponent
-              text={spec
-                .replace(/_/g, ' ')
-                .replace(/\b\w/g, l => l.toUpperCase())}
+              text={spec && typeof spec === 'string'
+                ? spec.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                : 'Specialty'}
               size={type === 'list' ? 9 : size === 'small' ? 9 : 10}
               color={appColors.primary}
               font="medium"
@@ -167,7 +162,7 @@ const PtItem = (props: Props) => {
 
         <View style={styles.cardInfoContainer}>
           <TextComponent
-            text={item.title}
+            text={item.title || 'Personal Trainer'}
             size={size === 'small' ? 14 : 15}
             numberOfLines={1}
             font="bold"
@@ -178,7 +173,7 @@ const PtItem = (props: Props) => {
           <SpaceComponent height={4} />
 
           <TextComponent
-            text={item.description}
+            text={item.description || 'Professional Personal Trainer'}
             size={size === 'small' ? 11 : 12}
             numberOfLines={1}
             color={appColors.gray}
@@ -207,9 +202,11 @@ const PtItem = (props: Props) => {
             {item.specializations && item.specializations.length > 0 && (
               <View style={styles.cardInlineSpecTag}>
                 <TextComponent
-                  text={item.specializations[0]
-                    .replace(/_/g, ' ')
-                    .replace(/\b\w/g, l => l.toUpperCase())}
+                  text={item.specializations[0] 
+                    ? item.specializations[0]
+                        .replace(/_/g, ' ')
+                        .replace(/\b\w/g, l => l.toUpperCase())
+                    : ''}
                   size={size === 'small' ? 9 : 10}
                   color={appColors.primary}
                   font="medium"
@@ -228,7 +225,7 @@ const PtItem = (props: Props) => {
             />
             <SpaceComponent width={2} />
             <TextComponent
-              text={item.location}
+              text={item.location || 'Location not specified'}
               size={size === 'small' ? 11 : 12}
               numberOfLines={1}
               color={appColors.gray}
@@ -286,7 +283,7 @@ const PtItem = (props: Props) => {
       <View style={styles.listContentContainer}>
         <View style={styles.listRowContainer}>
           <TextComponent
-            text={item.title}
+            text={item.title || 'Personal Trainer'}
             size={16}
             numberOfLines={1}
             font="bold"
@@ -300,7 +297,7 @@ const PtItem = (props: Props) => {
 
         <View style={styles.listRowContainer}>
           <TextComponent
-            text={item.description}
+            text={item.description || 'Professional Personal Trainer'}
             size={13}
             numberOfLines={1}
             color={appColors.gray}
@@ -325,9 +322,9 @@ const PtItem = (props: Props) => {
             )}
 
             {item.experienceYears && item.experienceYears > 0 && (
-              <>
+              <View style={styles.ratingExperienceRow}>
                 <TextComponent
-                  text="•"
+                  text=" • "
                   size={12}
                   color={appColors.gray}
                   styles={{marginHorizontal: 6}}
@@ -338,39 +335,41 @@ const PtItem = (props: Props) => {
                   color={appColors.gray}
                   font="medium"
                 />
-              </>
+              </View>
             )}
 
             {item.specializations && item.specializations.length > 0 && (
-              <>
+              <View style={styles.ratingExperienceRow}>
                 <TextComponent
-                  text="•"
+                  text=" • "
                   size={12}
                   color={appColors.gray}
                   styles={{marginHorizontal: 6}}
                 />
                 <View style={styles.inlineSpecTag}>
                   <TextComponent
-                    text={item.specializations[0]
-                      .replace(/_/g, ' ')
-                      .replace(/\b\w/g, l => l.toUpperCase())}
+                    text={item.specializations[0] 
+                      ? item.specializations[0]
+                          .replace(/_/g, ' ')
+                          .replace(/\b\w/g, l => l.toUpperCase())
+                      : ''}
                     size={11}
                     color={appColors.primary}
                     font="medium"
                   />
                 </View>
-              </>
+              </View>
             )}
           </View>
         </View>
 
-        {/* Row 4: Location (riêng dòng) */}
+
         <View style={styles.listRowContainer}>
           <RowComponent styles={{alignItems: 'center'}}>
             <Location size={12} color={appColors.gray} />
             <SpaceComponent width={4} />
             <TextComponent
-              text={item.location}
+              text={item.location || 'Location not specified'}
               size={12}
               numberOfLines={1}
               color={appColors.gray}
@@ -382,7 +381,7 @@ const PtItem = (props: Props) => {
           </RowComponent>
         </View>
 
-        {/* Row 5: Price (riêng dòng, in đậm) */}
+
         <View style={styles.listRowContainer}>
           <View style={styles.listPriceContainer}>
             <TextComponent
@@ -397,7 +396,11 @@ const PtItem = (props: Props) => {
     </TouchableOpacity>
   );
 
-  return <>{type === 'card' ? renderCardType() : renderListType()}</>;
+  if (type === 'card') {
+    return renderCardType();
+  } else {
+    return renderListType();
+  }
 };
 
 export default PtItem;

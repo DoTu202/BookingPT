@@ -97,7 +97,7 @@ const ptApi = {
           clientsMap[clientId].totalSessions += 1;
           
           if (booking.status === 'completed') {
-            clientsMap[clientId].totalSpent += booking.price || 0;
+            clientsMap[clientId].totalSpent += booking.priceAtBooking || 0;
           }
           
           // Track latest booking
@@ -169,7 +169,7 @@ const ptApi = {
         return bookingDate >= startDate;
       });
       
-      const totalEarnings = periodBookings.reduce((total, booking) => total + (booking.price || 0), 0);
+      const totalEarnings = periodBookings.reduce((total, booking) => total + (booking.priceAtBooking || 0), 0);
       const totalSessions = periodBookings.length;
       const averagePerSession = totalSessions > 0 ? totalEarnings / totalSessions : 0;
       
@@ -204,7 +204,7 @@ const ptApi = {
 
   // Client functions to view PT information
   searchPTs: async (params = {}) => {
-    const url = '/api/client/trainers';
+    const url = '/api/client/pt';
     return axiosClient.get(url, { params });
   },
 

@@ -257,8 +257,8 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 60 : 45,
     paddingBottom: 12,
     backgroundColor: appColors.primary,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderRadius: 20,
+    height: 140,
   },
   backButton: {
     padding: 8,

@@ -23,12 +23,12 @@ const ChatListScreen = ({ navigation }) => {
   const [chatRooms, setChatRooms] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Lấy danh sách chat từ API
+  // Get chat list from API
   const loadChatRooms = async () => {
     try {
       setLoading(true);
       const response = await chatApi.getChatRooms(auth.accesstoken);
-      
+
       if (response.success) {
         setChatRooms(response.data || []);
       }
@@ -40,16 +40,16 @@ const ChatListScreen = ({ navigation }) => {
     }
   };
 
-  // Lấy thông tin người chat (PT hoặc Client)
+  // Get information about the other user (PT or Client)
   const getOtherUser = (chatRoom) => {
     if (auth.role === 'ot') {
-      return chatRoom.clientUser; // Tôi là PT, hiển thị Client
+      return chatRoom.clientUser; // PT, show Client chat
     } else {
-      return chatRoom.ptUser; // Tôi là Client, hiển thị PT
+      return chatRoom.ptUser; // Client, show PT chat
     }
   };
 
-  // Định dạng thời gian tin nhắn cuối
+  // Format the last message time
   const formatLastMessageTime = (date) => {
     if (!date) return '';
     
