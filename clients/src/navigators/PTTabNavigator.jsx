@@ -1,7 +1,7 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {Text, View} from 'react-native';
-import {Home, Calendar, Clock, DollarSign, User} from 'lucide-react-native';
+import {Home, Calendar, Clock, DollarSign, User, MessageCircle} from 'lucide-react-native';
 import appColors from '../constants/appColors';
 import {StyleSheet, Platform} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -10,11 +10,11 @@ import {
   PTAvailabilityScreen,
   PTBookingsScreen,
   PTHomeScreen,
-  PTEarningScreen,
   PTProfileScreen,
   PTProfileViewScreen,
   ProfileTabScreen
 } from '../screens/ptScreen';
+import { ChatListScreen } from '../screens/commonScreen';
 
 
 const Tab = createBottomTabNavigator();
@@ -39,8 +39,8 @@ const PTTabNavigator = () => {
             case 'PTAvailability':
               IconComponent = Clock;
               break;
-            case 'PTEarnings':
-              IconComponent = DollarSign;
+            case 'PTMessages':
+              IconComponent = MessageCircle;
               break;
             case 'PTProfile':
               IconComponent = User;
@@ -107,10 +107,10 @@ const PTTabNavigator = () => {
         }}
       />
       <Tab.Screen
-        name="PTEarnings"
-        component={PTEarningScreen}
+        name="PTMessages"
+        component={ChatListScreen}
         options={{
-          tabBarLabel: 'Earnings',
+          tabBarLabel: 'Messages',
         }}
       />
       <Tab.Screen

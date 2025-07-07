@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+
 import {
   StyleSheet,
   View,
@@ -16,13 +17,14 @@ import {
   CardComponent,
   SpaceComponent,
 } from '../../components';
-import { Calendar, Clock, User, More, Refresh2 } from 'iconsax-react-native';
+import { Calendar, Clock, User, More, Refresh2, MessageCircle } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
 import { timeUtils } from '../../utils/timeUtils';
 import { useSelector } from 'react-redux';
 import { authSelector } from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import chatApi from '../../apis/chatApi';
 
 const ClientBookingsScreen = ({ navigation }) => {
   const [bookings, setBookings] = useState([]);
@@ -138,6 +140,27 @@ const ClientBookingsScreen = ({ navigation }) => {
         },
       ]
     );
+  };
+
+  const handleStartChat = async (ptId) => {
+    try {
+      setLoading(true);
+      // Get or create chat room with PT
+      const response = await chatApi.startChat(currentUser.accesstoken, ptId);
+      
+      if (response.success) {
+        // Navigate to chat screen
+        navigation.navigate('ChatScreen', {
+          chatRoomId: response.data._id,
+          otherUser: response.data.ptUser
+        });
+      }
+    } catch (error) {
+      console.error('Error starting chat:', error);
+      Alert.alert('Error', 'Unable to start chat');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderBookingItem = (booking, index) => {
@@ -258,15 +281,48 @@ const ClientBookingsScreen = ({ navigation }) => {
         {/* Action buttons */}
         {canCancel && (
           <>
-            <SpaceComponent height={12} />
+            <SpaceComponent height={16} />
             <RowComponent justify="space-between">
               <ButtonComponent
                 text="Cancel Booking"
                 type="primary"
+                size={12}
                 color={appColors.danger}
                 onPress={() => handleCancelBooking(booking)}
-                styles={{ flex: 1 }}
+                styles={{ flex: 0.48, borderRadius: 12 }}
               />
+              <ButtonComponent
+                text=" Chat"
+                type="primary"
+                size={12}
+                color={appColors.success}
+                onPress={() => handleStartChat(booking.pt?._id)}
+                styles={{ flex: 0.48, borderRadius: 12 }}
+              />
+            </RowComponent>
+          </>
+        )}
+        
+        {/* Chat button for completed/confirmed bookings */}
+        {(booking.status === 'confirmed' || booking.status === 'completed') && !canCancel && (
+          <>
+            <SpaceComponent height={16} />
+            <RowComponent justify="center">
+              <TouchableOpacity
+                style={styles.chatButton}
+                onPress={() => handleStartChat(booking.pt?._id)}
+              >
+                <RowComponent justify="center">
+                  <MessageCircle size={18} color={appColors.white} />
+                  <SpaceComponent width={8} />
+                  <TextComponent
+                    text="Chat with PT"
+                    size={14}
+                    color={appColors.white}
+                    font="Poppins-SemiBold"
+                  />
+                </RowComponent>
+              </TouchableOpacity>
             </RowComponent>
           </>
         )}
@@ -474,5 +530,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
+  },
+  chatButton: {
+    backgroundColor: appColors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+    shadowColor: appColors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    minWidth: 140,
   },
 });

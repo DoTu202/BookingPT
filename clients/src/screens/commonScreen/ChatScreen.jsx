@@ -26,6 +26,7 @@ const ChatScreen = ({ navigation, route }) => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [pollingInterval, setPollingInterval] = useState(null);
 
   // Get messages from API
   const loadMessages = async () => {
@@ -34,13 +35,36 @@ const ChatScreen = ({ navigation, route }) => {
       const response = await chatApi.getMessages(auth.accesstoken, chatRoomId);
 
       if (response.success) {
-        setMessages(response.data || []);
+        setMessages(response.data.messages || []);
       }
     } catch (error) {
       console.error('Error loading messages:', error);
       Alert.alert('Error', 'Cannot load messages');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Poll for new messages
+  const startPolling = () => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await chatApi.getMessages(auth.accesstoken, chatRoomId);
+        if (response.success) {
+          setMessages(response.data.messages || []);
+        }
+      } catch (error) {
+        console.error('Error polling messages:', error);
+      }
+    }, 3000); // Poll every 3 seconds
+    
+    setPollingInterval(interval);
+  };
+
+  const stopPolling = () => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
     }
   };
 
@@ -97,7 +121,7 @@ const ChatScreen = ({ navigation, route }) => {
 
   // Render một tin nhắn
   const renderMessage = ({ item }) => {
-    const isMyMessage = item.sender === auth.id;
+    const isMyMessage = item.sender._id === auth.id;
     
     return (
       <View style={[
@@ -127,6 +151,11 @@ const ChatScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     loadMessages();
+    startPolling();
+    
+    return () => {
+      stopPolling();
+    };
   }, [chatRoomId]);
 
   return (
@@ -151,8 +180,17 @@ const ChatScreen = ({ navigation, route }) => {
                 {otherUser.username.charAt(0).toUpperCase()}
               </Text>
             </View>
-            <Text style={styles.headerTitle}>{otherUser.username}</Text>
+            <View style={styles.userInfo}>
+              <Text style={styles.headerTitle}>{otherUser.username}</Text>
+              <Text style={styles.headerSubtitle}>
+                {otherUser.role === 'pt' ? 'Personal Trainer' : 'Client'}
+              </Text>
+            </View>
           </View>
+          
+          <TouchableOpacity style={styles.moreButton}>
+            <Icon name="more-vert" size={24} color="white" />
+          </TouchableOpacity>
         </View>
 
         {/* Messages List */}
@@ -219,11 +257,19 @@ const styles = StyleSheet.create({
     backgroundColor: appColors.primary,
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 60 : 45,
-    paddingBottom: 12,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   backButton: {
     padding: 8,
@@ -235,23 +281,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   avatarText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },
+  userInfo: {
+    flex: 1,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  moreButton: {
+    padding: 8,
   },
   messagesList: {
     flex: 1,
@@ -290,21 +349,30 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     maxWidth: '80%',
-    padding: 12,
-    borderRadius: 16,
+    padding: 16,
+    borderRadius: 18,
+    marginVertical: 2,
   },
   myBubble: {
     backgroundColor: appColors.primary,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 6,
+    shadowColor: appColors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   otherBubble: {
     backgroundColor: 'white',
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
   },
   messageText: {
     fontSize: 16,
@@ -334,30 +402,48 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
   textInput: {
     flex: 1,
     borderWidth: 1,
     borderColor: appColors.lightGray,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: 25,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     fontSize: 16,
     maxHeight: 100,
-    marginRight: 8,
+    marginRight: 12,
     backgroundColor: '#f8f9fa',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: appColors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: appColors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   sendButtonDisabled: {
     backgroundColor: appColors.lightGray,
+    shadowOpacity: 0,
+    elevation: 0,
   },
 });
 

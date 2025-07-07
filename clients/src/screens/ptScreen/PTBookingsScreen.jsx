@@ -18,12 +18,15 @@ import {LoadingModal} from '../../modals';
 import ptApi from '../../apis/ptApi';
 import {timeUtils} from '../../utils/timeUtils';
 import {authSelector} from '../../redux/reducers/authReducer';
+import chatApi from '../../apis/chatApi';
+import {RowComponent} from '../../components'; 
 
-const PTBookingsScreen = () => {
+
+const PTBookingsScreen = ({navigation}) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all'); // all, pending, confirmed, completed
+  const [filter, setFilter] = useState('all'); 
   const auth = useSelector(authSelector);
 
   const fetchBookings = async (isRefresh = false) => {
@@ -131,6 +134,27 @@ const PTBookingsScreen = () => {
         },
       },
     ]);
+  };
+
+  const handleStartChat = async clientId => {
+    try {
+      setLoading(true);
+      // Get or create chat room with client
+      const response = await chatApi.startChat(auth.accesstoken, clientId);
+
+      if (response.success) {
+        // Navigate to chat screen
+        navigation.navigate('ChatScreen', {
+          chatRoomId: response.data._id,
+          otherUser: response.data.clientUser,
+        });
+      }
+    } catch (error) {
+      console.error('Error starting chat:', error);
+      Alert.alert('Error', 'Unable to start chat');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusColor = status => {
@@ -282,17 +306,19 @@ const PTBookingsScreen = () => {
                 <Text style={styles.actionButtonText}>Complete</Text>
               </TouchableOpacity>
             )}
-            
+
             {item.client && (
               <TouchableOpacity
                 style={[styles.actionButton, styles.chatButton]}
-                onPress={() => navigation.navigate('ChatListScreen')}>
-                <MaterialIcons
-                  name="chat"
-                  size={16}
-                  color={appColors.white}
-                />
-                <Text style={styles.actionButtonText}>Chat</Text>
+                onPress={() => handleStartChat(item.client._id)}>
+                <RowComponent justify="center">
+                  <MaterialIcons
+                    name="chat"
+                    size={16}
+                    color={appColors.white}
+                  />
+                  <Text style={styles.actionButtonText}> Chat</Text>
+                </RowComponent>
               </TouchableOpacity>
             )}
           </View>
@@ -519,12 +545,21 @@ const styles = StyleSheet.create({
     backgroundColor: appColors.primary,
   },
   chatButton: {
-    backgroundColor: appColors.secondary,
+    backgroundColor: appColors.primary,
+    shadowColor: appColors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
   },
   actionButtonText: {
     fontSize: 12,
     fontWeight: 'bold',
     color: appColors.white,
+    marginLeft: 4,
   },
   errorText: {
     fontSize: 14,

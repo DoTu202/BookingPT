@@ -42,7 +42,7 @@ const ChatListScreen = ({ navigation }) => {
 
   // Get information about the other user (PT or Client)
   const getOtherUser = (chatRoom) => {
-    if (auth.role === 'ot') {
+    if (auth.role === 'pt') {
       return chatRoom.clientUser; // PT, show Client chat
     } else {
       return chatRoom.ptUser; // Client, show PT chat
@@ -98,7 +98,7 @@ const ChatListScreen = ({ navigation }) => {
           </View>
           
           <Text style={styles.lastMessage} numberOfLines={1}>
-            {item.lastMessage || 'Start a conversation...'}
+            {item.lastMessage?.content || 'Start a conversation...'}
           </Text>
         </View>
 
