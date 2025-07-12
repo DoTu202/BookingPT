@@ -19,19 +19,8 @@ const {
   confirmBooking,
   getPtBookings,
   rejectBooking,
-  markBookingAsCompleted
+  markBookingAsCompleted,
 } = require('../controllers/pt/bookingPtController');
-
-// const {
-//   getDashboardStats,
-//   getTodayBookings,
-// } = require('../controllers/pt/dashboardController');
-
-// const {
-//   getEarningsData,
-// } = require('../controllers/pt/earningsController');
-
-
 
 const ptRouter = express.Router();
 
@@ -49,13 +38,5 @@ ptRouter.get('/bookings', getPtBookings);
 ptRouter.post('/bookings/:bookingId/confirm', confirmBooking);
 ptRouter.post('/bookings/:bookingId/reject', rejectBooking);
 ptRouter.post('/bookings/:bookingId/complete', markBookingAsCompleted);
-
-// Dashboard routes
-// ptRouter.get('/dashboard/stats', getDashboardStats);
-// ptRouter.get('/dashboard/today-bookings', getTodayBookings);
-
-// Earnings routes
-// ptRouter.get('/earnings', getEarningsData);
-
 
 module.exports = ptRouter;
