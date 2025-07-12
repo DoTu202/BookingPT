@@ -24,9 +24,9 @@ const ptProfileSchema = new mongoose.Schema({
   hourlyRate: {
     type: Number,
     required: true,
-    min: 50000
+    min: 10000, 
+    max: 1000000 
   },
-
   totalSessions: {
     type: Number,
     default: 0
@@ -47,7 +47,6 @@ const ptProfileSchema = new mongoose.Schema({
     city: String,
     district: String
   },
-
   isAcceptingClients: {
     type: Boolean,
     default: true

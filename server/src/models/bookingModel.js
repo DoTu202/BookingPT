@@ -54,7 +54,7 @@ const bookingSchema = new mongoose.Schema({
 
 bookingSchema.pre('save', function(next) {
     if (this.bookingTime.endTime <= this.bookingTime.startTime) {
-        return next(new Error('Thời gian kết thúc của lịch đặt phải sau thời gian bắt đầu.'));
+        return next(new Error('End time must be after start time'));
     }
     next();
 });

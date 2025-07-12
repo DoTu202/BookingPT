@@ -140,7 +140,7 @@ const deleteNotification = async (req, res) => {
     }
 };
 
-// Create notification (helper function)
+// Create notification
 const createNotification = async ({
     recipient,
     sender = null,

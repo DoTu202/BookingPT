@@ -2,7 +2,12 @@ const Booking = require('../../models/bookingModel');
 const asyncHandler = require('express-async-handler');
 const Availability = require('../../models/AvailabilityModel');
 const { createNotification } = require('../notificationController');
-const timeUtils = require('../../utils/timeUtils');
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 
 const getPtBookings = asyncHandler(async (req, res) => {
@@ -13,7 +18,9 @@ const getPtBookings = asyncHandler(async (req, res) => {
         queryOptions.status = status;
     }
     if (date) {
-        const { startOfDay, endOfDay } = timeUtils.getDateRange(date);
+        // Convert date from Vietnam timezone to UTC for database query
+        const startOfDay = dayjs.tz(date, 'Asia/Ho_Chi_Minh').startOf('day').utc().toDate();
+        const endOfDay = dayjs.tz(date, 'Asia/Ho_Chi_Minh').endOf('day').utc().toDate();
         queryOptions['bookingTime.startTime'] = { $gte: startOfDay, $lte: endOfDay };
     }
 
@@ -22,19 +29,10 @@ const getPtBookings = asyncHandler(async (req, res) => {
         .populate('availabilitySlot', 'startTime endTime') 
         .sort({ 'bookingTime.startTime': 'desc' });
 
-    // Format booking times for consistent display
-    const formattedBookings = bookings.map(booking => ({
-        ...booking.toObject(),
-        bookingTime: {
-            startTime: timeUtils.formatDateTime(booking.bookingTime.startTime, 'YYYY-MM-DD HH:mm'),
-            endTime: timeUtils.formatDateTime(booking.bookingTime.endTime, 'YYYY-MM-DD HH:mm'),
-        }
-    }));
-
     res.status(200).json({ 
         message: 'PT bookings retrieved successfully.', 
-        count: formattedBookings.length, 
-        data: formattedBookings 
+        count: bookings.length, 
+        data: bookings 
     });
 });
 
@@ -135,7 +133,7 @@ const markBookingAsCompleted = asyncHandler(async (req, res) => {
     if (booking.status !== 'confirmed') {
         res.status(400); throw new Error(`Only confirmed bookings can be marked as completed. Current status: "${booking.status}".`);
     }
-    if (timeUtils.isInFuture(booking.bookingTime.endTime)) {
+    if (dayjs(booking.bookingTime.endTime).isAfter(dayjs())) {
         res.status(400); throw new Error('Cannot mark session as completed before it ends.');
     }
 

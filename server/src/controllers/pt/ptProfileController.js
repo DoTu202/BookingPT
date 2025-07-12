@@ -8,41 +8,42 @@ const getProfile = asyncHandler(async (req, res) => {
     'user',
     'username email photoUrl dob role phoneNumber',
   );
-  if (!profile) {
+
+  // If found profile, return it
+  if (profile) {
     return res.status(200).json({
-      message: "PT has not created a detailed profile yet.",
-      data: {
-        user: {
-          _id: req.user._id,
-          username: req.user.username,
-          email: req.user.email,
-          photoUrl: req.user.photoUrl,
-          dob: req.user.dob,
-          phoneNumber: req.user.phoneNumber,
-          role: req.user.role,
-        }
-      }
+      data: profile,
+      message: 'Get profile successfully',
     });
   }
-  res.status(200).json({
-    data: profile,
-    message: 'Get profile successfully',
+  return res.status(200).json({
+    message: 'PT has not created a detailed profile yet.',
+    data: {
+      user: req.user,
+      _id: null,
+      username: req.user.username,
+      bio: '',
+      specializations: [],
+      experienceYears: 0,
+      hourlyRate: 0,
+      location: null,
+    },
   });
 });
-
-
 
 //Update or create profile of PT
 const updatePtProfile = asyncHandler(async (req, res) => {
   const {bio, specializations, experienceYears, location, hourlyRate} =
     req.body;
 
+  console.log('Received profile data:', req.body);
+
   if (
     hourlyRate !== undefined &&
-    (isNaN(parseFloat(hourlyRate)) || parseFloat(hourlyRate) < 0)
+    (isNaN(parseFloat(hourlyRate)) || parseFloat(hourlyRate) < 10000)
   ) {
     return res.status(400).json({
-      message: 'Hourly rate is not valid',
+      message: 'Hourly rate must be at least 10,000 VND',
     });
   }
   if (
@@ -50,12 +51,12 @@ const updatePtProfile = asyncHandler(async (req, res) => {
     (isNaN(parseInt(experienceYears)) || parseInt(experienceYears) < 0)
   ) {
     return res.status(400).json({
-      message: 'Experience years is not valid',
+      message: 'Experience years must be a positive number',
     });
   }
 
   const profileFields = {
-    user: req.user._id, 
+    user: req.user._id,
   };
 
   if (bio !== undefined) {
@@ -75,16 +76,33 @@ const updatePtProfile = asyncHandler(async (req, res) => {
     profileFields.hourlyRate = parseFloat(hourlyRate);
   if (location !== undefined) profileFields.location = location;
 
-  let profile = await PTProfile.findOneAndUpdate(
-    {user: req.user._id}, 
-    {$set: profileFields}, 
-    {new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true},
-  ).populate('user', 'username email photoUrl');
+  try {
+    let profile = await PTProfile.findOneAndUpdate(
+      {user: req.user._id},
+      {$set: profileFields},
+      {new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true},
+    ).populate('user', 'username email photoUrl');
 
-  res.status(200).json({
-    message: 'PT profile updated successfully',
-    data: profile,
-  });
+    console.log('Profile saved successfully:', profile);
+
+    res.status(200).json({
+      message: 'PT profile updated successfully',
+      data: profile,
+      success: true,
+    });
+  } catch (error) {
+    console.error('Error saving profile:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        message:
+          'Validation failed: ' +
+          Object.values(error.errors)
+            .map(e => e.message)
+            .join(', '),
+      });
+    }
+    throw error;
+  }
 });
 
 module.exports = {

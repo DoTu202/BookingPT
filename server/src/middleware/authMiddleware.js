@@ -26,7 +26,9 @@ const authenticateToken = async (req, res, next) => {
     }
 
     try {
-      const user = await UserModal.findById(decodePayload.id).select('-password');
+      const user = await UserModal.findById(decodePayload.id).select(
+        '-password',
+      );
       if (!user) {
         return res.status(401).json({
           message: 'Unauthorized',

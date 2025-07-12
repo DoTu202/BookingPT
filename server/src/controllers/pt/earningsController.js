@@ -4,10 +4,10 @@ const PTProfile = require('../../models/PTProfileModel');
 const getEarningsData = async (req, res) => {
   try {
     const ptId = req.user.id;
-    const { period = 'monthly' } = req.query; // monthly, weekly, yearly
+    const {period = 'monthly'} = req.query; // monthly, weekly, yearly
 
     // Get PT profile
-    const ptProfile = await PTProfile.findOne({ user: ptId });
+    const ptProfile = await PTProfile.findOne({user: ptId});
     if (!ptProfile) {
       return res.status(404).json({
         success: false,
@@ -16,10 +16,12 @@ const getEarningsData = async (req, res) => {
     }
 
     // Get all completed bookings for this PT
-    const completedBookings = await Booking.find({ 
-      pt: ptId, 
-      status: 'completed' 
-    }).populate('client', 'fullname email').sort({ date: -1 });
+    const completedBookings = await Booking.find({
+      pt: ptId,
+      status: 'completed',
+    })
+      .populate('client', 'fullname email')
+      .sort({date: -1});
 
     // Calculate total earnings
     const totalEarnings = completedBookings.reduce((total, booking) => {
@@ -30,38 +32,42 @@ const getEarningsData = async (req, res) => {
     const totalSessions = completedBookings.length;
 
     // Calculate average per session
-    const averagePerSession = totalSessions > 0 ? Math.round(totalEarnings / totalSessions) : 0;
+    const averagePerSession =
+      totalSessions > 0 ? Math.round(totalEarnings / totalSessions) : 0;
 
     // Count unique clients
     const uniqueClients = new Set(
-      completedBookings.map(booking => booking.client?._id?.toString())
+      completedBookings.map(booking => booking.client?._id?.toString()),
     ).size;
 
     // Create simple chart data (last 7 days)
     const today = new Date();
     const chartData = [];
-    
+
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(today.getDate() - i);
       date.setHours(0, 0, 0, 0);
-      
+
       const nextDate = new Date(date);
       nextDate.setDate(date.getDate() + 1);
-      
+
       // Find bookings for this day
       const dayBookings = completedBookings.filter(booking => {
         const bookingDate = new Date(booking.date);
         return bookingDate >= date && bookingDate < nextDate;
       });
-      
-      const dayEarnings = dayBookings.reduce((sum, booking) => sum + (booking.priceAtBooking || 0), 0);
-      
+
+      const dayEarnings = dayBookings.reduce(
+        (sum, booking) => sum + (booking.priceAtBooking || 0),
+        0,
+      );
+
       chartData.push({
-        label: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        label: date.toLocaleDateString('en-US', {weekday: 'short'}),
         value: dayEarnings,
         sessions: dayBookings.length,
-        date: date.toISOString().split('T')[0]
+        date: date.toISOString().split('T')[0],
       });
     }
 
@@ -73,7 +79,7 @@ const getEarningsData = async (req, res) => {
       startTime: booking.startTime,
       endTime: booking.endTime,
       amount: booking.priceAtBooking || 0,
-      status: booking.status
+      status: booking.status,
     }));
 
     // Simple response data
@@ -85,14 +91,13 @@ const getEarningsData = async (req, res) => {
       uniqueClients,
       chartData,
       recentTransactions,
-      hasData: completedBookings.length > 0
+      hasData: completedBookings.length > 0,
     };
 
     res.status(200).json({
       success: true,
       data: earningsData,
     });
-
   } catch (error) {
     console.error('Error getting earnings data:', error);
     res.status(500).json({

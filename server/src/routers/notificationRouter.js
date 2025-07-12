@@ -13,13 +13,9 @@ const notificationRouter = express.Router();
 notificationRouter.use(authenticateToken);
 
 notificationRouter.get('/', getNotifications);
-
 notificationRouter.get('/unread-count', getUnreadCount);
-
 notificationRouter.put('/:notificationId/read', markAsRead);
-
 notificationRouter.put('/mark-all-read', markAllAsRead);
-
 notificationRouter.delete('/:notificationId', deleteNotification);
 
 module.exports = notificationRouter;

@@ -1,107 +1,80 @@
 const Availability = require('../../models/AvailabilityModel');
 const asyncHandler = require('express-async-handler');
-const Booking = require('../../models/bookingModel');
-const timeUtils = require('../../utils/timeUtils');
+const dayjs = require('dayjs');
+const timezone = require('dayjs/plugin/timezone');
+dayjs.extend(timezone);
 
 const addAvailability = asyncHandler(async (req, res) => {
-  const {date, startTime, endTime} = req.body;
+  const {startTime, endTime} = req.body;
   const ptId = req.user._id;
 
-  // Validate input
-  if (!date || !startTime || !endTime) {
-    return res.status(400).json({
-      message: 'Date, start time and end time are required',
-    });
+  // Check required fields
+  if (!startTime || !endTime) {
+    res.status(400);
+    throw new Error('startTime and endTime are required as UTC ISO strings');
   }
 
-  // Validate time format using timeUtils
-  if (!timeUtils.isValidTimeFormat(startTime) || !timeUtils.isValidTimeFormat(endTime)) {
-    return res.status(400).json({
-      message: 'Invalid time format. Expected HH:MM',
-    });
+  // Validate ISO 8601 format
+  const startDateTime = dayjs(startTime);
+  const endDateTime = dayjs(endTime);
+
+  if (!startDateTime.isValid() || !endDateTime.isValid()) {
+    res.status(400);
+    throw new Error('Invalid ISO 8601 format for startTime or endTime');
   }
 
-  // Parse date and time using timeUtils
-  const startDateTime = timeUtils.parseDateTime(date, startTime);
-  const endDateTime = timeUtils.parseDateTime(date, endTime);
-  
-  // Convert to Date objects for database
+  // Check time logic
+  if (endDateTime.isBefore(startDateTime)) {
+    res.status(400);
+    throw new Error('End time must be after start time');
+  }
+
+  if (startDateTime.isBefore(dayjs())) {
+    res.status(400);
+    throw new Error('Start time must be in the future');
+  }
+
+  // Convert to Date objects for MongoDB
   const _startTime = startDateTime.toDate();
   const _endTime = endDateTime.toDate();
-  
-  // Validate parsed dates
-  if (!startDateTime.isValid() || !endDateTime.isValid()) {
-    return res.status(400).json({
-      message: 'Invalid date or time format',
-    });
-  }
 
-  // Check end time is after start time
-  if (!endDateTime.isAfter(startDateTime)) {
-    return res.status(400).json({
-      message: 'End time must be after start time',
-    });
-  }
-
-  // Check if start time is in the future (compare Vietnam times)
-  const nowVietnam = timeUtils.now();
-  if (startDateTime.isBefore(nowVietnam)) {
-    return res.status(400).json({
-      message: 'Start time must be in the future',
-    });
-  }
-
-  // Check if the PT is already booked or unavailable during this time
+  // Check for overlapping slots
   const overlappingAvailability = await Availability.findOne({
     pt: ptId,
     $or: [
-      {
-        startTime: {$lt: _endTime, $gte: _startTime},
-      },
-      {
-        endTime: {$gt: _startTime, $lte: _endTime},
-      },
-      {
-        startTime: {$lte: _startTime},
-        endTime: {$gte: _endTime},
-      },
+      {startTime: {$lt: _endTime, $gte: _startTime}},
+      {endTime: {$gt: _startTime, $lte: _endTime}},
+      {startTime: {$lte: _startTime}, endTime: {$gte: _endTime}},
     ],
   });
-  
+
   if (overlappingAvailability) {
-    return res.status(400).json({
-      message: 'This time slot is already booked or unavailable',
-    });
+    res.status(400);
+    throw new Error('This time slot overlaps with an existing one');
   }
-  
+
+  // Create and save new slot
   const newAvailability = new Availability({
     pt: ptId,
     startTime: _startTime,
     endTime: _endTime,
-    status: 'available',
   });
 
   await newAvailability.save();
-  
-  // Format response data
-  const formattedAvailability = {
-    ...newAvailability.toObject(),
-    startTime: timeUtils.formatDateTime(newAvailability.startTime, 'YYYY-MM-DD HH:mm'),
-    endTime: timeUtils.formatDateTime(newAvailability.endTime, 'YYYY-MM-DD HH:mm'),
-  };
-  
+
+  // Return the created slot
   res.status(201).json({
-    message: 'Availability added successfully',
-    data: formattedAvailability,
+    success: true,
+    data: newAvailability,
   });
 });
 
-//Update availability for PT
 const updateAvailability = asyncHandler(async (req, res) => {
   const {availabilityId} = req.params;
-  const {date, startTime, endTime, status} = req.body;
+  const {startTime, endTime} = req.body;
   const ptId = req.user._id;
 
+  // Check avaiblability exists
   const availability = await Availability.findOne({
     _id: availabilityId,
     pt: ptId,
@@ -109,197 +82,88 @@ const updateAvailability = asyncHandler(async (req, res) => {
 
   if (!availability) {
     res.status(404);
-    throw new Error(
-      'Can not find availability with this id or you are not the owner',
-    );
+    throw new Error('Availability slot not found');
   }
 
-  if (availability.status === 'booked') {
-    const booking = await Booking.findOne({
-      availabilitySlot: availabilityId,
-      status: {$in: ['pending', 'confirmed']},
-    });
-    if (booking) {
-      res.status(400);
-      throw new Error(
-        'Cannot update availability that has pending or confirmed bookings. Please cancel related bookings first.',
-      );
-    }
+  // Check required fields
+  if (!startTime || !endTime) {
+    res.status(400);
+    throw new Error('startTime and endTime are required');
   }
 
-  let _startTime = availability.startTime;
-  let _endTime = availability.endTime;
-  
-  // If date and time are provided, combine them using timeUtils
-  if (date && startTime) {
-    // Validate time format
-    if (!timeUtils.isValidTimeFormat(startTime)) {
-      return res.status(400).json({
-        message: 'Invalid start time format. Expected HH:MM',
-      });
-    }
-    
-    const startDateTime = timeUtils.parseDateTime(date, startTime);
-    if (!startDateTime.isValid()) {
-      return res.status(400).json({
-        message: 'Invalid start date or time format',
-      });
-    }
-    _startTime = startDateTime.toDate();
-  } else if (startTime) {
-    // If only time is provided, use existing date
-    if (!timeUtils.isValidTimeFormat(startTime)) {
-      return res.status(400).json({
-        message: 'Invalid start time format. Expected HH:MM',
-      });
-    }
-    
-    const existingDate = timeUtils.formatDateTime(availability.startTime, 'YYYY-MM-DD');
-    const startDateTime = timeUtils.parseDateTime(existingDate, startTime);
-    if (!startDateTime.isValid()) {
-      return res.status(400).json({
-        message: 'Invalid start date or time format',
-      });
-    }
-    _startTime = startDateTime.toDate();
+  const startDateTime = dayjs(startTime);
+  const endDateTime = dayjs(endTime);
+
+  if (!startDateTime.isValid() || !endDateTime.isValid()) {
+    res.status(400);
+    throw new Error('Invalid ISO 8601 format');
   }
 
-  if (date && endTime) {
-    // Validate time format
-    if (!timeUtils.isValidTimeFormat(endTime)) {
-      return res.status(400).json({
-        message: 'Invalid end time format. Expected HH:MM',
-      });
-    }
-    
-    const endDateTime = timeUtils.parseDateTime(date, endTime);
-    if (!endDateTime.isValid()) {
-      return res.status(400).json({
-        message: 'Invalid end date or time format',
-      });
-    }
-    _endTime = endDateTime.toDate();
-  } else if (endTime) {
-    // If only time is provided, use existing date
-    if (!timeUtils.isValidTimeFormat(endTime)) {
-      return res.status(400).json({
-        message: 'Invalid end time format. Expected HH:MM',
-      });
-    }
-    
-    const existingDate = timeUtils.formatDateTime(availability.endTime, 'YYYY-MM-DD');
-    const endDateTime = timeUtils.parseDateTime(existingDate, endTime);
-    if (!endDateTime.isValid()) {
-      return res.status(400).json({
-        message: 'Invalid end date or time format',
-      });
-    }
-    _endTime = endDateTime.toDate();
-  }
-  
-  // Check end time is after start time
-  if (timeUtils.compare(_endTime, _startTime) <= 0) {
+  if (endDateTime.isBefore(startDateTime)) {
     res.status(400);
     throw new Error('End time must be after start time');
   }
 
-  // Check if updating to past time (only if changing from future to past)
-  if (startTime || endTime) {
-    if (timeUtils.isInPast(_startTime) && timeUtils.isInFuture(availability.startTime)) {
-      res.status(400);
-      throw new Error('Cannot update availability to a time in the past.');
-    }
-    const overlappingAvailability = await Availability.findOne({
-      _id: {$ne: availabilityId}, // Exclude the current availability
-      pt: ptId,
-      $or: [
-        {startTime: {$lt: _endTime, $gte: _startTime}},
-        {endTime: {$gt: _startTime, $lte: _endTime}},
-        {startTime: {$lte: _startTime}, endTime: {$gte: _endTime}},
-      ],
-    });
-    if (overlappingAvailability) {
-      res.status(400);
-      throw new Error('This time slot is already booked or unavailable');
-    }
-    availability.startTime = _startTime;
-    availability.endTime = _endTime;
+  // Check for overlapping slots 
+  const overlappingAvailability = await Availability.findOne({
+    pt: ptId,
+    _id: {$ne: availabilityId}, // Exclude current slot
+    $or: [
+      {startTime: {$lt: endDateTime.toDate(), $gte: startDateTime.toDate()}},
+      {endTime: {$gt: startDateTime.toDate(), $lte: endDateTime.toDate()}},
+      {
+        startTime: {$lte: startDateTime.toDate()},
+        endTime: {$gte: endDateTime.toDate()},
+      },
+    ],
+  });
+
+  if (overlappingAvailability) {
+    res.status(400);
+    throw new Error('Updated time slot overlaps with an existing one');
   }
 
-  if (status) {
-    if (!['available', 'unavailable_by_pt'].includes(status)) {
-      res.status(400);
-      throw new Error('Invalid status update for availability.');
-    }
-    availability.status = status;
-  }
+  // Update availability
+  availability.startTime = startDateTime.toDate();
+  availability.endTime = endDateTime.toDate();
 
-  const updatedAvailability = await availability.save();
-
-  // Format response data
-  const formattedAvailability = {
-    ...updatedAvailability.toObject(),
-    startTime: timeUtils.formatDateTime(updatedAvailability.startTime, 'YYYY-MM-DD HH:mm'),
-    endTime: timeUtils.formatDateTime(updatedAvailability.endTime, 'YYYY-MM-DD HH:mm'),
-  };
+  await availability.save();
 
   res.status(200).json({
-    message: 'Availability updated successfully.',
-    data: formattedAvailability,
+    success: true,
+    data: availability,
   });
 });
 
-//Get availability for PT
+
 const getAvailabilitySlots = asyncHandler(async (req, res) => {
-  const {status, startDate, endDate, date} = req.query;
-  const queryOptions = {pt: req.user._id};
+  const ptId = req.user._id;
+  const {date} = req.query; 
 
-  if (status) {
-    if (!['available', 'unavailable_by_pt'].includes(status)) {
-      res.status(400);
-      throw new Error('Invalid status filter');
-    }
-    queryOptions.status = status;
+  let query = {pt: ptId};
+
+  // If date is provided, filter by startTime within that date
+  if (date) {
+    const timeZone = 'Asia/Ho_Chi_Minh';
+    const startOfDay = dayjs.tz(date, timeZone).startOf('day').toDate();
+    const endOfDay = dayjs.tz(date, timeZone).endOf('day').toDate();
+
+    query.startTime = {
+      $gte: startOfDay,
+      $lte: endOfDay,
+    };
   }
 
-  // Handle single date parameter (for backward compatibility)
-  if (date && !startDate && !endDate) {
-    const { startOfDay, endOfDay } = timeUtils.getDateRange(date);
-    queryOptions.startTime = {$gte: startOfDay, $lte: endOfDay};
-  } else {
-    // Handle date range
-    if (startDate) {
-      const startOfDay = timeUtils.getStartOfDay(startDate);
-      queryOptions.startTime = {$gte: startOfDay};
-    }
-    
-    if (endDate) {
-      const endOfDay = timeUtils.getEndOfDay(endDate);
-      if (queryOptions.startTime) {
-        queryOptions.startTime = {...queryOptions.startTime, $lte: endOfDay};
-      } else {
-        queryOptions.startTime = {$lte: endOfDay};
-      }
-    }
-  }
-
-  const slots = await Availability.find(queryOptions).sort({startTime: 'asc'});
-
-  // Format times for consistent display
-  const formattedSlots = slots.map(slot => ({
-    ...slot.toObject(),
-    startTime: timeUtils.formatDateTime(slot.startTime, 'YYYY-MM-DD HH:mm'),
-    endTime: timeUtils.formatDateTime(slot.endTime, 'YYYY-MM-DD HH:mm'),
-  }));
+  const availabilitySlots = await Availability.find(query)
+    .sort({startTime: 1})
+    .populate('pt', 'username email');
 
   res.status(200).json({
-    message: 'Availability fetched successfully',
-    count: formattedSlots.length,
-    data: formattedSlots,
+    success: true,
+    data: availabilitySlots,
   });
 });
 
-//delete availability
 const deletedAvailabilitySlot = asyncHandler(async (req, res) => {
   const {availabilityId} = req.params;
   const ptId = req.user._id;
@@ -311,26 +175,20 @@ const deletedAvailabilitySlot = asyncHandler(async (req, res) => {
 
   if (!availability) {
     res.status(404);
-    throw new Error('Availability not found or you are not the owner');
-  }
-  //not have booking
-
-  if (availability.status === 'booked') {
-    const booking = await Booking.findOne({
-      availability: availabilityId,
-      status: {$in: ['pending_confirmation', 'confirmed']},
-    });
-    if (booking) {
-      res.status(400);
-      throw new Error(
-        'Cannot delete availability that has pending or confirmed bookings. Please cancel related bookings first.',
-      );
-    }
+    throw new Error('Availability slot not found');
   }
 
-  await availability.deleteOne();
+  // Check if slot is booked
+  if (availability.isBooked) {
+    res.status(400);
+    throw new Error('Cannot delete a booked time slot');
+  }
+
+  await Availability.findByIdAndDelete(availabilityId);
+
   res.status(200).json({
-    message: 'Availability deleted successfully',
+    success: true,
+    message: 'Availability slot deleted successfully',
   });
 });
 

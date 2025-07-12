@@ -1,11 +1,16 @@
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcrypt');
 const User = require('../models/userModel');
-const PTProfile = require('../models/PTProfileModel'); // Hoặc tên model PTProfile của bạn
+const PTProfile = require('../models/PTProfileModel'); 
 const Availability = require('../models/AvailabilityModel');
-const { createNotification } = require('./notificationController'); // Hoặc tên model Availability của bạn
+const { createNotification } = require('./notificationController');
 const Booking = require('../models/bookingModel');
-const timeUtils = require('../utils/timeUtils');
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const searchPTs = asyncHandler(async (req, res) => {
   const {
@@ -21,7 +26,7 @@ const searchPTs = asyncHandler(async (req, res) => {
   const pageSize = parseInt(req.query.pageSize) || 10;
   const page = parseInt(req.query.pageNumber) || 1;
 
-  // 
+  // Validate sortBy and order
   const profileQueryConditions = {};
 
   if (specialization) {
@@ -46,7 +51,7 @@ const searchPTs = asyncHandler(async (req, res) => {
     };
   }
 
-  // pt & client same username; 
+  // Filter PTs by name if provided
   const userQueryConditions = {role: 'pt'};
   if (name) {
     userQueryConditions.username = {$regex: name, $options: 'i'};
@@ -73,7 +78,9 @@ const searchPTs = asyncHandler(async (req, res) => {
   }
 
   if (availableDate) {
-    const { startOfDay, endOfDay } = timeUtils.getDateRange(availableDate);
+    // Convert date from Vietnam timezone to UTC for database query
+    const startOfDay = dayjs.tz(availableDate, 'Asia/Ho_Chi_Minh').startOf('day').utc().toDate();
+    const endOfDay = dayjs.tz(availableDate, 'Asia/Ho_Chi_Minh').endOf('day').utc().toDate();
 
     const ptIdsCurrentlyInQuery = profileQueryConditions.user
       ? profileQueryConditions.user.$in
@@ -88,6 +95,7 @@ const searchPTs = asyncHandler(async (req, res) => {
       availabilityQuery.pt = {$in: ptIdsCurrentlyInQuery};
     }
 
+    // Find PTs with available slots on the selected date
     const availablePTsFromSlots = await Availability.find(
       availabilityQuery,
     ).distinct('pt');
@@ -142,7 +150,7 @@ const searchPTs = asyncHandler(async (req, res) => {
 });
 
 
-//
+// View PT Profile details
 const viewPTProfile = asyncHandler(async (req, res) => {
   const {ptId} = req.params;
 
@@ -172,6 +180,7 @@ const viewPTProfile = asyncHandler(async (req, res) => {
   res.status(200).json(profile);
 });
 
+
 //Client get PT Profile details and availability
 const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   const {ptId} = req.params;
@@ -189,12 +198,14 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   };
 
   if (startDate) {
-    const startOfDay = timeUtils.getStartOfDay(startDate);
+    // Convert date from Vietnam timezone to UTC for database query
+    const startOfDay = dayjs.tz(startDate, 'Asia/Ho_Chi_Minh').startOf('day').utc().toDate();
     queryOptions.startTime = {$gte: startOfDay};
   }
   
   if (endDate) {
-    const endOfDay = timeUtils.getEndOfDay(endDate);
+    // Convert date from Vietnam timezone to UTC for database query
+    const endOfDay = dayjs.tz(endDate, 'Asia/Ho_Chi_Minh').endOf('day').utc().toDate();
     if (queryOptions.startTime) {
       queryOptions.startTime = {...queryOptions.startTime, $lte: endOfDay};
     } else {
@@ -204,17 +215,11 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
 
   const slots = await Availability.find(queryOptions).sort({startTime: 'asc'});
 
-  // Format times for consistent display
-  const formattedSlots = slots.map(slot => ({
-    ...slot.toObject(),
-    startTime: timeUtils.formatDateTime(slot.startTime, 'YYYY-MM-DD HH:mm'),
-    endTime: timeUtils.formatDateTime(slot.endTime, 'YYYY-MM-DD HH:mm'),
-  }));
-
+  // Return raw slots data - frontend will handle timezone conversion for display
   res.status(200).json({
     message: 'PT availability retrieved successfully.',
-    count: formattedSlots.length,
-    data: formattedSlots,
+    count: slots.length,
+    data: slots,
   });
 });
 
@@ -256,7 +261,7 @@ const createBookingRequest = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error('Time slot is no longer available.');
   }
-  if (timeUtils.isInPast(slot.startTime)) {
+  if (dayjs(slot.startTime).isBefore(dayjs())) {
     res.status(400);
     throw new Error('Cannot book past time slots.');
   }
@@ -582,7 +587,7 @@ const uploadProfilePhoto = asyncHandler(async (req, res) => {
     
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { photo: photoUrl },
+      { photoUrl: photoUrl },
       { new: true, runValidators: true }
     ).select('-password');
     

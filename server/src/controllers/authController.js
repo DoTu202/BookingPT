@@ -14,6 +14,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Function to generate JSON Web Token
 const getJsonWebToken = (email, id, role, username, photoUrl) => {
   const payload = {
     email,
@@ -161,7 +162,7 @@ function generatePassword(length = 8) {
     return password;
 }
 
-
+// Forgot password
 const forgotPassword = asyncHandler(async (req, res) => {
   const {email} = req.body;
   const randomPassword = generatePassword(8);
