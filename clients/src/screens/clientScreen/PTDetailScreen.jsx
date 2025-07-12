@@ -18,9 +18,15 @@ import {
 } from '../../components';
 import { Star1, Location } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
-import ptApi from '../../apis/ptApi';
+import clientApi from '../../apis/clientApi';
 import { timeUtils } from '../../utils/timeUtils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import dayjs from 'dayjs';
+import timezone from 'dayjs/plugin/timezone';
+import utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const PTDetailScreen = ({ navigation, route }) => {
   // Get PT data from navigation params
@@ -70,7 +76,7 @@ const PTDetailScreen = ({ navigation, route }) => {
       setPtProfile(ptData);
 
       // Set default date to today or first reasonable date
-      const today = timeUtils.formatDate(timeUtils.now());
+      const today = dayjs().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
       setSelectedDate(today);
       
     } catch (error) {
@@ -92,7 +98,7 @@ const PTDetailScreen = ({ navigation, route }) => {
         dateString = selectedDate.split('T')[0];
       }
       
-      const response = await ptApi.getPTAvailability(ptProfile.user._id, {
+      const response = await clientApi.getPTAvailability(ptProfile.user._id, {
         startDate: dateString,
         endDate: dateString,
       });
@@ -151,12 +157,12 @@ const PTDetailScreen = ({ navigation, route }) => {
         notesFromClient: `Mobile app booking - Duration: ${sessionDetails.duration}h, Total: ${sessionDetails.totalPrice.toLocaleString()} VND`,
       };
 
-      const response = await ptApi.createBooking(bookingData);
+      const response = await clientApi.createBooking(bookingData);
       
       if (response.data.success || response.data.message) {
         Alert.alert(
           'Booking Success! ',
-          `Your booking request has been sent successfully!\n\nTrainer: ${ptProfile.user.username}\nTime: ${timeUtils.formatTime(selectedSlot.startTime)} - ${timeUtils.formatTime(selectedSlot.endTime)}\nDate: ${timeUtils.formatDateWithDay(selectedDate)}\nTotal: ${sessionDetails.totalPrice.toLocaleString()} VND\n\nThe trainer will confirm your booking soon.`,
+          `Your booking request has been sent successfully!\n\nTrainer: ${ptProfile.user.username}\nTime: ${timeUtils.formatToVietnameseTime(selectedSlot.startTime)} - ${timeUtils.formatToVietnameseTime(selectedSlot.endTime)}\nDate: ${timeUtils.formatToVietnameseDate(selectedDate)}\nTotal: ${sessionDetails.totalPrice.toLocaleString()} VND\n\nThe trainer will confirm your booking soon.`,
           [
             {
               text: 'OK',
@@ -228,9 +234,9 @@ const PTDetailScreen = ({ navigation, route }) => {
   const calculateSessionDetails = (slot) => {
     if (!slot || !ptProfile?.hourlyRate) return { duration: 0, totalPrice: 0 };
     
-    // Parse the time strings from backend (format: "YYYY-MM-DD HH:mm")
-    const startTime = timeUtils.parseDateTime(slot.startTime);
-    const endTime = timeUtils.parseDateTime(slot.endTime);
+    // Parse ISO time strings from backend to dayjs objects in Vietnam timezone
+    const startTime = dayjs(slot.startTime).tz('Asia/Ho_Chi_Minh');
+    const endTime = dayjs(slot.endTime).tz('Asia/Ho_Chi_Minh');
     const durationHours = endTime.diff(startTime, 'hour', true); // Get decimal hours
     const totalPrice = durationHours * (ptProfile.hourlyRate || 500000);
     
@@ -376,8 +382,8 @@ const PTDetailScreen = ({ navigation, route }) => {
             <View style={styles.dateContainer}>
               {/* Show dates from today for next 30 days */}
               {Array.from({length: 30}, (_, index) => {
-                const date = timeUtils.addTime(timeUtils.now(), index, 'day');
-                const dateStr = timeUtils.formatDate(date);
+                const date = dayjs().tz('Asia/Ho_Chi_Minh').add(index, 'day');
+                const dateStr = date.format('YYYY-MM-DD');
                 const isSelected = selectedDate === dateStr;
                 
                 return (
@@ -387,18 +393,18 @@ const PTDetailScreen = ({ navigation, route }) => {
                     onPress={() => setSelectedDate(dateStr)}
                   >
                     <TextComponent
-                      text={timeUtils.formatDateTime(date, 'ddd')}
+                      text={date.format('ddd')}
                       size={12}
                       color={isSelected ? appColors.white : appColors.gray}
                     />
                     <TextComponent
-                      text={timeUtils.formatDateTime(date, 'DD')}
+                      text={date.format('DD')}
                       size={16}
                       font="Poppins-SemiBold"
                       color={isSelected ? appColors.white : appColors.black}
                     />
                     <TextComponent
-                      text={timeUtils.formatDateTime(date, 'MMM')}
+                      text={date.format('MMM')}
                       size={10}
                       color={isSelected ? appColors.white : appColors.gray}
                     />
@@ -430,7 +436,7 @@ const PTDetailScreen = ({ navigation, route }) => {
                     onPress={() => setSelectedSlot(slot)}
                   >
                     <TextComponent
-                      text={`${timeUtils.formatTime(slot.startTime)} - ${timeUtils.formatTime(slot.endTime)}`}
+                      text={`${timeUtils.formatToVietnameseTime(slot.startTime)} - ${timeUtils.formatToVietnameseTime(slot.endTime)}`}
                       size={14}
                       color={isSelected ? appColors.white : appColors.black}
                       font={isSelected ? "Poppins-SemiBold" : "Poppins-Regular"}
@@ -463,13 +469,13 @@ const PTDetailScreen = ({ navigation, route }) => {
                     color={appColors.gray}
                   />
                   <TextComponent
-                    text={`${timeUtils.formatTime(selectedSlot.startTime)} - ${timeUtils.formatTime(selectedSlot.endTime)}`}
+                    text={`${timeUtils.formatToVietnameseTime(selectedSlot.startTime)} - ${timeUtils.formatToVietnameseTime(selectedSlot.endTime)}`}
                     size={16}
                     font="Poppins-SemiBold"
                     color={appColors.black}
                   />
                   <TextComponent
-                    text={timeUtils.formatDateWithDay(selectedDate)}
+                    text={timeUtils.formatToVietnameseDate(selectedDate)}
                     size={14}
                     color={appColors.gray}
                   />
@@ -541,7 +547,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 10, // Giảm padding top
+    paddingTop: 10, 
   },
   loadingContainer: {
     flex: 1,
@@ -549,18 +555,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   profileCard: {
-    padding: 16, // Giảm padding từ 20 → 16
-    marginTop: 10, // Giảm margin
-    marginBottom: 16, // Giảm margin
+    padding: 16, 
+    marginTop: 10, 
+    marginBottom: 16, 
   },
   avatarContainer: {
-    width: 70, // Giảm size từ 80 → 70
+    width: 70, 
     height: 70,
     borderRadius: 35,
     backgroundColor: appColors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12, // Giảm margin
+    marginRight: 12, 
   },
   profileInfo: {
     flex: 1,

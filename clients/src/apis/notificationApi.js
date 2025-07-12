@@ -1,4 +1,4 @@
-import { appInfo } from '../constants/appInfos';
+import {appInfo} from '../constants/appInfos';
 
 const notificationApi = {
   getNotifications: async (token, page = 1, limit = 20, isRead = undefined) => {
@@ -12,12 +12,12 @@ const notificationApi = {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.message || 'Failed to get notifications');
       }
@@ -30,18 +30,21 @@ const notificationApi = {
   },
 
   // Get unread notification count
-  getUnreadCount: async (token) => {
+  getUnreadCount: async token => {
     try {
-      const response = await fetch(`${appInfo.BASE_URL}/api/notifications/unread-count`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+      const response = await fetch(
+        `${appInfo.BASE_URL}/api/notifications/unread-count`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.message || 'Failed to get unread count');
       }
@@ -56,16 +59,19 @@ const notificationApi = {
   // Mark notification as read
   markAsRead: async (token, notificationId) => {
     try {
-      const response = await fetch(`${appInfo.BASE_URL}/api/notifications/${notificationId}/read`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+      const response = await fetch(
+        `${appInfo.BASE_URL}/api/notifications/${notificationId}/read`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.message || 'Failed to mark as read');
       }
@@ -78,18 +84,21 @@ const notificationApi = {
   },
 
   // Mark all notifications as read
-  markAllAsRead: async (token) => {
+  markAllAsRead: async token => {
     try {
-      const response = await fetch(`${appInfo.BASE_URL}/api/notifications/mark-all-read`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+      const response = await fetch(
+        `${appInfo.BASE_URL}/api/notifications/mark-all-read`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.message || 'Failed to mark all as read');
       }
@@ -104,16 +113,19 @@ const notificationApi = {
   // Delete notification
   deleteNotification: async (token, notificationId) => {
     try {
-      const response = await fetch(`${appInfo.BASE_URL}/api/notifications/${notificationId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+      const response = await fetch(
+        `${appInfo.BASE_URL}/api/notifications/${notificationId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.message || 'Failed to delete notification');
       }

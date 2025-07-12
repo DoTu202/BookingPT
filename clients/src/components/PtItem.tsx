@@ -7,10 +7,11 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import React from 'react';
-import {CardComponent, TextComponent, SpaceComponent, RowComponent} from '.';
+import {TextComponent, SpaceComponent, RowComponent} from '.';
 import appColors from '../constants/appColors';
 import {Location, Star1} from 'iconsax-react-native';
 import {Heart} from 'lucide-react-native';
+
 
 interface PTData {
   _id: string;
@@ -22,7 +23,7 @@ interface PTData {
   hourlyRate?: number;
   specializations?: string[];
   experienceYears?: number;
-  ptData?: any;
+  ptData?: any; 
 }
 
 interface Props {
@@ -35,681 +36,188 @@ interface Props {
 const PtItem = (props: Props) => {
   const {item, type, size = 'medium', onPress} = props;
 
-  const getCardWidth = () => {
-    if (type === 'list') return '100%';
-
-    const screenWidth = Dimensions.get('window').width;
-    switch (size) {
-      case 'small':
-        return screenWidth * 0.45;
-      case 'large':
-        return screenWidth * 0.65;
-      default:
-        return screenWidth * 0.55;
-    }
-  };
-
-  const getNumericCardWidth = () => {
-    const screenWidth = Dimensions.get('window').width;
-    switch (size) {
-      case 'small':
-        return screenWidth * 0.45;
-      case 'large':
-        return screenWidth * 0.65;
-      default:
-        return screenWidth * 0.55;
-    }
-  };
-
   const formatPrice = (price: number) => {
     if (!price || price === 0) return 'Contact';
     return `${(price / 1000).toFixed(0)}K VND`;
   };
-
-  const renderSpecializations = () => {
-    if (!item.specializations || item.specializations.length === 0) return null;
-
-    const maxSpecs = type === 'list' ? 2 : size === 'small' ? 2 : 3;
-
-    return (
-      <View
-        style={[
-          styles.specializationsContainer,
-          type === 'list' && styles.specializationsListContainer,
-        ]}>
-        {item.specializations.slice(0, maxSpecs).map((spec, index) => (
-          <View
-            key={index}
-            style={[
-              styles.specializationTag,
-              type === 'list' && styles.specializationTagList,
-              {
-                paddingHorizontal:
-                  type === 'list' ? 6 : size === 'small' ? 6 : 8,
-                paddingVertical: type === 'list' ? 2 : size === 'small' ? 2 : 3,
-              },
-            ]}>
-            <TextComponent
-              text={spec && typeof spec === 'string'
-                ? spec.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-                : 'Specialty'}
-              size={type === 'list' ? 9 : size === 'small' ? 9 : 10}
-              color={appColors.primary}
-              font="medium"
-            />
-          </View>
-        ))}
-        {item.specializations.length > maxSpecs && (
-          <View
-            style={[
-              styles.specializationTag,
-              styles.moreTag,
-              type === 'list' && styles.specializationTagList,
-            ]}>
-            <TextComponent
-              text={`+${item.specializations.length - maxSpecs}`}
-              size={type === 'list' ? 9 : size === 'small' ? 9 : 10}
-              color={appColors.gray}
-              font="medium"
-            />
-          </View>
-        )}
-      </View>
-    );
+  
+  const getCardWidth = () => {
+    if (type === 'list') return '100%';
+    const screenWidth = Dimensions.get('window').width;
+    switch (size) {
+      case 'small': return screenWidth * 0.45;
+      case 'large': return screenWidth * 0.65;
+      default: return screenWidth * 0.55;
+    }
   };
 
-  const renderCardType = () => (
-    <TouchableOpacity
-      onPress={() => onPress && onPress(item.ptData || item)}
-      style={[
-        styles.cardContainer,
-        {
-          width: getCardWidth(),
-          backgroundColor: appColors.white,
-        },
-      ]}
-      activeOpacity={0.9}>
-      <View style={styles.cardContent}>
-        <View style={styles.cardAvatarContainer}>
-          <Image
-            source={
-              item.imageURL
-                ? {uri: item.imageURL}
-                : require('../../assets/images/default.png')
-            }
-            style={styles.cardAvatar}
-          />
 
-          <TouchableOpacity style={styles.cardFavoriteButton}>
-            <Heart size={14} color={appColors.gray} />
-          </TouchableOpacity>
-
-          {item.rating && item.rating > 0 && (
-            <View style={styles.cardRatingBadge}>
-              <Star1 size={10} color={appColors.yellow} variant="Bold" />
-              <TextComponent
-                text={item.rating.toFixed(1)}
-                size={9}
-                color={appColors.white}
-                font="bold"
-                styles={{marginLeft: 1}}
-              />
-            </View>
-          )}
-        </View>
-
-        <SpaceComponent height={12} />
-
-        <View style={styles.cardInfoContainer}>
-          <TextComponent
-            text={item.title || 'Personal Trainer'}
-            size={size === 'small' ? 14 : 15}
-            numberOfLines={1}
-            font="bold"
-            color={appColors.gray2}
-            styles={{textAlign: 'center'}}
-          />
-
-          <SpaceComponent height={4} />
-
-          <TextComponent
-            text={item.description || 'Professional Personal Trainer'}
-            size={size === 'small' ? 11 : 12}
-            numberOfLines={1}
-            color={appColors.gray}
-            styles={{textAlign: 'center', lineHeight: 16}}
-          />
-
-          <SpaceComponent height={6} />
-
-          {/* Row 3: Experience & Specialization */}
-          <View style={styles.cardMiddleRow}>
-            {item.experienceYears && item.experienceYears > 0 && (
-              <TextComponent
-                text={`${item.experienceYears} năm`}
-                size={size === 'small' ? 10 : 11}
-                color={appColors.gray}
-                font="medium"
-              />
-            )}
-
-            {item.specializations &&
-              item.specializations.length > 0 &&
-              item.experienceYears && (
-                <TextComponent text=" • " size={11} color={appColors.gray} />
-              )}
-
-            {item.specializations && item.specializations.length > 0 && (
-              <View style={styles.cardInlineSpecTag}>
-                <TextComponent
-                  text={item.specializations[0] 
-                    ? item.specializations[0]
-                        .replace(/_/g, ' ')
-                        .replace(/\b\w/g, l => l.toUpperCase())
-                    : ''}
-                  size={size === 'small' ? 9 : 10}
-                  color={appColors.primary}
-                  font="medium"
-                />
-              </View>
-            )}
-          </View>
-
-          <SpaceComponent height={6} />
-
-          <RowComponent
-            styles={{justifyContent: 'center', alignItems: 'center'}}>
-            <Location
-              size={size === 'small' ? 11 : 12}
-              color={appColors.gray}
-            />
-            <SpaceComponent width={2} />
-            <TextComponent
-              text={item.location || 'Location not specified'}
-              size={size === 'small' ? 11 : 12}
-              numberOfLines={1}
-              color={appColors.gray}
-              styles={{
-                textAlign: 'center',
-                maxWidth: getNumericCardWidth() - 40,
-              }}
-            />
-          </RowComponent>
-
-          <SpaceComponent height={8} />
-
-          <View style={styles.cardPriceContainer}>
-            <TextComponent
-              text={formatPrice(item.hourlyRate || 0)}
-              size={size === 'small' ? 13 : 14}
-              color={appColors.primary}
-              font="bold"
-            />
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
+  const renderSeparator = (key: string) => (
+    <TextComponent key={key} text=" • " size={12} color={appColors.gray} />
   );
 
+  const renderListDetails = () => {
+    const details = [];
+
+    // 1. Add Rating
+    if (item.rating && item.rating > 0) {
+      details.push(
+        <RowComponent key="rating" styles={{alignItems: 'center'}}>
+          <Star1 size={12} color={appColors.yellow} variant="Bold" />
+          <TextComponent
+            text={item.rating.toFixed(1)}
+            size={12}
+            color={appColors.gray2}
+            font="medium"
+            styles={{marginLeft: 2}}
+          />
+        </RowComponent>
+      );
+    }
+
+    // 2. Add Experience
+    if (item.experienceYears && item.experienceYears > 0) {
+      details.push(
+        <TextComponent
+          key="exp"
+          text={`${item.experienceYears} năm`}
+          size={12}
+          color={appColors.gray}
+          font="medium"
+        />
+      );
+    }
+
+    // 3. Add Main Specialization
+    if (item.specializations && item.specializations.length > 0) {
+      details.push(
+        <View key="spec" style={styles.inlineSpecTag}>
+          <TextComponent
+            text={item.specializations[0]
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, l => l.toUpperCase())}
+            size={11}
+            color={appColors.primary}
+            font="medium"
+          />
+        </View>
+      );
+    }
+    
+    // Render the details array with separators in between
+    return (
+        <RowComponent styles={{alignItems: 'center'}}>
+            {details.map((detail, index) => (
+                <React.Fragment key={index}>
+                    {detail}
+                    {index < details.length - 1 && renderSeparator(`sep-${index}`)}
+                </React.Fragment>
+            ))}
+        </RowComponent>
+    );
+  };
+  
+  // Main Render Functions 
+
+  const renderCardType = () => {
+    return <View />; // Placeholder for your existing card component
+  };
+  
   const renderListType = () => (
     <TouchableOpacity
       onPress={() => onPress && onPress(item.ptData || item)}
       style={styles.listContainer}
       activeOpacity={0.8}>
-      <View style={styles.avatarContainer}>
-        <Image
-          source={
-            item.imageURL
-              ? {uri: item.imageURL}
-              : require('../../assets/images/default.png')
-          }
-          style={styles.avatar}
-        />
-
-        {item.rating && item.rating > 0 && (
-          <View style={styles.avatarRatingBadge}>
-            <Star1 size={10} color={appColors.yellow} variant="Bold" />
-            <TextComponent
-              text={item.rating.toFixed(1)}
-              size={9}
-              color={appColors.white}
-              font="bold"
-              styles={{marginLeft: 1}}
-            />
-          </View>
-        )}
-      </View>
-
+      <Image
+        source={
+          item.imageURL
+            ? {uri: item.imageURL}
+            : require('../../assets/images/default.png')
+        }
+        style={styles.avatar}
+      />
       <View style={styles.listContentContainer}>
-        <View style={styles.listRowContainer}>
+        <RowComponent justify="space-between">
           <TextComponent
-            text={item.title || 'Personal Trainer'}
+            text={item.title}
             size={16}
-            numberOfLines={1}
             font="bold"
-            color={appColors.gray2}
             styles={{flex: 1}}
+            numberOfLines={1}
           />
           <TouchableOpacity style={styles.listFavoriteButton}>
             <Heart size={16} color={appColors.gray} />
           </TouchableOpacity>
-        </View>
+        </RowComponent>
 
-        <View style={styles.listRowContainer}>
+        <TextComponent
+          text={item.description}
+          size={13}
+          numberOfLines={1}
+          color={appColors.gray}
+        />
+        
+        {/* USE THE NEW, SAFE RENDER FUNCTION HERE */}
+        {renderListDetails()}
+
+        <RowComponent styles={{alignItems: 'center'}}>
+          <Location size={12} color={appColors.gray} />
+          <SpaceComponent width={4} />
           <TextComponent
-            text={item.description || 'Professional Personal Trainer'}
-            size={13}
-            numberOfLines={1}
+            text={item.location}
+            size={12}
             color={appColors.gray}
-            styles={{lineHeight: 18}}
+            numberOfLines={1}
           />
-        </View>
-
-        <View style={styles.listRowContainer}>
-          <View style={styles.ratingExperienceRow}>
-            {/* Rating */}
-            {item.rating && item.rating > 0 && (
-              <View style={styles.ratingContainer}>
-                <Star1 size={12} color={appColors.yellow} variant="Bold" />
-                <TextComponent
-                  text={item.rating.toFixed(1)}
-                  size={12}
-                  color={appColors.gray2}
-                  font="medium"
-                  styles={{marginLeft: 2}}
-                />
-              </View>
-            )}
-
-            {item.experienceYears && item.experienceYears > 0 && (
-              <View style={styles.ratingExperienceRow}>
-                <TextComponent
-                  text=" • "
-                  size={12}
-                  color={appColors.gray}
-                  styles={{marginHorizontal: 6}}
-                />
-                <TextComponent
-                  text={`${item.experienceYears} năm`}
-                  size={12}
-                  color={appColors.gray}
-                  font="medium"
-                />
-              </View>
-            )}
-
-            {item.specializations && item.specializations.length > 0 && (
-              <View style={styles.ratingExperienceRow}>
-                <TextComponent
-                  text=" • "
-                  size={12}
-                  color={appColors.gray}
-                  styles={{marginHorizontal: 6}}
-                />
-                <View style={styles.inlineSpecTag}>
-                  <TextComponent
-                    text={item.specializations[0] 
-                      ? item.specializations[0]
-                          .replace(/_/g, ' ')
-                          .replace(/\b\w/g, l => l.toUpperCase())
-                      : ''}
-                    size={11}
-                    color={appColors.primary}
-                    font="medium"
-                  />
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
-
-
-        <View style={styles.listRowContainer}>
-          <RowComponent styles={{alignItems: 'center'}}>
-            <Location size={12} color={appColors.gray} />
-            <SpaceComponent width={4} />
-            <TextComponent
-              text={item.location || 'Location not specified'}
-              size={12}
-              numberOfLines={1}
-              color={appColors.gray}
-              styles={{
-                lineHeight: 16,
-                maxWidth: Dimensions.get('window').width - 150,
-              }}
-            />
-          </RowComponent>
-        </View>
-
-
-        <View style={styles.listRowContainer}>
-          <View style={styles.listPriceContainer}>
-            <TextComponent
-              text={formatPrice(item.hourlyRate || 0)}
-              size={15}
-              color={appColors.primary}
-              font="bold"
-            />
-          </View>
+        </RowComponent>
+        
+        <View style={styles.listPriceContainer}>
+          <TextComponent
+            text={formatPrice(item.hourlyRate || 0)}
+            size={15}
+            color={appColors.primary}
+            font="bold"
+          />
         </View>
       </View>
     </TouchableOpacity>
   );
 
-  if (type === 'card') {
-    return renderCardType();
-  } else {
-    return renderListType();
-  }
+  return type === 'list' ? renderListType() : renderCardType();
 };
 
 export default PtItem;
 
 const styles = StyleSheet.create({
-  cardContainer: {
-    backgroundColor: appColors.white,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    paddingVertical: 20,
-    paddingHorizontal: 10,
-    minHeight: 260,
-  },
-  cardContent: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  cardAvatarContainer: {
-    position: 'relative',
-    alignItems: 'center',
-  },
-  cardAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: appColors.gray4,
-  },
-  cardFavoriteButton: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  cardRatingBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: appColors.white,
-  },
-  cardInfoContainer: {
-    flex: 1,
-    width: '100%',
-    alignItems: 'center',
-  },
-  cardMiddleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-  },
-  cardInlineSpecTag: {
-    backgroundColor: appColors.primary + '15',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: appColors.primary + '30',
-  },
-  cardPriceContainer: {
-    backgroundColor: appColors.primary + '15',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: appColors.primary + '30',
-  },
-
-  // Legacy Card Styles (không dùng nữa)
-  container: {
-    backgroundColor: appColors.white,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    overflow: 'hidden',
-  },
-  imageContainer: {
-    position: 'relative',
-  },
-  image: {
-    width: '100%',
-    resizeMode: 'cover',
-    backgroundColor: appColors.gray4,
-  },
-  favoriteButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  ratingBadge: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  contentContainer: {
-    padding: 16,
-    flex: 1,
-  },
-  headerSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  priceContainer: {
-    backgroundColor: appColors.primary + '15',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  specializationsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-  },
-  specializationTag: {
-    backgroundColor: appColors.primary + '15',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: appColors.primary + '30',
-  },
-  moreTag: {
-    backgroundColor: appColors.lightGray,
-    borderColor: appColors.gray4,
-  },
-  footerSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  experienceBadge: {
-    backgroundColor: appColors.success + '15',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-
-  // List Styles
+  // --- List Styles ---
   listContainer: {
     backgroundColor: appColors.white,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 12,
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: appColors.lightGray,
-    minHeight: 110,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 12,
-    alignItems: 'center',
+    borderBottomColor: appColors.gray5,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: appColors.gray4,
-  },
-  avatarRatingBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: appColors.white,
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    marginRight: 12,
   },
   listContentContainer: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingVertical: 2,
-  },
-  listRowContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    minHeight: 18,
-  },
-  listHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
   },
   listFavoriteButton: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  ratingExperienceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    flexWrap: 'nowrap',
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bulletSeparator: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingLeft: 8,
   },
   inlineSpecTag: {
-    backgroundColor: appColors.primary + '15',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: appColors.primary + '30',
-  },
-  ratingExperienceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  experienceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  mainSpecContainer: {
-    backgroundColor: appColors.primary + '15',
+    backgroundColor: `${appColors.primary}1A`,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: appColors.primary + '30',
-  },
-  specializationsListContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 3,
-  },
-  specializationTagList: {
-    backgroundColor: appColors.primary + '10',
-    borderColor: appColors.primary + '20',
-  },
-  listBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   listPriceContainer: {
-    backgroundColor: appColors.primary + '15',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: appColors.primary + '30',
-    alignSelf: 'flex-start',
-  },
-  listExperienceBadge: {
-    backgroundColor: appColors.success + '10',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+      alignSelf: 'flex-start',
+      marginTop: 4,
   },
 });

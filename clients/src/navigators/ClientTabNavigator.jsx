@@ -1,15 +1,19 @@
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
-import { Home2, Messages2, Calendar, Chart, User } from 'iconsax-react-native';
+import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {Text} from 'react-native';
+import {Home2, Messages2, Calendar, Chart, User} from 'iconsax-react-native';
 import appColors from '../constants/appColors';
-import { StyleSheet, Platform } from 'react-native';
-import { fontFamilies } from '../constants/fontFamilies';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {StyleSheet, Platform} from 'react-native';
+import {fontFamilies} from '../constants/fontFamilies';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
-// Import Client Screens
-import { ClientHomeScreen, ClientBookingsScreen, ProgressScreen, ClientProfileScreen } from '../screens/clientScreen';
-import { ChatListScreen } from '../screens/commonScreen';
+import {
+  ClientHomeScreen,
+  ClientBookingsScreen,
+  ProgressScreen,
+  ClientProfileScreen,
+} from '../screens/clientScreen';
+import {ChatListScreen} from '../screens/commonScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -18,17 +22,17 @@ const ClientTabNavigator = () => {
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: route.name === 'ClientBookings', 
+      screenOptions={({route}) => ({
+        headerShown: route.name === 'ClientBookings',
         headerTitle: route.name === 'ClientBookings' ? 'My Bookings' : '',
         headerTintColor: appColors.white,
         headerStyle: {
           backgroundColor: appColors.primary,
         },
         headerBackTitleVisible: false,
-        tabBarIcon: ({ focused, color, size }) => {
+        tabBarIcon: ({focused, color, size}) => {
           let IconComponent;
-          
+
           switch (route.name) {
             case 'ClientHome':
               IconComponent = Home2;
@@ -68,52 +72,49 @@ const ClientTabNavigator = () => {
         tabBarStyle: [
           styles.tabBarStyle,
           {
-            paddingBottom: Platform.OS === 'ios' 
-              ? Math.max(insets.bottom - 5, 8) 
-              : 8,
-            height: Platform.OS === 'ios' 
-              ? 75 + Math.max(insets.bottom - 15, 0)
-              : 65,
-          }
+            paddingBottom:
+              Platform.OS === 'ios' ? Math.max(insets.bottom - 5, 8) : 8,
+            height:
+              Platform.OS === 'ios' ? 75 + Math.max(insets.bottom - 15, 0) : 65,
+          },
         ],
         tabBarItemStyle: styles.tabBarItemStyle,
       })}>
-      
-      <Tab.Screen 
-        name="ClientHome" 
+      <Tab.Screen
+        name="ClientHome"
         component={ClientHomeScreen}
         options={{
           tabBarLabel: 'Home',
         }}
       />
-      
-      <Tab.Screen 
-        name="ClientBookings" 
+
+      <Tab.Screen
+        name="ClientBookings"
         component={ClientBookingsScreen}
         options={{
           tabBarLabel: 'Bookings',
-          headerShown: false, 
+          headerShown: false,
         }}
       />
-      
-      <Tab.Screen 
-        name="Progress" 
+
+      <Tab.Screen
+        name="Progress"
         component={ProgressScreen}
         options={{
           tabBarLabel: 'Progress',
         }}
       />
-      
-      <Tab.Screen 
-        name="Messages" 
+
+      <Tab.Screen
+        name="Messages"
         component={ChatListScreen}
         options={{
           tabBarLabel: 'Messages',
         }}
       />
-      
-      <Tab.Screen 
-        name="ClientProfile" 
+
+      <Tab.Screen
+        name="ClientProfile"
         component={ClientProfileScreen}
         options={{
           tabBarLabel: 'Profile',

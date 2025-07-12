@@ -17,7 +17,7 @@ import {authSelector} from '../../redux/reducers/authReducer';
 import {globalStyles} from '../../styles/globalStyles';
 import appColors from '../../constants/appColors';
 import {useSelector} from 'react-redux';
-import ptApi from '../../apis/ptApi';
+import clientApi from '../../apis/clientApi';
 import {
   RowComponent,
   TextComponent,
@@ -42,19 +42,16 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {fontFamilies} from '../../constants/fontFamilies';
 
-const { width } = Dimensions.get('window');
-
+const {width} = Dimensions.get('window');
 
 const ClientHomeScreen = ({navigation}) => {
   const dispatch = useDispatch();
   const auth = useSelector(authSelector);
-  
-  // State for PT data
+
   const [ptList, setPtList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch PT data when component mounts
   useEffect(() => {
     fetchFeaturedPTs();
   }, []);
@@ -63,17 +60,16 @@ const ClientHomeScreen = ({navigation}) => {
     try {
       setLoading(true);
       setError(null);
-      
 
-      const response = await ptApi.searchPTs({
-        limit: 8 // Limit to 8 featured trainers
+      const response = await clientApi.searchPTs({
+        pageSize: 8,
       });
-      
-      console.log('API Response:', response); // Debug log
-      console.log('Response data:', response.data); // Debug log
-      
-      // Handle response properly - response.data contains the server response
-      if (response.data && response.data.data && Array.isArray(response.data.data)) {
+
+      if (
+        response.data &&
+        response.data.data &&
+        Array.isArray(response.data.data)
+      ) {
         setPtList(response.data.data);
       } else if (response.data && Array.isArray(response.data)) {
         setPtList(response.data);
@@ -90,28 +86,28 @@ const ClientHomeScreen = ({navigation}) => {
   };
 
   const renderPTItem = ({item}) => {
-    // Convert location object to string
-    const locationString = item.location && typeof item.location === 'object' 
-      ? `${item.location.district}, ${item.location.city}` 
-      : (item.location || 'Ha Noi');
+    const locationString =
+      item.location && item.location.district && item.location.city
+        ? `${item.location.district}, ${item.location.city}`
+        : 'Location not specified';
 
     return (
-      <PtItem 
+      <PtItem
         type="card"
-        size="medium" // Use medium size for featured trainers
+        size="medium" 
         item={{
           _id: item._id,
-          title: `${item.user?.username || 'Personal Trainer'}`,
+          title: item.user?.username || 'Personal Trainer',
           description: item.bio || 'Professional Personal Trainer',
-          location: locationString, // Convert object to string
+          location: locationString,
           imageURL: item.user?.photoUrl || '',
           rating: item.rating || 0,
           hourlyRate: item.hourlyRate || 0,
           specializations: item.specializations || [],
           experienceYears: item.experienceYears || 0,
-          ptData: item // Pass full PT data
+          ptData: item,
         }}
-        onPress={() => navigation.navigate('PTDetailScreen', { item: item })} // Truyền object gốc từ API
+        onPress={() => navigation.navigate('PTDetailScreen', {item: item})}
       />
     );
   };
@@ -119,16 +115,15 @@ const ClientHomeScreen = ({navigation}) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-      
+
       {/* Header Section */}
       <View style={styles.headerContainer}>
         <View style={styles.headerContent}>
           {/* Top Bar */}
           <RowComponent justify="space-between" styles={styles.topBar}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => navigation.openDrawer()}
-              style={styles.menuButton}
-            >
+              style={styles.menuButton}>
               <HambergerMenu color={appColors.white} size={24} />
             </TouchableOpacity>
 
@@ -140,7 +135,11 @@ const ClientHomeScreen = ({navigation}) => {
                   size={12}
                   font={fontFamilies.regular}
                 />
-                <ArrowDown color={appColors.white} size={14} style={styles.locationIcon} />
+                <ArrowDown
+                  color={appColors.white}
+                  size={14}
+                  style={styles.locationIcon}
+                />
               </RowComponent>
               <TextComponent
                 text="Cau Giay, Hanoi"
@@ -152,28 +151,26 @@ const ClientHomeScreen = ({navigation}) => {
             </View>
 
             <View style={styles.actionButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => navigation.navigate('ClientBookings')}
-                style={styles.actionButton}
-              >
+                style={styles.actionButton}>
                 <CircleComponent color="rgba(255,255,255,0.2)" size={40}>
                   <TextComponent text="📅" size={18} />
                 </CircleComponent>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 onPress={() => navigation.navigate('Notifications')}
-                style={styles.actionButton}
-              >
+                style={styles.actionButton}>
                 <CircleComponent color="rgba(255,255,255,0.2)" size={40}>
                   <View style={styles.notificationIconContainer}>
-                    <Icon 
-                      name="notifications" 
-                      size={20} 
-                      color={appColors.white} 
+                    <Icon
+                      name="notifications"
+                      size={20}
+                      color={appColors.white}
                     />
-                    <NotificationBadge 
-                      size={14} 
+                    <NotificationBadge
+                      size={14}
                       style={styles.notificationBadge}
                     />
                   </View>
@@ -201,11 +198,16 @@ const ClientHomeScreen = ({navigation}) => {
           </View>
 
           {/* Search Bar */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.searchContainer}
-            onPress={() => navigation.navigate('SearchPtScreen', {isFilter: false})}
-          >
-            <SearchNormal1 color={appColors.text2} size={20} style={styles.searchIcon} />
+            onPress={() =>
+              navigation.navigate('SearchPtScreen', {isFilter: false})
+            }>
+            <SearchNormal1
+              color={appColors.text2}
+              size={20}
+              style={styles.searchIcon}
+            />
             <TextComponent
               text="Search for trainers..."
               color={appColors.text2}
@@ -214,9 +216,10 @@ const ClientHomeScreen = ({navigation}) => {
               styles={styles.searchText}
             />
             <TouchableOpacity
-              onPress={() => navigation.navigate('SearchPtScreen', {isFilter: true})}
-              style={styles.filterButton}
-            >
+              onPress={() =>
+                navigation.navigate('SearchPtScreen', {isFilter: true})
+              }
+              style={styles.filterButton}>
               <Sort size={18} color={appColors.primary} />
             </TouchableOpacity>
           </TouchableOpacity>
@@ -229,29 +232,55 @@ const ClientHomeScreen = ({navigation}) => {
       </View>
 
       {/* Content Section */}
-      <ScrollView 
+      <ScrollView
         style={styles.contentContainer}
         contentContainerStyle={styles.contentScrollView}
         showsVerticalScrollIndicator={false}
-        bounces={true}
-      >
+        bounces={true}>
         {/* Quick Stats */}
         <SectionComponent>
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
               <TextComponent text="💪" size={24} styles={styles.statIcon} />
-              <TextComponent text="12" size={20} font={fontFamilies.bold} color={appColors.text} />
-              <TextComponent text="Sessions" size={12} color={appColors.text2} />
+              <TextComponent
+                text="12"
+                size={20}
+                font={fontFamilies.bold}
+                color={appColors.text}
+              />
+              <TextComponent
+                text="Sessions"
+                size={12}
+                color={appColors.text2}
+              />
             </View>
             <View style={styles.statCard}>
               <TextComponent text="🔥" size={24} styles={styles.statIcon} />
-              <TextComponent text="2.4k" size={20} font={fontFamilies.bold} color={appColors.text} />
-              <TextComponent text="Calories" size={12} color={appColors.text2} />
+              <TextComponent
+                text="2.4k"
+                size={20}
+                font={fontFamilies.bold}
+                color={appColors.text}
+              />
+              <TextComponent
+                text="Calories"
+                size={12}
+                color={appColors.text2}
+              />
             </View>
             <View style={styles.statCard}>
               <TextComponent text="⏱️" size={24} styles={styles.statIcon} />
-              <TextComponent text="18h" size={20} font={fontFamilies.bold} color={appColors.text} />
-              <TextComponent text="Training" size={12} color={appColors.text2} />
+              <TextComponent
+                text="18h"
+                size={20}
+                font={fontFamilies.bold}
+                color={appColors.text}
+              />
+              <TextComponent
+                text="Training"
+                size={12}
+                color={appColors.text2}
+              />
             </View>
           </View>
         </SectionComponent>
@@ -265,7 +294,8 @@ const ClientHomeScreen = ({navigation}) => {
               font={fontFamilies.bold}
               color={appColors.text}
             />
-            <TouchableOpacity onPress={() => navigation.navigate('SearchPtScreen')}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('SearchPtScreen')}>
               <TextComponent
                 text="See All"
                 size={14}
@@ -278,16 +308,27 @@ const ClientHomeScreen = ({navigation}) => {
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={appColors.primary} />
-              <TextComponent text="Loading trainers..." color={appColors.text2} styles={styles.loadingText} />
+              <TextComponent
+                text="Loading trainers..."
+                color={appColors.text2}
+                styles={styles.loadingText}
+              />
             </View>
           ) : error ? (
             <View style={styles.errorContainer}>
-              <TextComponent text={error} color={appColors.danger} styles={styles.errorText} />
-              <TouchableOpacity 
+              <TextComponent
+                text={error}
+                color={appColors.danger}
+                styles={styles.errorText}
+              />
+              <TouchableOpacity
                 onPress={fetchFeaturedPTs}
-                style={styles.retryButton}
-              >
-                <TextComponent text="Retry" color={appColors.white} font={fontFamilies.medium} />
+                style={styles.retryButton}>
+                <TextComponent
+                  text="Retry"
+                  color={appColors.white}
+                  font={fontFamilies.medium}
+                />
               </TouchableOpacity>
             </View>
           ) : (
@@ -295,13 +336,18 @@ const ClientHomeScreen = ({navigation}) => {
               horizontal
               showsHorizontalScrollIndicator={false}
               data={ptList}
-              keyExtractor={(item) => `featured-${item._id}`}
+              keyExtractor={item => `featured-${item._id}`}
               renderItem={renderPTItem}
               contentContainerStyle={styles.trainersList}
-              ItemSeparatorComponent={() => <View style={styles.trainerSeparator} />}
+              ItemSeparatorComponent={() => (
+                <View style={styles.trainerSeparator} />
+              )}
               ListEmptyComponent={() => (
                 <View style={styles.emptyContainer}>
-                  <TextComponent text="No trainers available" color={appColors.text2} />
+                  <TextComponent
+                    text="No trainers available"
+                    color={appColors.text2}
+                  />
                 </View>
               )}
             />
@@ -321,7 +367,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: appColors.gray5,
   },
-  
+
   // Header Styles
   headerContainer: {
     backgroundColor: appColors.primary,
@@ -376,7 +422,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: appColors.white,
   },
-  
+
   // Welcome Section
   welcomeSection: {
     marginBottom: 20,
@@ -387,7 +433,7 @@ const styles = StyleSheet.create({
   welcomeSubtext: {
     opacity: 0.9,
   },
-  
+
   // Search Bar
   searchContainer: {
     flexDirection: 'row',
@@ -398,7 +444,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 20,
     shadowColor: appColors.black,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
@@ -414,12 +460,12 @@ const styles = StyleSheet.create({
     backgroundColor: `${appColors.primary}15`,
     borderRadius: 12,
   },
-  
+
   categoriesContainer: {
     marginTop: 10,
     marginBottom: -30,
   },
-  
+
   contentContainer: {
     flex: 1,
     marginTop: 40,
@@ -427,7 +473,7 @@ const styles = StyleSheet.create({
   contentScrollView: {
     paddingBottom: 100,
   },
-  
+
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -441,7 +487,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 4,
     shadowColor: appColors.black,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
@@ -449,12 +495,12 @@ const styles = StyleSheet.create({
   statIcon: {
     marginBottom: 4,
   },
-  
+
   sectionHeader: {
     alignItems: 'center',
     marginBottom: 16,
   },
-  
+
   loadingContainer: {
     alignItems: 'center',
     paddingVertical: 40,
@@ -487,7 +533,7 @@ const styles = StyleSheet.create({
     right: -6,
     zIndex: 1,
   },
-  
+
   // Trainers List
   trainersList: {
     paddingHorizontal: 4,

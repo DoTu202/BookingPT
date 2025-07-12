@@ -12,6 +12,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useFocusEffect} from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import {useSelector} from 'react-redux';
+import dayjs from 'dayjs';
 import {fontFamilies} from '../../constants/fontFamilies';
 import appColors from '../../constants/appColors';
 import {LoadingModal} from '../../modals';
@@ -191,7 +192,6 @@ const PTBookingsScreen = ({navigation}) => {
   };
 
   const renderBookingItem = ({item}) => {
-    // Defensive programming: check if bookingTime exists and has valid data
     if (
       !item.bookingTime ||
       !item.bookingTime.startTime ||
@@ -218,7 +218,7 @@ const PTBookingsScreen = ({navigation}) => {
 
     const canConfirmOrReject = item.status === 'pending_confirmation';
     const canMarkCompleted =
-      item.status === 'confirmed' && timeUtils.isInPast(endTimeStr);
+      item.status === 'confirmed' && dayjs(endTimeStr).isBefore(dayjs());
 
     return (
       <View style={styles.bookingCard}>
@@ -242,8 +242,8 @@ const PTBookingsScreen = ({navigation}) => {
           <View style={styles.detailRow}>
             <MaterialIcons name="schedule" size={16} color={appColors.text2} />
             <Text style={styles.detailText}>
-              {timeUtils.formatDate(startTimeStr)} • {timeUtils.formatTime(startTimeStr)} -{' '}
-              {timeUtils.formatTime(endTimeStr)}
+              {timeUtils.formatToShortDate(startTimeStr)} • {timeUtils.formatToVietnameseTime(startTimeStr)} -{' '}
+              {timeUtils.formatToVietnameseTime(endTimeStr)}
             </Text>
           </View>
 

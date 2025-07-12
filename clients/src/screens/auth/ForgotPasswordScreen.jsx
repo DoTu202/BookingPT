@@ -16,7 +16,7 @@ import {ArrowLeft} from 'iconsax-react-native';
 import {useState} from 'react';
 import {Validate} from '../../utils/validate';
 import {LoadingModal} from '../../modals';
-import authenticationAPI from '../../apis/authApi';
+import authApi from '../../apis/authApi';
 
 const ForgotPasswordScreen = ({navigation}) => {
   const [email, setEmail] = useState('');
@@ -34,7 +34,7 @@ const ForgotPasswordScreen = ({navigation}) => {
     const api = '/forgotPassword';
     setIsLoading(true);
     try {
-      const res = await authenticationAPI.HandleAuthentication(
+      const res = await authApi.HandleAuthentication(
         api,
         {email},
         'post',

@@ -17,6 +17,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import chatApi from '../../apis/chatApi';
 import { authSelector } from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
+import { timeUtils } from '../../utils/timeUtils';
 
 const ChatScreen = ({ navigation, route }) => {
   const { chatRoomId, otherUser } = route.params;
@@ -95,28 +96,7 @@ const ChatScreen = ({ navigation, route }) => {
   // Format the message time
   const formatMessageTime = (date) => {
     if (!date) return '';
-    
-    const messageDate = new Date(date);
-    const now = new Date();
-    const diffInDays = Math.floor((now - messageDate) / (1000 * 60 * 60 * 24));
-    
-    if (diffInDays === 0) {
-      // Today: only show hour
-      return messageDate.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-    } else if (diffInDays === 1) {
-      // Yesterday
-      return 'Yesterday';
-    } else {
-      // Other days
-      return messageDate.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric'
-      });
-    }
+    return timeUtils.formatMessageTime(date);
   };
 
   // Render một tin nhắn

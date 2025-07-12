@@ -2,12 +2,12 @@ import React, {useState, useEffect} from 'react';
 import {
   StyleSheet,
   View,
-  ScrollView,
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Modal,
   TextInput,
+  ScrollView,
   StatusBar,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -16,31 +16,27 @@ import {
   RowComponent,
   TextComponent,
   ButtonComponent,
-  InputComponent,
   SpaceComponent,
   PtItem,
-  CardComponent,
 } from '../../components';
 import {
   ArrowLeft,
   SearchNormal1,
   Filter,
-  Setting2,
   CloseCircle,
+  Setting2,
 } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
-import ptApi from '../../apis/ptApi';
+import clientApi from '../../apis/clientApi';
 
 const SearchPtScreen = ({navigation, route}) => {
-  const {isFilter} = route.params || {isFilter: false};
-
-  console.log('SearchPtScreen mounted with isFilter:', isFilter); // Debug log
+  const {isFilter: initialFilterState} = route.params || {isFilter: false};
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(initialFilterState);
   const [filters, setFilters] = useState({
     specialization: '',
     location: '',
@@ -49,81 +45,13 @@ const SearchPtScreen = ({navigation, route}) => {
     sortBy: 'rating',
   });
 
-  const specializations = [
-    'All',
-    'YOGA',
-    'CARDIO',
-    'STRENGTH_TRAINING',
-    'WEIGHT_LOSS',
-    'MUSCLE_BUILDING',
-    'PILATES',
-    'FUNCTIONAL_TRAINING',
-    'REHABILITATION',
-    'GENERAL_FITNESS',
-  ];
-
-  const specializationLabels = {
-    All: 'All',
-    YOGA: 'Yoga',
-    CARDIO: 'Cardio',
-    STRENGTH_TRAINING: 'Strength Training',
-    WEIGHT_LOSS: 'Weight Loss',
-    MUSCLE_BUILDING: 'Muscle Building',
-    PILATES: 'Pilates',
-    FUNCTIONAL_TRAINING: 'Functional Training',
-    REHABILITATION: 'Rehabilitation',
-    GENERAL_FITNESS: 'General Fitness',
-  };
-
-  const locations = [
-    'All',
-    'Cau Giay',
-    'Thanh Xuan',
-    'Hoan Kiem',
-    'Hai Ba Trung',
-    'Dong Da',
-    'Long Bien',
-    'Nam Tu Liem',
-    'Bac Tu Liem',
-    'Hoang Mai',
-    'Tu Liem',
-    'Gia Lam',
-    'Other',
-    'District 1',
-    'District 2',
-    'District 3',
-    'District 4',
-    'District 5',
-    'District 6',
-    'District 7',
-    'District 10',
-    'Binh Thanh District',
-    'Phu Nhuan District',
-  ];
-
-  const sortOptions = [
-    {value: 'rating', label: 'Rating'},
-    {value: 'hourlyRate', label: 'Price: Low to High'},
-    {value: '-hourlyRate', label: 'Price: High to Low'},
-    {value: 'experienceYears', label: 'Experience'},
-  ];
-
+  // Simplified useEffect for searching
   useEffect(() => {
-    searchPTs();
-
-    if (isFilter) {
-      setTimeout(() => setShowFilters(true), 300);
-    }
-  }, []);
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchQuery.length >= 2 || searchQuery.length === 0) {
-        searchPTs();
-      }
+    const handler = setTimeout(() => {
+      searchPTs();
     }, 500);
 
-    return () => clearTimeout(timeoutId);
+    return () => clearTimeout(handler);
   }, [searchQuery, filters]);
 
   const searchPTs = async () => {
@@ -131,25 +59,24 @@ const SearchPtScreen = ({navigation, route}) => {
       setLoading(true);
       setError(null);
 
-      const params = {};
-      if (searchQuery) params.name = searchQuery;
-      if (filters.specialization && filters.specialization !== 'All') {
+      // Build search parameters
+      const params = {name: searchQuery};
+      if (filters.specialization && filters.specialization !== 'All')
         params.specialization = filters.specialization;
-      }
-      if (filters.location && filters.location !== 'All') {
+      if (filters.location && filters.location !== 'All')
         params.location = filters.location;
-      }
       if (filters.minRate) params.minRate = filters.minRate;
       if (filters.maxRate) params.maxRate = filters.maxRate;
       if (filters.sortBy) params.sortBy = filters.sortBy;
 
       console.log('Search params:', params);
 
-      const response = await ptApi.searchPTs(params);
+      const response = await clientApi.searchPTs(params);
+      console.log('API response:', response.data);
 
-      if (response.data && response.data.data) {
+      if (response.data && Array.isArray(response.data.data)) {
         setSearchResults(response.data.data);
-        console.log('Search results:', response.data.data.length, 'PTs found');
+        console.log('Search results count:', response.data.data.length);
       } else {
         setSearchResults([]);
       }
@@ -162,46 +89,48 @@ const SearchPtScreen = ({navigation, route}) => {
     }
   };
 
-  const clearFilters = () => {
-    setFilters({
-      specialization: '',
-      location: '',
-      minRate: '',
-      maxRate: '',
-      sortBy: 'rating',
-    });
-  };
+  const renderPTItem = ({item, index}) => {
+    console.log(`Rendering item ${index}:`, item);
 
-  const renderPTItem = ({item}) => {
-    if (!item || !item._id) {
-      console.warn('Invalid PT item data:', item);
-      return null;
+    // Xử lý location an toàn hơn
+    let locationString = 'Location not set';
+    if (item.location) {
+      if (typeof item.location === 'string') {
+        locationString = item.location;
+      } else if (typeof item.location === 'object') {
+        if (item.location.district && item.location.city) {
+          locationString = `${item.location.district}, ${item.location.city}`;
+        } else if (item.location.city) {
+          locationString = item.location.city;
+        } else if (item.location.district) {
+          locationString = item.location.district;
+        }
+      }
     }
 
-    // Convert location object to string
-    const locationString = item.location && typeof item.location === 'object' 
-      ? `${item.location.district}, ${item.location.city}` 
-      : (item.location || 'Ha Noi');
-
-    // Ensure all required data exists
     const ptItemData = {
       _id: item._id,
-      title: item.user?.fullName || item.user?.username || 'Personal Trainer',
-      description: item.bio || item.description || 'Professional Personal Trainer',
-      location: locationString, 
-      imageURL: item.user?.photoUrl || item.profileImage || item.avatar || '',
-      rating: parseFloat(item.rating) || 0,
-      hourlyRate: parseInt(item.hourlyRate) || 0,
-      specializations: Array.isArray(item.specializations) ? item.specializations : [],
-      experienceYears: parseInt(item.experienceYears) || 0,
+      title: item.user?.username || 'Personal Trainer',
+      description: item.bio || 'Professional Personal Trainer',
+      location: locationString,
+      imageURL: item.user?.photoUrl || '',
+      rating: item.averageRating || item.rating || 0,
+      hourlyRate: item.hourlyRate || 0,
+      specializations: item.specializations || [],
+      experienceYears: item.experienceYears || 0,
       ptData: item,
     };
+
+    console.log('PT item data:', ptItemData);
 
     return (
       <PtItem
         type="list"
         item={ptItemData}
-        onPress={() => navigation.navigate('PTDetailScreen', {item})}
+        onPress={() => {
+          console.log('PT item pressed:', item);
+          navigation.navigate('PTDetailScreen', {item});
+        }}
       />
     );
   };
@@ -210,206 +139,136 @@ const SearchPtScreen = ({navigation, route}) => {
     <Modal
       visible={showFilters}
       animationType="slide"
-      presentationStyle="fullScreen"
-      onRequestClose={() => setShowFilters(false)}
-    >
-      <View style={styles.filterModal}>
-        {/* Filter Header */}
-        <View style={styles.filterHeader}>
-          <TouchableOpacity onPress={() => setShowFilters(false)}>
-            <ArrowLeft size={24} color={appColors.black} />
-          </TouchableOpacity>
-          <TextComponent
-            text="Filter & Sort"
-            size={20}
-            font="Poppins-Bold"
-            color={appColors.black}
-          />
-          <TouchableOpacity onPress={clearFilters}>
+      transparent={true}
+      onRequestClose={() => setShowFilters(false)}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
             <TextComponent
-              text="Clear"
-              size={16}
-              color={appColors.primary}
-              font="Poppins-Medium"
+              text="Filters"
+              size={18}
+              font="Poppins-Bold"
+              color={appColors.gray2}
             />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.filterContent}>
-          {/* Specialization Filter */}
-          <SectionComponent>
-            <TextComponent
-              text="Specialization"
-              size={16}
-              font="Poppins-SemiBold"
-              color={appColors.black}
-            />
-            <SpaceComponent height={12} />
-            <View style={styles.chipContainer}>
-              {specializations.map(spec => (
-                <TouchableOpacity
-                  key={spec}
-                  style={[
-                    styles.chip,
-                    filters.specialization === spec && styles.chipSelected,
-                  ]}
-                  onPress={() =>
-                    setFilters(prev => ({
-                      ...prev,
-                      specialization: prev.specialization === spec ? '' : spec,
-                    }))
-                  }>
-                  <TextComponent
-                    text={specializationLabels[spec] || spec}
-                    size={14}
-                    color={
-                      filters.specialization === spec
-                        ? appColors.white
-                        : appColors.gray
-                    }
-                    font={
-                      filters.specialization === spec
-                        ? 'Poppins-Medium'
-                        : 'Poppins-Regular'
-                    }
-                  />
-                </TouchableOpacity>
-              ))}
+            <TouchableOpacity onPress={() => setShowFilters(false)}>
+              <CloseCircle size={24} color={appColors.gray} />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.filterContent}>
+            <View style={styles.filterSection}>
+              <TextComponent
+                text="Specialization"
+                size={14}
+                font="Poppins-SemiBold"
+                color={appColors.gray2}
+              />
+              <TextInput
+                style={styles.filterInput}
+                value={filters.specialization}
+                onChangeText={(text) => setFilters({...filters, specialization: text})}
+                placeholder="e.g., weight_loss, muscle_building"
+                placeholderTextColor={appColors.gray}
+              />
             </View>
-          </SectionComponent>
 
-          {/* Location Filter */}
-          <SectionComponent>
-            <TextComponent
-              text="Location"
-              size={16}
-              font="Poppins-SemiBold"
-              color={appColors.black}
-            />
-            <SpaceComponent height={12} />
-            <View style={styles.chipContainer}>
-              {locations.map(loc => (
-                <TouchableOpacity
-                  key={loc}
-                  style={[
-                    styles.chip,
-                    filters.location === loc && styles.chipSelected,
-                  ]}
-                  onPress={() =>
-                    setFilters(prev => ({
-                      ...prev,
-                      location: prev.location === loc ? '' : loc,
-                    }))
-                  }>
-                  <TextComponent
-                    text={loc}
-                    size={14}
-                    color={
-                      filters.location === loc
-                        ? appColors.white
-                        : appColors.gray
-                    }
-                    font={
-                      filters.location === loc
-                        ? 'Poppins-Medium'
-                        : 'Poppins-Regular'
-                    }
-                  />
-                </TouchableOpacity>
-              ))}
+            <View style={styles.filterSection}>
+              <TextComponent
+                text="Location"
+                size={14}
+                font="Poppins-SemiBold"
+                color={appColors.gray2}
+              />
+              <TextInput
+                style={styles.filterInput}
+                value={filters.location}
+                onChangeText={(text) => setFilters({...filters, location: text})}
+                placeholder="e.g., District 1, Ho Chi Minh City"
+                placeholderTextColor={appColors.gray}
+              />
             </View>
-          </SectionComponent>
 
-          {/* Price Range */}
-          <SectionComponent>
-            <TextComponent
-              text="Price Range (VND)"
-              size={16}
-              font="Poppins-SemiBold"
-              color={appColors.black}
-            />
-            <SpaceComponent height={12} />
-            <RowComponent>
-              <View style={{flex: 1}}>
+            <View style={styles.filterSection}>
+              <TextComponent
+                text="Price Range (VND)"
+                size={14}
+                font="Poppins-SemiBold"
+                color={appColors.gray2}
+              />
+              <RowComponent>
                 <TextInput
-                  style={styles.priceInput}
+                  style={[styles.filterInput, {flex: 1, marginRight: 8}]}
                   value={filters.minRate}
-                  onChangeText={text =>
-                    setFilters(prev => ({...prev, minRate: text}))
-                  }
-                  placeholder="Min price"
-                  keyboardType="numeric"
+                  onChangeText={(text) => setFilters({...filters, minRate: text})}
+                  placeholder="Min"
                   placeholderTextColor={appColors.gray}
+                  keyboardType="numeric"
                 />
-              </View>
-              <SpaceComponent width={16} />
-              <View style={{flex: 1}}>
                 <TextInput
-                  style={styles.priceInput}
+                  style={[styles.filterInput, {flex: 1, marginLeft: 8}]}
                   value={filters.maxRate}
-                  onChangeText={text =>
-                    setFilters(prev => ({...prev, maxRate: text}))
-                  }
-                  placeholder="Max price"
-                  keyboardType="numeric"
+                  onChangeText={(text) => setFilters({...filters, maxRate: text})}
+                  placeholder="Max"
                   placeholderTextColor={appColors.gray}
+                  keyboardType="numeric"
                 />
+              </RowComponent>
+            </View>
+
+            <View style={styles.filterSection}>
+              <TextComponent
+                text="Sort By"
+                size={14}
+                font="Poppins-SemiBold"
+                color={appColors.gray2}
+              />
+              <View style={styles.sortOptions}>
+                {['rating', 'hourlyRate', 'experienceYears'].map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.sortOption,
+                      filters.sortBy === option && styles.sortOptionActive,
+                    ]}
+                    onPress={() => setFilters({...filters, sortBy: option})}>
+                    <TextComponent
+                      text={option === 'rating' ? 'Rating' : option === 'hourlyRate' ? 'Price' : 'Experience'}
+                      size={13}
+                      color={filters.sortBy === option ? appColors.white : appColors.gray}
+                    />
+                  </TouchableOpacity>
+                ))}
               </View>
-            </RowComponent>
-          </SectionComponent>
+            </View>
+          </ScrollView>
 
-          {/* Sort By */}
-          <SectionComponent>
-            <TextComponent
-              text="Sort By"
-              size={16}
-              font="Poppins-SemiBold"
-              color={appColors.black}
-            />
-            <SpaceComponent height={12} />
-            {sortOptions.map(option => (
-              <TouchableOpacity
-                key={option.value}
-                style={styles.sortOption}
-                onPress={() =>
-                  setFilters(prev => ({...prev, sortBy: option.value}))
-                }>
-                <TextComponent
-                  text={option.label}
-                  size={14}
-                  color={
-                    filters.sortBy === option.value
-                      ? appColors.primary
-                      : appColors.black
-                  }
-                  font={
-                    filters.sortBy === option.value
-                      ? 'Poppins-SemiBold'
-                      : 'Poppins-Regular'
-                  }
-                />
-                <View
-                  style={[
-                    styles.radioButton,
-                    filters.sortBy === option.value &&
-                      styles.radioButtonSelected,
-                  ]}
-                />
-              </TouchableOpacity>
-            ))}
-          </SectionComponent>
-        </ScrollView>
-
-        <View style={styles.filterFooter}>
-          <ButtonComponent
-            text={loading ? 'Applying...' : 'Apply Filters'}
-            type="primary"
-            disabled={loading}
-            onPress={() => {
-              setShowFilters(false);
-              searchPTs();
-            }}
-          />
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.clearFiltersButton}
+              onPress={() => setFilters({
+                specialization: '',
+                location: '',
+                minRate: '',
+                maxRate: '',
+                sortBy: 'rating',
+              })}>
+              <TextComponent
+                text="Clear All"
+                size={14}
+                color={appColors.gray}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.applyFiltersButton}
+              onPress={() => setShowFilters(false)}>
+              <TextComponent
+                text="Apply Filters"
+                size={14}
+                color={appColors.white}
+                font="Poppins-SemiBold"
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -417,161 +276,106 @@ const SearchPtScreen = ({navigation, route}) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={appColors.primary}
-        translucent={false}
-      />
-      {/* Custom Header */}
+      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
+      
+      {/* Header */}
       <View style={styles.header}>
-          <RowComponent justify="space-between" styles={styles.headerRow}>
+        <RowComponent justify="space-between" styles={styles.headerRow}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.headerButton}>
+            <ArrowLeft size={24} color={appColors.white} />
+          </TouchableOpacity>
+          <TextComponent
+            text="Find Trainers"
+            size={20}
+            font="Poppins-Bold"
+            color={appColors.white}
+          />
+          <TouchableOpacity
+            onPress={() => setShowFilters(true)}
+            style={styles.headerButton}>
+            <Filter size={24} color={appColors.white} />
+          </TouchableOpacity>
+        </RowComponent>
+        <SpaceComponent height={16} />
+        <View style={styles.searchContainer}>
+          <SearchNormal1 size={18} color={appColors.gray} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search trainers by name..."
+            placeholderTextColor={appColors.gray}
+          />
+          {searchQuery.length > 0 && (
             <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={styles.headerButton}>
-              <ArrowLeft size={24} color={appColors.white} />
+              onPress={() => setSearchQuery('')}
+              style={styles.clearButton}>
+              <CloseCircle size={18} color={appColors.gray} />
             </TouchableOpacity>
-            <TextComponent
-              text="Find Trainers"
-              size={20}
-              font="Poppins-Bold"
-              color={appColors.white}
-            />
-            <TouchableOpacity
-              onPress={() => setShowFilters(true)}
-              style={styles.headerButton}>
-              <Filter size={24} color={appColors.white} />
-            </TouchableOpacity>
-          </RowComponent>
-
-          <SpaceComponent height={16} />
-
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <SearchNormal1 size={18} color={appColors.gray} />
-            <TextInput
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search trainers by name..."
-              placeholderTextColor={appColors.gray}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                style={styles.clearButton}>
-                <CloseCircle size={18} color={appColors.gray} />
-              </TouchableOpacity>
-            )}
-          </View>
+          )}
         </View>
+      </View>
 
-        {/* Results */}
-        <View style={styles.content}>
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={appColors.primary} />
-              <SpaceComponent height={16} />
-              <TextComponent
-                text="Searching for trainers..."
-                color={appColors.gray}
-              />
-            </View>
-          ) : error ? (
-            <View style={styles.emptyContainer}>
-              <TextComponent
-                text="⚠️"
-                size={48}
-                styles={{textAlign: 'center'}}
-              />
-              <SpaceComponent height={16} />
-              <TextComponent
-                text="Something went wrong"
-                size={18}
-                font="Poppins-SemiBold"
-                color={appColors.gray}
-                styles={{textAlign: 'center'}}
-              />
-              <SpaceComponent height={8} />
-              <TextComponent
-                text={error}
-                size={14}
-                color={appColors.gray}
-                styles={{textAlign: 'center'}}
-              />
-              <SpaceComponent height={20} />
-              <TouchableOpacity style={styles.retryButton} onPress={searchPTs}>
+      {/* Content */}
+      <View style={styles.content}>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={appColors.primary} />
+            <SpaceComponent height={12} />
+            <TextComponent text="Searching trainers..." />
+          </View>
+        ) : error ? (
+          <View style={styles.emptyContainer}>
+            <TextComponent text={error} color={appColors.red} />
+            <SpaceComponent height={12} />
+            <TouchableOpacity
+              onPress={() => searchPTs()}
+              style={styles.retryButton}>
+              <TextComponent text="Retry" color={appColors.primary} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <SectionComponent>
+              <RowComponent justify="space-between">
                 <TextComponent
-                  text="Try Again"
-                  size={16}
-                  color={appColors.primary}
-                  font="Poppins-Medium"
+                  text={`${searchResults.length} trainers found`}
+                  font="Poppins-SemiBold"
                 />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <>
-              {/* Results Header */}
-              <SectionComponent>
-                <RowComponent justify="space-between">
-                  <TextComponent
-                    text={`${searchResults.length} trainers found`}
-                    size={16}
-                    font="Poppins-SemiBold"
-                    color={appColors.black}
-                  />
-                  <TouchableOpacity onPress={() => setShowFilters(true)}>
-                    <RowComponent>
-                      <Setting2 size={16} color={appColors.primary} />
-                      <SpaceComponent width={4} />
-                      <TextComponent
-                        text="Filters"
-                        size={14}
-                        color={appColors.primary}
-                        font="Poppins-Medium"
-                      />
-                    </RowComponent>
-                  </TouchableOpacity>
-                </RowComponent>
-              </SectionComponent>
+                <TouchableOpacity onPress={() => setShowFilters(true)}>
+                  <RowComponent>
+                    <Setting2 size={16} color={appColors.primary} />
+                    <SpaceComponent width={4} />
+                    <TextComponent text="Filters" color={appColors.primary} />
+                  </RowComponent>
+                </TouchableOpacity>
+              </RowComponent>
+            </SectionComponent>
 
-              {/* Results List */}
-              {searchResults.length > 0 ? (
-                <FlatList
-                  data={searchResults}
-                  keyExtractor={item => item._id}
-                  renderItem={renderPTItem}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.resultsList}
-                />
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <SearchNormal1 size={64} color={appColors.gray} />
-                  <SpaceComponent height={16} />
-                  <TextComponent
-                    text="No trainers found"
-                    size={18}
-                    font="Poppins-SemiBold"
-                    color={appColors.gray}
-                    styles={{textAlign: 'center'}}
-                  />
-                  <SpaceComponent height={8} />
-                  <TextComponent
-                    text="Try adjusting your search criteria or filters"
-                    size={14}
-                    color={appColors.gray}
-                    styles={{textAlign: 'center'}}
-                  />
-                  <SpaceComponent height={20} />
-                  <ButtonComponent
-                    text="Clear All Filters"
-                    type="link"
-                    onPress={clearFilters}
-                  />
-                </View>
-              )}
-            </>
-          )
-        }
+            <FlatList
+              data={searchResults}
+              keyExtractor={(item, index) => item._id?.toString() || index.toString()}
+              renderItem={renderPTItem}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.resultsList}
+              ListEmptyComponent={() =>
+                !loading && (
+                  <View style={styles.emptyContainer}>
+                    <TextComponent text="No trainers match your criteria." />
+                    <SpaceComponent height={8} />
+                    <TextComponent 
+                      text="Try adjusting your search terms or filters." 
+                      size={12}
+                      color={appColors.gray}
+                    />
+                  </View>
+                )
+              }
+            />
+          </>
+        )}
       </View>
 
       <FilterModal />
@@ -588,7 +392,7 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: appColors.primary,
-    paddingTop: 60, // Safe area for status bar
+    paddingTop: 60,
     paddingHorizontal: 16,
     paddingBottom: 20,
     borderBottomLeftRadius: 20,
@@ -599,10 +403,6 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 4,
-    borderRadius: 8,
-    minWidth: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -610,25 +410,19 @@ const styles = StyleSheet.create({
     backgroundColor: appColors.white,
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginHorizontal: 4,
-    marginTop: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: appColors.black,
     marginLeft: 8,
-    padding: 0,
+    height: 48,
   },
   clearButton: {
     padding: 4,
-    marginLeft: 8,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -636,85 +430,93 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resultsList: {
+    paddingHorizontal: 16,
     paddingBottom: 20,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    padding: 20,
   },
   retryButton: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: appColors.primary,
   },
-  priceInput: {
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: appColors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: appColors.lightGray,
+  },
+  filterContent: {
+    paddingHorizontal: 20,
+  },
+  filterSection: {
+    marginVertical: 12,
+  },
+  filterInput: {
     borderWidth: 1,
-    borderColor: appColors.gray2,
+    borderColor: appColors.lightGray,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 16,
-    color: appColors.black,
+    marginTop: 8,
+    fontSize: 14,
+    color: appColors.gray2,
   },
-  filterModal: {
-    flex: 1,
-    backgroundColor: appColors.white,
-  },
-  filterHeader: {
+  sortOptions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: appColors.gray2,
-  },
-  filterContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  chipContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: appColors.gray2,
-    marginBottom: 8,
-  },
-  chipSelected: {
-    backgroundColor: appColors.primary,
+    marginTop: 8,
   },
   sortOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: appColors.gray2,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: appColors.lightGray,
+    marginRight: 8,
   },
-  radioButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: appColors.gray,
-  },
-  radioButtonSelected: {
-    borderColor: appColors.primary,
+  sortOptionActive: {
     backgroundColor: appColors.primary,
   },
-  filterFooter: {
+  modalFooter: {
+    flexDirection: 'row',
     padding: 20,
     borderTopWidth: 1,
-    borderTopColor: appColors.gray2,
+    borderTopColor: appColors.lightGray,
+  },
+  clearFiltersButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginRight: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: appColors.lightGray,
+  },
+  applyFiltersButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginLeft: 8,
+    borderRadius: 8,
+    backgroundColor: appColors.primary,
   },
 });

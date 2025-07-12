@@ -14,9 +14,6 @@ import {
   ChatListScreen,
 } from '../screens/commonScreen';
 
-import {PTClientsScreen, PTProfileScreen} from '../screens/ptScreen';
-
-
 import {
   PTDetailScreen,
   PaymentScreen,
@@ -50,17 +47,6 @@ const MainNavigator = () => {
             options={{gestureEnabled: false}}
           />
 
-          {/* PT Specific Screens */}
-          {/* <Stack.Screen
-            name="BookingDetail"
-            component={BookingDetailScreen}
-            options={{
-              headerShown: true,
-              title: 'Booking Details',
-              headerBackTitleVisible: false,
-            }}
-          /> */}
-
           <Stack.Screen
             name="Notifications"
             component={NotificationScreen}
@@ -92,28 +78,10 @@ const MainNavigator = () => {
               headerShown: false,
             }}
           />
-
-          <Stack.Screen
-            name="PTClients"
-            component={PTClientsScreen}
-            options={{
-              headerShown: true,
-              title: 'My Clients',
-              headerTintColor: appColors.primary,
-              headerBackTitleVisible: false,
-            }}
-          />
-
-          <Stack.Screen
-            name="PTProfileScreen"
-            component={PTProfileScreen}
-            options={{
-              headerShown: false,
-              gestureEnabled: true,
-            }}
-          />
         </>
       ) : (
+        
+        
         //CLIENT FLOW
         <>
           <Stack.Screen
@@ -170,16 +138,6 @@ const MainNavigator = () => {
               title: 'Payment',
             }}
           />
-
-          {/* <Stack.Screen
-            name="BookingDetail"
-            component={BookingDetailScreen}
-            options={{
-              headerShown: true,
-              title: 'Booking Details',
-              backgroundColor: appColors.primary,
-            }}
-          /> */}
 
           {/* client common screen  */}
           <Stack.Screen

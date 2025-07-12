@@ -10,12 +10,9 @@ import {
   PTAvailabilityScreen,
   PTBookingsScreen,
   PTHomeScreen,
-  PTProfileScreen,
-  PTProfileViewScreen,
-  ProfileTabScreen
+  ProfileTabScreen,
 } from '../screens/ptScreen';
-import { ChatListScreen } from '../screens/commonScreen';
-
+import {ChatListScreen} from '../screens/commonScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -68,13 +65,11 @@ const PTTabNavigator = () => {
         tabBarStyle: [
           styles.tabBarStyle,
           {
-            paddingBottom: Platform.OS === 'ios' 
-              ? Math.max(insets.bottom - 5, 8) 
-              : 8,
+            paddingBottom:
+              Platform.OS === 'ios' ? Math.max(insets.bottom - 5, 8) : 8,
             paddingTop: 8,
-            height: Platform.OS === 'ios' 
-              ? 75 + Math.max(insets.bottom - 15, 0)
-              : 65,
+            height:
+              Platform.OS === 'ios' ? 75 + Math.max(insets.bottom - 15, 0) : 65,
           },
         ],
         tabBarItemStyle: styles.tabBarItemStyle,

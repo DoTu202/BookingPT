@@ -12,7 +12,7 @@ import {
   TextComponent,
   ButtonComponent,
 } from '../../components';
-import authenticationAPI from '../../apis/authApi';
+import authApi from '../../apis/authApi';
 import {useDispatch} from 'react-redux';
 import {addAuth} from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -68,7 +68,7 @@ const VerifyCodeScreen = ({navigation, route}) => {
     const api = '/verification';
     setIsLoading(true);
     try {
-      const res = await authenticationAPI.HandleAuthentication(
+      const res = await authApi.HandleAuthentication(
         api,
         {email},
         'post',
@@ -100,7 +100,7 @@ const VerifyCodeScreen = ({navigation, route}) => {
           role,
         };
         try {
-          const res = await authenticationAPI.HandleAuthentication(
+          const res = await authApi.HandleAuthentication(
             api,
             data,
             'post',

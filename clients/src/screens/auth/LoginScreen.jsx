@@ -21,7 +21,7 @@ import TextComponent from '../../components/TextComponent';
 import {SectionComponent} from '../../components';
 import {RowComponent} from '../../components';
 import SocialLogin from './components/SocialLogin';
-import authenticationAPI from '../../apis/authApi';
+import authApi from '../../apis/authApi';
 import {useDispatch} from 'react-redux';
 import {addAuth} from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -57,14 +57,13 @@ const LoginScreen = ({navigation}) => {
 
     if (emailValidation) {
       try {
-        const res = await authenticationAPI.HandleAuthentication(
+        const res = await authApi.HandleAuthentication(
           '/login',
           {email, password},
           'post',
         );
 
         const authData = res.data.data || res.data;
-
         dispatch(addAuth(authData));
         await AsyncStorage.setItem(
           'auth',

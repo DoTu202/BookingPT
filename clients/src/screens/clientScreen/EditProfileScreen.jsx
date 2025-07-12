@@ -23,7 +23,7 @@ import {
 import appColors from '../../constants/appColors';
 import { useDispatch, useSelector } from 'react-redux';
 import { authSelector, addAuth } from '../../redux/reducers/authReducer';
-import profileApi from '../../apis/profileApi';
+import clientApi from '../../apis/clientApi';
 import { TouchableOpacity } from 'react-native';
 
 const EditProfileScreen = ({ navigation }) => {

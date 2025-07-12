@@ -28,7 +28,7 @@ import TextComponent from '../../components/TextComponent';
 import SocialLogin from './components/SocialLogin';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {LoadingModal} from '../../modals';
-import authenticationAPI from '../../apis/authApi';
+import authApi from '../../apis/authApi';
 import {Validate} from '../../utils/validate';
 import {useDispatch} from 'react-redux';
 import {SectionComponent} from '../../components';
@@ -57,14 +57,6 @@ const SignUpScreen = ({navigation}) => {
 
   useEffect(() => {
     if (
-      // !errorMessage ||
-      // (errorMessage &&
-      //   (errorMessage.email ||
-      //     errorMessage.password ||
-      //     errorMessage.confirmPassword)) ||
-      // !values.email ||
-      // !values.password ||
-      // !values.confirmPassword
       !values.username ||
       !values.email ||
       !values.password ||
@@ -153,7 +145,7 @@ const SignUpScreen = ({navigation}) => {
     const api = '/verification';
     setIsLoading(true);
     try {
-      const res = await authenticationAPI.HandleAuthentication(
+      const res = await authApi.HandleAuthentication(
         api,
         {email: values.email},
         'post',

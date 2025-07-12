@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   StyleSheet,
   View,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import dayjs from 'dayjs';
 import {
   SectionComponent,
   RowComponent,
@@ -31,10 +32,10 @@ import {
 } from 'iconsax-react-native';
 import appColors from '../../constants/appColors';
 import ptApi from '../../apis/ptApi';
-import { timeUtils } from '../../utils/timeUtils';
-import { fontFamilies } from '../../constants/fontFamilies';
+import {timeUtils} from '../../utils/timeUtils';
+import {fontFamilies} from '../../constants/fontFamilies';
 
-const PTAvailabilityScreen = ({ navigation }) => {
+const PTAvailabilityScreen = ({navigation}) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [availabilitySlots, setAvailabilitySlots] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -45,8 +46,13 @@ const PTAvailabilityScreen = ({ navigation }) => {
   const [newSlot, setNewSlot] = useState({
     startTime: '',
     endTime: '',
-    date: '',
   });
+
+  // Utility function to format date for display
+  const formatDate = date => {
+    if (!date) return '';
+    return dayjs(date).format('dddd, DD MMMM YYYY');
+  };
 
   useEffect(() => {
     loadAvailabilitySlots();
@@ -55,19 +61,13 @@ const PTAvailabilityScreen = ({ navigation }) => {
   const loadAvailabilitySlots = async () => {
     try {
       setLoading(true);
-      const dateString = selectedDate.toISOString().split('T')[0];
-      
-      const response = await ptApi.getAvailabilitySlots({
-        date: dateString
-      });
-      
-      if (response.data && response.data.data) {
-        setAvailabilitySlots(response.data.data);
-      } else if (response.data && Array.isArray(response.data)) {
-        setAvailabilitySlots(response.data);
-      } else {
-        setAvailabilitySlots([]);
-      }
+      const dateString = dayjs(selectedDate).format('YYYY-MM-DD');
+
+      const response = await ptApi.getAvailabilitySlots({date: dateString});
+
+      // API returns an array of availability slots with startTime and endTime as UTC ISO strings
+      const slots = response.data?.data || response.data || [];
+      setAvailabilitySlots(slots);
     } catch (error) {
       console.error('Error loading availability slots:', error);
       setAvailabilitySlots([]);
@@ -79,96 +79,100 @@ const PTAvailabilityScreen = ({ navigation }) => {
   const handleAddSlot = async () => {
     try {
       if (!newSlot.startTime || !newSlot.endTime) {
-        Alert.alert('Error', 'Please fill in all fields');
+        Alert.alert('Error', 'Please fill in both start and end times.');
         return;
       }
 
-      // Create proper datetime strings in Vietnam timezone
-      const dateStr = selectedDate.toISOString().split('T')[0];
-      
+      // Use dayjs to format date
+      const dateString = dayjs(selectedDate).format('YYYY-MM-DD');
+
+      // Use new timeUtils to create UTC ISO strings
+      const startTimeIso = timeUtils.createUtcIsoString(
+        dateString,
+        newSlot.startTime,
+      );
+      const endTimeIso = timeUtils.createUtcIsoString(
+        dateString,
+        newSlot.endTime,
+      );
+
+      if (!startTimeIso || !endTimeIso) {
+        Alert.alert('Error', 'Invalid date or time.');
+        return;
+      }
+
+      // Data sent to API in new format
       const slotData = {
-        date: dateStr,
-        startTime: newSlot.startTime,
-        endTime: newSlot.endTime,
+        startTime: startTimeIso,
+        endTime: endTimeIso,
       };
 
       if (editingSlot) {
-        await ptApi.updateAvailabilitySlot(editingSlot._id || editingSlot.id, slotData);
-        Alert.alert('Success', 'Availability slot updated successfully');
+        await ptApi.updateAvailabilitySlot(editingSlot._id, slotData);
+        Alert.alert('Success', 'Time slot updated successfully.');
       } else {
         await ptApi.addAvailabilitySlot(slotData);
-        Alert.alert('Success', 'Availability slot added successfully');
+        Alert.alert('Success', 'Time slot added successfully.');
       }
 
-      setShowAddModal(false);
-      setEditingSlot(null);
-      setNewSlot({ startTime: '', endTime: '', date: '' });
+      handleModalClose();
       await loadAvailabilitySlots();
     } catch (error) {
-      console.error('Error saving slot:', error);
-      console.error('Error details:', error.response?.data);
-      Alert.alert('Error', 'Failed to save availability slot');
+      const message = error.response?.data?.message || 'Operation failed.';
+      Alert.alert('Error', message);
+      console.error('Error in handleAddSlot:', error);
     }
   };
 
-  const handleDeleteSlot = async (slotId) => {
+  const handleDeleteSlot = async slotId => {
+    // Logic to delete remains unchanged
     Alert.alert(
-      'Delete Slot',
-      'Are you sure you want to delete this availability slot?',
+      'Delete Time Slot',
+      'Are you sure you want to delete this time slot?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        {text: 'Cancel', style: 'cancel'},
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
               await ptApi.deleteAvailabilitySlot(slotId);
-              Alert.alert('Success', 'Availability slot deleted');
+              Alert.alert('Success', 'Successfully deleted time slot.');
               await loadAvailabilitySlots();
             } catch (error) {
               console.error('Error deleting slot:', error);
-              Alert.alert('Error', 'Failed to delete slot');
+              Alert.alert('Error', 'Failed to delete time slot.');
             }
           },
         },
-      ]
+      ],
     );
   };
 
-  const formatDate = (date) => {
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
   const generateWeekDates = () => {
-    const today = new Date();
+    const today = dayjs();
     const dates = [];
     for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      dates.push(date);
+      dates.push(today.add(i, 'day').toDate());
     }
     return dates;
   };
 
-  const AvailabilitySlot = ({ slot }) => (
+  const AvailabilitySlot = ({slot}) => (
     <CardComponent
-      styles={[
-        styles.slotCard,
-        slot.isBooked && styles.bookedSlotCard
-      ]}
-    >
+      styles={[styles.slotCard, slot.isBooked && styles.bookedSlotCard]}>
       <RowComponent justify="space-between">
-        <View style={{ flex: 1 }}>
+        <View style={{flex: 1}}>
           <RowComponent>
-            <Clock size={16} color={slot.isBooked ? appColors.white : appColors.primary} />
+            <Clock
+              size={16}
+              color={slot.isBooked ? appColors.white : appColors.primary}
+            />
             <SpaceComponent width={8} />
             <TextComponent
-              text={`${timeUtils.formatTime(slot.startTime)} - ${timeUtils.formatTime(slot.endTime)}`}
+              text={`${timeUtils.formatToVietnameseTime(
+                slot.startTime,
+              )} - ${timeUtils.formatToVietnameseTime(slot.endTime)}`}
               size={16}
               font="Poppins-SemiBold"
               color={slot.isBooked ? appColors.white : appColors.black}
@@ -195,28 +199,27 @@ const PTAvailabilityScreen = ({ navigation }) => {
             </>
           )}
         </View>
-        
+
         {!slot.isBooked && (
           <RowComponent>
             <TouchableOpacity
               style={styles.slotActionButton}
               onPress={() => {
                 setEditingSlot(slot);
+
+                // Convert UTC ISO strings from API back to 24-hour format for editing
                 setNewSlot({
-                  startTime: timeUtils.formatTime(slot.startTime),
-                  endTime: timeUtils.formatTime(slot.endTime),
-                  date: slot.date,
+                  startTime: timeUtils.formatTo24HourTime(slot.startTime),
+                  endTime: timeUtils.formatTo24HourTime(slot.endTime),
                 });
                 setShowAddModal(true);
-              }}
-            >
+              }}>
               <Edit size={16} color={appColors.primary} />
             </TouchableOpacity>
             <SpaceComponent width={8} />
             <TouchableOpacity
               style={styles.slotActionButton}
-              onPress={() => handleDeleteSlot(slot._id || slot.id)}
-            >
+              onPress={() => handleDeleteSlot(slot._id || slot.id)}>
               <Trash size={16} color={appColors.danger} />
             </TouchableOpacity>
           </RowComponent>
@@ -229,16 +232,16 @@ const PTAvailabilityScreen = ({ navigation }) => {
     <View style={styles.dateSelector}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {generateWeekDates().map((date, index) => {
-          const isSelected = date.toDateString() === selectedDate.toDateString();
+          const isSelected =
+            date.toDateString() === selectedDate.toDateString();
           return (
             <TouchableOpacity
               key={date.toDateString()}
               style={[
                 styles.dateButton,
-                isSelected && styles.selectedDateButton
+                isSelected && styles.selectedDateButton,
               ]}
-              onPress={() => setSelectedDate(date)}
-            >
+              onPress={() => setSelectedDate(date)}>
               <TextComponent
                 text={date.getDate().toString()}
                 size={16}
@@ -246,7 +249,7 @@ const PTAvailabilityScreen = ({ navigation }) => {
                 color={isSelected ? appColors.white : appColors.black}
               />
               <TextComponent
-                text={date.toLocaleDateString('en-US', { weekday: 'short' })}
+                text={dayjs(date).format('ddd')}
                 size={12}
                 color={isSelected ? appColors.white : appColors.gray}
               />
@@ -262,20 +265,14 @@ const PTAvailabilityScreen = ({ navigation }) => {
       visible={showAddModal}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={handleModalClose}
-    >
-    <SafeAreaView style={styles.modalContainer}>
-  
+      onRequestClose={handleModalClose}>
+      <SafeAreaView style={styles.modalContainer}>
         <View style={styles.modalHeader}>
           <TouchableOpacity onPress={handleModalClose}>
-            <TextComponent
-              text="Cancel"
-              size={16}
-              color={appColors.primary}
-            />
+            <TextComponent text="Cancel" size={16} color={appColors.primary} />
           </TouchableOpacity>
           <TextComponent
-            text={editingSlot ? "Edit Slot" : "Add Slot"}
+            text={editingSlot ? 'Edit Slot' : 'Add Slot'}
             size={18}
             font="Poppins-SemiBold"
             color={appColors.black}
@@ -290,7 +287,9 @@ const PTAvailabilityScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={styles.modalContent}
+          keyboardShouldPersistTaps="handled">
           <SectionComponent>
             <TextComponent
               text="Date"
@@ -318,12 +317,11 @@ const PTAvailabilityScreen = ({ navigation }) => {
               color={appColors.black}
             />
             <SpaceComponent height={8} />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.timeInput}
-              onPress={() => setShowStartTimePicker(true)}
-            >
+              onPress={() => setShowStartTimePicker(true)}>
               <TextComponent
-                text={newSlot.startTime || "Select start time"}
+                text={newSlot.startTime || 'Select start time'}
                 size={16}
                 color={newSlot.startTime ? appColors.black : appColors.gray}
               />
@@ -339,12 +337,11 @@ const PTAvailabilityScreen = ({ navigation }) => {
               color={appColors.black}
             />
             <SpaceComponent height={8} />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.timeInput}
-              onPress={() => setShowEndTimePicker(true)}
-            >
+              onPress={() => setShowEndTimePicker(true)}>
               <TextComponent
-                text={newSlot.endTime || "Select end time"}
+                text={newSlot.endTime || 'Select end time'}
                 size={16}
                 color={newSlot.endTime ? appColors.black : appColors.gray}
               />
@@ -359,11 +356,24 @@ const PTAvailabilityScreen = ({ navigation }) => {
             {Platform.OS === 'ios' && (
               <View style={styles.pickerHeader}>
                 <TouchableOpacity onPress={() => setShowStartTimePicker(false)}>
-                  <TextComponent text="Cancel" size={16} color={appColors.primary} />
+                  <TextComponent
+                    text="Cancel"
+                    size={16}
+                    color={appColors.primary}
+                  />
                 </TouchableOpacity>
-                <TextComponent text="Select Start Time" size={16} font="Poppins-SemiBold" />
+                <TextComponent
+                  text="Select Start Time"
+                  size={16}
+                  font="Poppins-SemiBold"
+                />
                 <TouchableOpacity onPress={() => setShowStartTimePicker(false)}>
-                  <TextComponent text="Done" size={16} color={appColors.primary} font="Poppins-SemiBold" />
+                  <TextComponent
+                    text="Done"
+                    size={16}
+                    color={appColors.primary}
+                    font="Poppins-SemiBold"
+                  />
                 </TouchableOpacity>
               </View>
             )}
@@ -376,17 +386,30 @@ const PTAvailabilityScreen = ({ navigation }) => {
             />
           </View>
         )}
-        
+
         {showEndTimePicker && (
           <View>
             {Platform.OS === 'ios' && (
               <View style={styles.pickerHeader}>
                 <TouchableOpacity onPress={() => setShowEndTimePicker(false)}>
-                  <TextComponent text="Cancel" size={16} color={appColors.primary} />
+                  <TextComponent
+                    text="Cancel"
+                    size={16}
+                    color={appColors.primary}
+                  />
                 </TouchableOpacity>
-                <TextComponent text="Select End Time" size={16} font="Poppins-SemiBold" />
+                <TextComponent
+                  text="Select End Time"
+                  size={16}
+                  font="Poppins-SemiBold"
+                />
                 <TouchableOpacity onPress={() => setShowEndTimePicker(false)}>
-                  <TextComponent text="Done" size={16} color={appColors.primary} font="Poppins-SemiBold" />
+                  <TextComponent
+                    text="Done"
+                    size={16}
+                    color={appColors.primary}
+                    font="Poppins-SemiBold"
+                  />
                 </TouchableOpacity>
               </View>
             )}
@@ -408,7 +431,6 @@ const PTAvailabilityScreen = ({ navigation }) => {
     setNewSlot({
       startTime: '',
       endTime: '',
-      date: '',
     });
     setShowStartTimePicker(false);
     setShowEndTimePicker(false);
@@ -419,16 +441,16 @@ const PTAvailabilityScreen = ({ navigation }) => {
     resetModal();
   };
 
-  const formatTimeForInput = (time) => {
+  const formatTimeForInput = time => {
     if (!time) return '';
-    
+
     // If it's already in HH:MM format, return as is
     if (typeof time === 'string' && time.match(/^\d{2}:\d{2}$/)) {
       return time;
     }
-    
-    // Use timeUtils to format time properly
-    return timeUtils.formatTime(time);
+
+    // Use timeUtils to format time in 24-hour format
+    return timeUtils.formatTo24HourTime(time);
   };
 
   const handleStartTimeChange = (event, selectedTime) => {
@@ -436,11 +458,12 @@ const PTAvailabilityScreen = ({ navigation }) => {
       setShowStartTimePicker(false);
     }
     if (selectedTime) {
-      // Format time as HH:MM in local timezone
+      // Get time directly from Date object (local time)
       const hours = selectedTime.getHours().toString().padStart(2, '0');
       const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
       const timeString = `${hours}:${minutes}`;
-      setNewSlot({ ...newSlot, startTime: timeString });
+
+      setNewSlot({...newSlot, startTime: timeString});
     }
   };
 
@@ -449,31 +472,43 @@ const PTAvailabilityScreen = ({ navigation }) => {
       setShowEndTimePicker(false);
     }
     if (selectedTime) {
-      // Format time as HH:MM in local timezone
+      // Get time directly from Date object
       const hours = selectedTime.getHours().toString().padStart(2, '0');
       const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
       const timeString = `${hours}:${minutes}`;
-      setNewSlot({ ...newSlot, endTime: timeString });
+      setNewSlot({...newSlot, endTime: timeString});
     }
   };
 
-  const createTimeFromString = (timeString) => {
-    if (!timeString) return new Date();
+  const createTimeFromString = timeString => {
+    if (!timeString) {
+      // Return current time
+      return new Date();
+    }
+
     const [hours, minutes] = timeString.split(':');
+
+    // Create Date object with today's date and specified time
+    // Use setHours to set local time
     const date = new Date();
-    date.setHours(parseInt(hours) || 8, parseInt(minutes) || 0, 0, 0);
+    date.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0, 0);
+
     return date;
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right']}>
       <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <RowComponent justify="space-between">
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft size={24} color={appColors.white} style={{marginTop: 40}} />
+            <ArrowLeft
+              size={24}
+              color={appColors.white}
+              style={{marginTop: 40}}
+            />
           </TouchableOpacity>
           <TextComponent
             text="My Availability"
@@ -481,15 +516,13 @@ const PTAvailabilityScreen = ({ navigation }) => {
             font={fontFamilies.semiBold}
             color={appColors.white}
             styles={{marginTop: 40}}
-            
           />
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => {
               resetModal();
               setShowAddModal(true);
             }}
-            style={{marginTop: 40}}
-          >
+            style={{marginTop: 40}}>
             <Add size={24} color={appColors.white} />
           </TouchableOpacity>
         </RowComponent>
@@ -521,7 +554,9 @@ const PTAvailabilityScreen = ({ navigation }) => {
             availabilitySlots.map((slot, index) => (
               <View key={slot._id || slot.id || `slot-${index}`}>
                 <AvailabilitySlot slot={slot} />
-                {index < availabilitySlots.length - 1 && <SpaceComponent height={12} />}
+                {index < availabilitySlots.length - 1 && (
+                  <SpaceComponent height={12} />
+                )}
               </View>
             ))
           ) : (
@@ -533,14 +568,14 @@ const PTAvailabilityScreen = ({ navigation }) => {
                 size={18}
                 font="Poppins-SemiBold"
                 color={appColors.gray}
-                styles={{ textAlign: 'center' }}
+                styles={{textAlign: 'center'}}
               />
               <SpaceComponent height={8} />
               <TextComponent
                 text="Add time slots to let clients book sessions"
                 size={14}
                 color={appColors.gray}
-                styles={{ textAlign: 'center' }}
+                styles={{textAlign: 'center'}}
               />
               <SpaceComponent height={20} />
               <ButtonComponent
@@ -575,7 +610,6 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     height: 140,
     borderRadius: 20,
-
   },
   content: {
     flex: 1,
@@ -594,7 +628,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
@@ -616,7 +650,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,

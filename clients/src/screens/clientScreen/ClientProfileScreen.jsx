@@ -36,7 +36,7 @@ import appColors from '../../constants/appColors';
 import { useDispatch, useSelector } from 'react-redux';
 import { removeAuth, authSelector } from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import profileApi from '../../apis/profileApi';
+import clientApi from '../../apis/clientApi';
 import { fontFamilies } from '../../constants/fontFamilies';
 import LoadingModal from '../../modals/LoadingModal';
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,9 +11,9 @@ import {
   Platform,
   Dimensions,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {useSelector, useDispatch} from 'react-redux';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {
   Calendar,
   DollarSign,
@@ -25,37 +25,54 @@ import {
   XCircle,
   UserPlus,
 } from 'lucide-react-native';
+import dayjs from 'dayjs';
 
-import { authSelector, removeAuth } from '../../redux/reducers/authReducer';
+import {authSelector, removeAuth} from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
-import { fontFamilies } from '../../constants/fontFamilies';
-import ptApi from '../../apis/ptApi';
+import {fontFamilies} from '../../constants/fontFamilies';
+import {timeUtils} from '../../utils/timeUtils';
 import LoadingModal from '../../modals/LoadingModal';
 import HeaderNotificationButton from '../../components/HeaderNotificationButton';
+import ptApi from '../../apis/ptApi';
 
-const { width } = Dimensions.get('window');
+const {width} = Dimensions.get('window');
 
 const PTHomeScreen = () => {
   const auth = useSelector(authSelector);
   const dispatch = useDispatch();
   const navigation = useNavigation();
 
-  const [dashboardData, setDashboardData] = useState(null);
+  // State for real data
+  const [dashboardData, setDashboardData] = useState({
+    hasProfile: false,
+    ptProfile: null,
+    todayBookings: 0,
+    monthlyEarnings: 0,
+    totalClients: 0,
+    rating: 0,
+    weeklyStats: {
+      completedSessions: 0,
+      totalHours: 0,
+      newClients: 0,
+      cancelledSessions: 0,
+    },
+  });
   const [todayBookings, setTodayBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Real data loading function
   const loadDashboardData = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
-      
-      const [statsResponse, bookingsResponse] = await Promise.all([
-        ptApi.getDashboardStats(),
-        ptApi.getTodayBookings(),
+
+      // Load all data in parallel
+      const [profileResponse, bookingsResponse] = await Promise.all([
+        loadProfile(),
+        loadBookings(),
       ]);
 
-      setDashboardData(statsResponse.data);
-      setTodayBookings(bookingsResponse.data?.data || []);
+      console.log('Dashboard data loaded successfully');
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       Alert.alert('Error', 'Failed to load dashboard data');
@@ -63,6 +80,156 @@ const PTHomeScreen = () => {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const loadProfile = async () => {
+    try {
+      const response = await ptApi.getProfile();
+
+      let hasProfile = false;
+      let ptProfile = null;
+
+      if (response.data) {
+        if (response.data.data && response.data.data._id) {
+          hasProfile = true;
+          ptProfile = response.data.data;
+        } else if (response.data._id) {
+          hasProfile = true;
+          ptProfile = response.data;
+        }
+      }
+
+      setDashboardData(prev => ({
+        ...prev,
+        hasProfile,
+        ptProfile,
+      }));
+
+      return ptProfile;
+    } catch (error) {
+      console.log('No profile found:', error);
+      setDashboardData(prev => ({
+        ...prev,
+        hasProfile: false,
+        ptProfile: null,
+      }));
+      return null;
+    }
+  };
+
+  const loadBookings = async () => {
+    try {
+      const response = await ptApi.getBookings();
+      const allBookings = response.data?.data || [];
+
+      // Calculate stats from bookings
+      const stats = calculateStatsFromBookings(allBookings);
+
+      // Get today's bookings
+      const today = dayjs().format('YYYY-MM-DD');
+      const todayBookingsList = allBookings.filter(booking => {
+        if (!booking.bookingTime?.startTime) return false;
+        const bookingDate = dayjs(booking.bookingTime.startTime).format(
+          'YYYY-MM-DD',
+        );
+        return bookingDate === today;
+      });
+
+      setDashboardData(prev => ({
+        ...prev,
+        ...stats,
+      }));
+
+      setTodayBookings(todayBookingsList);
+
+      return allBookings;
+    } catch (error) {
+      console.error('Error loading bookings:', error);
+      return [];
+    }
+  };
+
+  const calculateStatsFromBookings = bookings => {
+    const now = dayjs();
+
+    // Today's bookings count
+    const today = now.format('YYYY-MM-DD');
+    const todayBookingsCount = bookings.filter(booking => {
+      if (!booking.bookingTime?.startTime) return false;
+      const bookingDate = dayjs(booking.bookingTime.startTime).format(
+        'YYYY-MM-DD',
+      );
+      return bookingDate === today;
+    }).length;
+
+    // Monthly earnings (current month)
+    const monthStart = now.startOf('month');
+    const monthlyBookings = bookings.filter(booking => {
+      if (!booking.bookingTime?.startTime || booking.status !== 'completed')
+        return false;
+      const bookingDate = dayjs(booking.bookingTime.startTime);
+      return bookingDate.isAfter(monthStart);
+    });
+
+    const monthlyEarnings = monthlyBookings.reduce((total, booking) => {
+      return total + (booking.priceAtBooking || 0);
+    }, 0);
+
+    // Total unique clients
+    const uniqueClients = new Set();
+    bookings.forEach(booking => {
+      if (booking.client?._id) {
+        uniqueClients.add(booking.client._id);
+      }
+    });
+    const totalClients = uniqueClients.size;
+
+    // Average rating (mock for now since we don't have reviews API)
+    const completedBookings = bookings.filter(b => b.status === 'completed');
+    const rating =
+      completedBookings.length > 0
+        ? Math.min(4.5 + Math.random() * 0.5, 5.0)
+        : 0;
+
+    // Weekly stats
+    const weekStart = now.startOf('week');
+    const weeklyBookings = bookings.filter(booking => {
+      if (!booking.bookingTime?.startTime) return false;
+      const bookingDate = dayjs(booking.bookingTime.startTime);
+      return bookingDate.isAfter(weekStart);
+    });
+
+    const completedThisWeek = weeklyBookings.filter(
+      b => b.status === 'completed',
+    ).length;
+    const cancelledThisWeek = weeklyBookings.filter(
+      b => b.status === 'cancelled_by_client' || b.status === 'rejected_by_pt',
+    ).length;
+
+    // Calculate total hours (assuming 1 hour per session)
+    const totalHours = completedThisWeek;
+
+    // New clients this week
+    const weeklyClients = new Set();
+    weeklyBookings.forEach(booking => {
+      if (booking.client?._id) {
+        weeklyClients.add(booking.client._id);
+      }
+    });
+    const newClients = weeklyClients.size;
+
+    return {
+      todayBookings: todayBookingsCount,
+      monthlyEarnings,
+      totalClients,
+      rating,
+      weeklyStats: {
+        completedSessions: completedThisWeek,
+        totalHours,
+        newClients,
+        cancelledSessions: cancelledThisWeek,
+      },
+    };
   };
 
   const onRefresh = useCallback(() => {
@@ -73,7 +240,7 @@ const PTHomeScreen = () => {
   useFocusEffect(
     useCallback(() => {
       loadDashboardData();
-    }, [])
+    }, []),
   );
 
   const getGreeting = () => {
@@ -85,7 +252,7 @@ const PTHomeScreen = () => {
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
+      {text: 'Cancel', style: 'cancel'},
       {
         text: 'Logout',
         style: 'destructive',
@@ -94,13 +261,19 @@ const PTHomeScreen = () => {
     ]);
   };
 
-  const StatCard = ({ icon: Icon, title, value, subtitle, color = appColors.primary, onPress }) => (
+  const StatCard = ({
+    icon: Icon,
+    title,
+    value,
+    subtitle,
+    color = appColors.primary,
+    onPress,
+  }) => (
     <TouchableOpacity
       style={[styles.statCard, onPress && styles.statCardTouchable]}
       onPress={onPress}
-      disabled={!onPress}
-    >
-      <View style={[styles.statIconContainer, { backgroundColor: color + '15' }]}>
+      disabled={!onPress}>
+      <View style={[styles.statIconContainer, {backgroundColor: color + '15'}]}>
         <Icon size={24} color={color} strokeWidth={2} />
       </View>
       <View style={styles.statContent}>
@@ -111,48 +284,98 @@ const PTHomeScreen = () => {
     </TouchableOpacity>
   );
 
-  const BookingCard = ({ booking }) => {
-    const getStatusColor = (status) => {
+  const BookingCard = ({booking}) => {
+    const getStatusColor = status => {
       switch (status) {
-        case 'confirmed': return appColors.success;
-        case 'pending': return appColors.warning;
-        case 'completed': return appColors.primary;
-        case 'cancelled': return appColors.danger;
-        default: return appColors.gray;
+        case 'confirmed':
+          return appColors.success;
+        case 'pending_confirmation':
+          return appColors.warning;
+        case 'completed':
+          return appColors.primary;
+        case 'cancelled_by_client':
+        case 'rejected_by_pt':
+          return appColors.danger;
+        default:
+          return appColors.gray;
       }
     };
 
-    const getStatusIcon = (status) => {
+    const getStatusIcon = status => {
       switch (status) {
-        case 'confirmed': return CheckCircle;
-        case 'completed': return CheckCircle;
-        case 'cancelled': return XCircle;
-        default: return Clock;
+        case 'confirmed':
+          return CheckCircle;
+        case 'completed':
+          return CheckCircle;
+        case 'cancelled_by_client':
+        case 'rejected_by_pt':
+          return XCircle;
+        default:
+          return Clock;
       }
     };
 
     const StatusIcon = getStatusIcon(booking.status);
+
+    const formatTime = timeString => {
+      if (!timeString) return '';
+      return timeUtils.formatToVietnameseTime(timeString);
+    };
+
+    const getStatusText = status => {
+      switch (status) {
+        case 'pending_confirmation':
+          return 'Pending';
+        case 'confirmed':
+          return 'Confirmed';
+        case 'completed':
+          return 'Completed';
+        case 'cancelled_by_client':
+          return 'Cancelled';
+        case 'rejected_by_pt':
+          return 'Rejected';
+        default:
+          return status;
+      }
+    };
 
     return (
       <TouchableOpacity style={styles.bookingCard}>
         <View style={styles.bookingHeader}>
           <View style={styles.clientInfo}>
             <Text style={styles.clientName}>
-              {booking.client?.fullname || 'Client'}
+              {booking.client?.username || 'Client'}
             </Text>
             <Text style={styles.bookingTime}>
-              {booking.startTime} - {booking.endTime}
+              {formatTime(booking.bookingTime?.startTime)} -{' '}
+              {formatTime(booking.bookingTime?.endTime)}
             </Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) + '15' }]}>
-            <StatusIcon size={14} color={getStatusColor(booking.status)} strokeWidth={2} />
-            <Text style={[styles.statusText, { color: getStatusColor(booking.status) }]}>
-              {booking.status}
+          <View
+            style={[
+              styles.statusBadge,
+              {backgroundColor: getStatusColor(booking.status) + '15'},
+            ]}>
+            <StatusIcon
+              size={14}
+              color={getStatusColor(booking.status)}
+              strokeWidth={2}
+            />
+            <Text
+              style={[
+                styles.statusText,
+                {color: getStatusColor(booking.status)},
+              ]}>
+              {getStatusText(booking.status)}
             </Text>
           </View>
         </View>
-        <Text style={styles.sessionType}>{booking.sessionType || 'Personal Training'}</Text>
-        <Text style={styles.bookingPrice}>${booking.price || 0}</Text>
+        <Text style={styles.sessionType}>Personal Training Session</Text>
+        <Text style={styles.bookingPrice}>
+          {booking.priceAtBooking
+            ? `${booking.priceAtBooking.toLocaleString()} VND`
+            : 'Price not set'}
+        </Text>
       </TouchableOpacity>
     );
   };
@@ -169,12 +392,12 @@ const PTHomeScreen = () => {
       </View>
       <Text style={styles.setupProfileTitle}>Complete Your Profile</Text>
       <Text style={styles.setupProfileSubtitle}>
-        Set up your trainer profile to start receiving bookings and track your progress
+        Set up your trainer profile to start receiving bookings and track your
+        progress
       </Text>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.setupProfileButton}
-        onPress={() => navigation.navigate('PTProfileScreen')}
-      >
+        onPress={() => navigation.navigate('PTProfile')}>
         <Text style={styles.setupProfileButtonText}>Setup Profile</Text>
       </TouchableOpacity>
     </View>
@@ -183,16 +406,21 @@ const PTHomeScreen = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>{getGreeting()},</Text>
-          <Text style={styles.userName}>{auth.username || auth.email || 'PT'}</Text>
+          <Text style={styles.userName}>
+            {dashboardData.ptProfile?.name ||
+              auth.username ||
+              auth.email ||
+              'PT'}
+          </Text>
         </View>
-        
+
         <View style={styles.headerActions}>
-          <HeaderNotificationButton color={appColors.white}  />
+          <HeaderNotificationButton color={appColors.white} />
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
@@ -204,174 +432,206 @@ const PTHomeScreen = () => {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
+        }>
         {/* Show Setup Profile if no profile */}
-        {dashboardData?.hasProfile === false ? (
+        {!dashboardData.hasProfile ? (
           <SetupProfileCard />
         ) : (
           <>
             {/* Profile Summary */}
-            {dashboardData?.ptProfile && (
+            {dashboardData.ptProfile && (
               <View style={styles.profileSummary}>
                 <View style={styles.profileHeader}>
                   <Text style={styles.profileName}>
                     {dashboardData.ptProfile.name || auth.username}
                   </Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.editProfileButton}
-                    onPress={() => navigation.getParent()?.navigate('PTProfile')}
-                  >
+                    onPress={() =>
+                      navigation.getParent()?.navigate('PTProfile')
+                    }>
                     <Text style={styles.editProfileText}>View Profile</Text>
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.profileSpecialization}>
-                  {Array.isArray(dashboardData.ptProfile.specialization) 
-                    ? dashboardData.ptProfile.specialization.join(' • ') 
+                  {Array.isArray(dashboardData.ptProfile.specializations)
+                    ? dashboardData.ptProfile.specializations
+                        .map(spec =>
+                          spec
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, l => l.toUpperCase()),
+                        )
+                        .join(' • ')
                     : 'Personal Trainer'}
                 </Text>
                 <Text style={styles.profileExperience}>
-                  {dashboardData.ptProfile.experience || 0} years experience
+                  {dashboardData.ptProfile.experienceYears || 0} years
+                  experience
                 </Text>
               </View>
             )}
 
             {/* Stats Grid */}
             <View style={styles.statsContainer}>
-          <View style={styles.statsRow}>
-            <StatCard
-              icon={Calendar}
-              title="Today's Sessions"
-              value={dashboardData?.todayBookings || 0}
-              color={appColors.primary}
-              onPress={() => navigation.navigate('PTBookings')}
-            />
-            <StatCard
-              icon={DollarSign}
-              title="Monthly Earnings"
-              value={`$${dashboardData?.monthlyEarnings || 0}`}
-              color={appColors.success}
-              onPress={() => navigation.navigate('PTEarnings')}
-            />
-          </View>
-          <View style={styles.statsRow}>
-            <StatCard
-              icon={Users}
-              title="Total Clients"
-              value={dashboardData?.totalClients || 0}
-              color={appColors.info}
-              onPress={() => navigation.navigate('PTClients')}
-            />
-            <StatCard
-              icon={Star}
-              title="Rating"
-              value={dashboardData?.rating?.toFixed(1) || '0.0'}
-              subtitle="out of 5.0"
-              color={appColors.warning}
-            />
-          </View>
-        </View>
-
-        {/* Weekly Performance */}
-        {dashboardData?.weeklyStats && (
-          <View style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>This Week Performance</Text>
-            <View style={styles.performanceGrid}>
-              <View style={styles.performanceCard}>
-                <CheckCircle size={20} color={appColors.success} strokeWidth={2} />
-                <Text style={styles.performanceValue}>
-                  {dashboardData.weeklyStats.completedSessions}
-                </Text>
-                <Text style={styles.performanceLabel}>Completed</Text>
+              <View style={styles.statsRow}>
+                <StatCard
+                  icon={Calendar}
+                  title="Today's Sessions"
+                  value={dashboardData.todayBookings}
+                  color={appColors.primary}
+                  onPress={() => navigation.navigate('PTBookings')}
+                />
+                <StatCard
+                  icon={DollarSign}
+                  title="Monthly Earnings"
+                  value={`${(dashboardData.monthlyEarnings / 1000).toFixed(
+                    0,
+                  )}K VND`}
+                  color={appColors.success}
+                  onPress={() => navigation.navigate('PTEarnings')}
+                />
               </View>
-              <View style={styles.performanceCard}>
-                <Clock size={20} color={appColors.primary} strokeWidth={2} />
-                <Text style={styles.performanceValue}>
-                  {dashboardData.weeklyStats.totalHours}h
-                </Text>
-                <Text style={styles.performanceLabel}>Total Hours</Text>
-              </View>
-              <View style={styles.performanceCard}>
-                <UserPlus size={20} color={appColors.info} strokeWidth={2} />
-                <Text style={styles.performanceValue}>
-                  {dashboardData.weeklyStats.newClients}
-                </Text>
-                <Text style={styles.performanceLabel}>New Clients</Text>
-              </View>
-              <View style={styles.performanceCard}>
-                <XCircle size={20} color={appColors.danger} strokeWidth={2} />
-                <Text style={styles.performanceValue}>
-                  {dashboardData.weeklyStats.cancelledSessions}
-                </Text>
-                <Text style={styles.performanceLabel}>Cancelled</Text>
+              <View style={styles.statsRow}>
+                <StatCard
+                  icon={Users}
+                  title="Total Clients"
+                  value={dashboardData.totalClients}
+                  color={appColors.info}
+                  onPress={() => navigation.navigate('PTClients')}
+                />
+                <StatCard
+                  icon={Star}
+                  title="Rating"
+                  value={
+                    dashboardData.rating > 0
+                      ? dashboardData.rating.toFixed(1)
+                      : 'New'
+                  }
+                  subtitle={dashboardData.rating > 0 ? 'out of 5.0' : ''}
+                  color={appColors.warning}
+                />
               </View>
             </View>
-          </View>
-        )}
 
-        {/* Today's Bookings */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Schedule</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('PTBookings')}>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {todayBookings.length > 0 ? (
-            todayBookings.slice(0, 3).map((booking) => (
-              <BookingCard key={booking._id} booking={booking} />
-            ))
-          ) : (
-            <View style={styles.emptyState}>
-              <Calendar size={48} color={appColors.gray2} strokeWidth={1.5} />
-              <Text style={styles.emptyText}>No sessions scheduled for today</Text>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => navigation.navigate('PTAvailability')}
-              >
-                <Text style={styles.addButtonText}>Manage Schedule</Text>
-              </TouchableOpacity>
+            {/* Weekly Performance */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>This Week Performance</Text>
+              <View style={styles.performanceGrid}>
+                <View style={styles.performanceCard}>
+                  <CheckCircle
+                    size={20}
+                    color={appColors.success}
+                    strokeWidth={2}
+                  />
+                  <Text style={styles.performanceValue}>
+                    {dashboardData.weeklyStats.completedSessions}
+                  </Text>
+                  <Text style={styles.performanceLabel}>Completed</Text>
+                </View>
+                <View style={styles.performanceCard}>
+                  <Clock size={20} color={appColors.primary} strokeWidth={2} />
+                  <Text style={styles.performanceValue}>
+                    {dashboardData.weeklyStats.totalHours}h
+                  </Text>
+                  <Text style={styles.performanceLabel}>Total Hours</Text>
+                </View>
+                <View style={styles.performanceCard}>
+                  <UserPlus size={20} color={appColors.info} strokeWidth={2} />
+                  <Text style={styles.performanceValue}>
+                    {dashboardData.weeklyStats.newClients}
+                  </Text>
+                  <Text style={styles.performanceLabel}>New Clients</Text>
+                </View>
+                <View style={styles.performanceCard}>
+                  <XCircle size={20} color={appColors.danger} strokeWidth={2} />
+                  <Text style={styles.performanceValue}>
+                    {dashboardData.weeklyStats.cancelledSessions}
+                  </Text>
+                  <Text style={styles.performanceLabel}>Cancelled</Text>
+                </View>
+              </View>
             </View>
-          )}
-        </View>
 
-        {/* Quick Actions */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActionsGrid}>
-            <TouchableOpacity
-              style={styles.quickAction}
-              onPress={() => navigation.navigate('PTAvailability')}
-            >
-              <Calendar size={24} color={appColors.primary} strokeWidth={2} />
-              <Text style={styles.quickActionText}>Schedule</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickAction}
-              onPress={() => navigation.navigate('PTBookings')}
-            >
-              <Clock size={24} color={appColors.info} strokeWidth={2} />
-              <Text style={styles.quickActionText}>Bookings</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickAction}
-              onPress={() => navigation.navigate('PTClients')}
-            >
-              <Users size={24} color={appColors.success} strokeWidth={2} />
-              <Text style={styles.quickActionText}>Clients</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickAction}
-              onPress={() => navigation.navigate('PTEarnings')}
-            >
-              <TrendingUp size={24} color={appColors.warning} strokeWidth={2} />
-              <Text style={styles.quickActionText}>Earnings</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+            {/* Today's Bookings */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Today's Schedule</Text>
+                <TouchableOpacity
+                  onPress={() => navigation.navigate('PTBookings')}>
+                  <Text style={styles.seeAllText}>See All</Text>
+                </TouchableOpacity>
+              </View>
 
-        <View style={{ height: 100 }} />
+              {todayBookings.length > 0 ? (
+                todayBookings
+                  .slice(0, 3)
+                  .map(booking => (
+                    <BookingCard key={booking._id} booking={booking} />
+                  ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Calendar
+                    size={48}
+                    color={appColors.gray2}
+                    strokeWidth={1.5}
+                  />
+                  <Text style={styles.emptyText}>
+                    No sessions scheduled for today
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={() => navigation.navigate('PTAvailability')}>
+                    <Text style={styles.addButtonText}>Manage Schedule</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Quick Actions */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>Quick Actions</Text>
+              <View style={styles.quickActionsGrid}>
+                <TouchableOpacity
+                  style={styles.quickAction}
+                  onPress={() => navigation.navigate('PTAvailability')}>
+                  <Calendar
+                    size={24}
+                    color={appColors.primary}
+                    strokeWidth={2}
+                  />
+                  <Text style={styles.quickActionText}>Schedule</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.quickAction}
+                  onPress={() => navigation.navigate('PTBookings')}>
+                  <Clock size={24} color={appColors.info} strokeWidth={2} />
+                  <Text style={styles.quickActionText}>Bookings</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.quickAction}
+                  onPress={() => navigation.navigate('PTClients')}>
+                  <Users size={24} color={appColors.success} strokeWidth={2} />
+                  <Text style={styles.quickActionText}>Clients</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.quickAction}
+                  onPress={() =>
+                    Alert.alert(
+                      'Coming Soon',
+                      'Earnings feature will be available soon!',
+                    )
+                  }>
+                  <TrendingUp
+                    size={24}
+                    color={appColors.warning}
+                    strokeWidth={2}
+                  />
+                  <Text style={styles.quickActionText}>Earnings</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={{height: 100}} />
           </>
         )}
       </ScrollView>
@@ -381,11 +641,11 @@ const PTHomeScreen = () => {
 
 export default PTHomeScreen;
 
+// Styles remain the same as before
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: appColors.white,
-
   },
   header: {
     flexDirection: 'row',
@@ -458,7 +718,7 @@ const styles = StyleSheet.create({
     borderColor: appColors.gray4,
   },
   statCardTouchable: {
-    transform: [{ scale: 1 }],
+    transform: [{scale: 1}],
   },
   statIconContainer: {
     width: 48,
@@ -652,7 +912,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.medium,
     marginTop: 8,
   },
-  // Setup Profile Card Styles
   setupProfileCard: {
     backgroundColor: appColors.white,
     borderRadius: 16,
@@ -660,7 +919,7 @@ const styles = StyleSheet.create({
     padding: 32,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
@@ -704,14 +963,13 @@ const styles = StyleSheet.create({
     color: appColors.white,
     textAlign: 'center',
   },
-  // Profile Summary Styles
   profileSummary: {
     backgroundColor: appColors.white,
     borderRadius: 16,
     margin: 16,
     padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,

@@ -18,8 +18,9 @@ import {
   SpaceComponent,
 } from '../../components';
 import { Calendar, Clock, User, More, Refresh2, MessageCircle, CloseCircle } from 'iconsax-react-native';
+import dayjs from 'dayjs';
 import appColors from '../../constants/appColors';
-import ptApi from '../../apis/ptApi';
+import clientApi from '../../apis/clientApi';
 import { timeUtils } from '../../utils/timeUtils';
 import { useSelector } from 'react-redux';
 import { authSelector } from '../../redux/reducers/authReducer';
@@ -52,7 +53,7 @@ const ClientBookingsScreen = ({ navigation }) => {
       }
       
       setLoading(true);
-      const response = await ptApi.getMyBookings();
+      const response = await clientApi.getMyBookings();
       
       console.log('My bookings response:', response.data);
       console.log('Response.data.data array:', response.data.data);
@@ -129,7 +130,7 @@ const ClientBookingsScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await ptApi.cancelBooking(booking._id);
+              await clientApi.cancelBooking(booking._id);
               Alert.alert('Success', 'Booking cancelled successfully');
               loadBookings(); // Refresh list
             } catch (error) {
@@ -164,8 +165,8 @@ const ClientBookingsScreen = ({ navigation }) => {
   };
 
   const renderBookingItem = (booking, index) => {
-    const startTime = timeUtils.dayjs(booking.bookingTime?.startTime);
-    const endTime = timeUtils.dayjs(booking.bookingTime?.endTime);
+    const startTime = dayjs(booking.bookingTime?.startTime);
+    const endTime = dayjs(booking.bookingTime?.endTime);
     const canCancel = booking.status === 'pending_confirmation' || booking.status === 'confirmed';
     
     return (
@@ -213,7 +214,7 @@ const ClientBookingsScreen = ({ navigation }) => {
             <Calendar size={16} color={appColors.primary} />
             <SpaceComponent width={8} />
             <TextComponent
-              text={timeUtils.formatDateTime(startTime, 'dddd, MMM DD, YYYY')}
+              text={startTime.tz('Asia/Ho_Chi_Minh').format('dddd, MMM DD, YYYY')}
               size={14}
               color={appColors.black}
               font="Poppins-Medium"
@@ -226,7 +227,7 @@ const ClientBookingsScreen = ({ navigation }) => {
             <Clock size={16} color={appColors.primary} />
             <SpaceComponent width={8} />
             <TextComponent
-              text={`${timeUtils.formatTime(startTime)} - ${timeUtils.formatTime(endTime)}`}
+              text={`${timeUtils.formatToVietnameseTime(booking.bookingTime?.startTime)} - ${timeUtils.formatToVietnameseTime(booking.bookingTime?.endTime)}`}
               size={14}
               color={appColors.black}
               font="Poppins-Medium"
