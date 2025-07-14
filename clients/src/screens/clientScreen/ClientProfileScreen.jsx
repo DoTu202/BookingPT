@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   StyleSheet,
   View,
@@ -17,12 +17,12 @@ import {
   SectionComponent,
 } from '../../components';
 import {
-  Edit, 
+  Edit,
   Lock,
   Notification,
   Setting2,
   InfoCircle,
-  LogoutCurve, 
+  LogoutCurve,
   ArrowRight2,
   Camera,
   Trash,
@@ -31,21 +31,24 @@ import {
   Chart,
   Calendar,
 } from 'iconsax-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import appColors from '../../constants/appColors';
-import { useDispatch, useSelector } from 'react-redux';
-import { removeAuth, authSelector } from '../../redux/reducers/authReducer';
+import {useDispatch, useSelector} from 'react-redux';
+import {removeAuth, authSelector} from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import profileApi from '../../apis/profileApi';
 import clientApi from '../../apis/clientApi';
-import { fontFamilies } from '../../constants/fontFamilies';
-import LoadingModal from '../../modals/LoadingModal';
+import {fontFamilies} from '../../constants/fontFamilies';
+import {LoadingModal} from '../../modals';
+import {launchImageLibrary} from 'react-native-image-picker';
 
-const { width } = Dimensions.get('window');
+const {width} = Dimensions.get('window');
 
-const ClientProfileScreen = ({ navigation }) => {
+const ClientProfileScreen = ({navigation}) => {
   const dispatch = useDispatch();
   const auth = useSelector(authSelector);
   const [loading, setLoading] = useState(false);
+  const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState({
     totalWorkouts: 0,
     currentStreak: 0,
@@ -54,44 +57,228 @@ const ClientProfileScreen = ({ navigation }) => {
     memberSince: 'December 2024',
   });
 
-  // Load user stats when component mounts
+  // Load user profile when component mounts
   useEffect(() => {
+    loadUserProfile();
     loadUserStats();
   }, []);
 
-  const loadUserStats = async () => {
+  const loadUserProfile = async () => {
     try {
-      // Mock stats for now - in real app, you'd call an API
-      // const response = await clientApi.getStats();
-      setStats({
-        totalWorkouts: 28,
-        currentStreak: 5,
-        totalHours: 42,
-        favoriteTrainers: 3,
-        memberSince: 'December 2024',
-      });
+      setLoading(true);
+      console.log('ClientProfileScreen: Loading user profile...');
+      const response = await profileApi.getProfile();
+
+      if (response.data?.success) {
+        const userData = response.data.data || response.data;
+        console.log('ClientProfileScreen: Profile data loaded:', userData);
+
+        if (userData.photoUrl) {
+          const timestamp = new Date().getTime();
+          userData.photoUrl = `${userData.photoUrl}?t=${timestamp}`;
+
+    
+          if (userData.photoUrl.includes('your-api-domain.com')) {
+            userData.photoUrl = userData.photoUrl.replace(
+              'http://your-api-domain.com',
+              'http://localhost:3001', 
+            );
+          }
+        }
+        setProfile(userData);
+      }
     } catch (error) {
-      console.error('Error loading user stats:', error);
+      console.error('Error loading profile:', error);
+      Alert.alert('Error', 'Failed to load profile data');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Giữ nguyên các hàm xử lý logic
+  const loadUserStats = async () => {
+    try {
+      console.log('ClientProfileScreen: Loading user stats...');
+
+      // Determine member since date
+      const memberSince = profile?.createdAt
+        ? formatJoinDate(profile.createdAt)
+        : 'June 2025';
+
+      // Get bookings to calculate stats
+      const bookingResponse = await clientApi.getMyBookings();
+      const bookings = bookingResponse.data?.data || [];
+
+      console.log(`ClientProfileScreen: Found ${bookings.length} bookings`);
+
+      // Filter completed bookings
+      const completedBookings = bookings.filter(b => b.status === 'completed');
+      const totalWorkouts = completedBookings.length;
+
+      // Calculate total hours 
+      let totalHours = 0;
+      completedBookings.forEach(booking => {
+        totalHours += 1;
+      });
+
+      // Calculate streak (dummy example)
+      const currentStreak = Math.min(completedBookings.length, 5);
+
+      // Calculate favorite trainers (from unique PTs in bookings)
+      const uniquePTs = new Set();
+      bookings.forEach(booking => {
+        if (booking.pt?._id) {
+          uniquePTs.add(booking.pt._id);
+        } else if (booking.ptId) {
+          uniquePTs.add(booking.ptId);
+        }
+      });
+
+      setStats({
+        totalWorkouts,
+        currentStreak,
+        totalHours,
+        favoriteTrainers: uniquePTs.size,
+        memberSince,
+      });
+      console.log('ClientProfileScreen: Stats calculated:', {
+        totalWorkouts,
+        currentStreak,
+        totalHours,
+        favoriteTrainers: uniquePTs.size,
+      });
+    } catch (error) {
+      console.error('Error loading user stats:', error);
+      setStats({
+        totalWorkouts: 0,
+        currentStreak: 0,
+        totalHours: 0,
+        favoriteTrainers: 0,
+        memberSince: 'June 2025',
+      });
+    }
+  };
+
+  const formatJoinDate = dateString => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+      });
+    } catch {
+      return 'Recently';
+    }
+  };
+
+  const handleUploadPhoto = () => {
+    const options = {
+      mediaType: 'photo',
+      quality: 0.8,
+      includeBase64: true,
+    };
+
+    launchImageLibrary(options, async response => {
+      if (response.didCancel) {
+        console.log('ClientProfileScreen: User cancelled image picker');
+        return;
+      }
+
+      if (response.errorCode) {
+        console.log(
+          'ClientProfileScreen: ImagePicker Error:',
+          response.errorMessage,
+        );
+        Alert.alert('Error', 'Could not select image. Please try again.');
+        return;
+      }
+
+      const imageAsset = response.assets && response.assets[0];
+      if (!imageAsset) {
+        Alert.alert('Error', 'Could not retrieve image data.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        console.log('ClientProfileScreen: Selected image details:', {
+          uri: imageAsset.uri,
+          type: imageAsset.type,
+          fileName: imageAsset.fileName,
+          fileSize: imageAsset.fileSize,
+          width: imageAsset.width,
+          height: imageAsset.height,
+          hasBase64: !!imageAsset.base64,
+        });
+
+        const formData = new FormData();
+        formData.append('photo', {
+          uri: imageAsset.uri,
+          type: imageAsset.type || 'image/jpeg',
+          name: imageAsset.fileName || `photo_${Date.now()}.jpg`,
+        });
+
+        console.log('ClientProfileScreen: Uploading photo to server...');
+        const result = await profileApi.uploadPhoto(formData);
+
+        if (result.data?.success) {
+          console.log(
+            'ClientProfileScreen: Upload successful, response:',
+            result.data,
+          );
+
+          const timestamp = new Date().getTime();
+          const updatedPhotoUrl = `${result.data.data.photoUrl}?t=${timestamp}`;
+
+          setProfile(prev => ({
+            ...prev,
+            photoUrl: updatedPhotoUrl,
+          }));
+
+          if (imageAsset.base64) {
+            console.log(
+              'ClientProfileScreen: Using base64 for immediate display',
+            );
+            setProfile(prev => ({
+              ...prev,
+              _tempImageBase64: `data:${
+                imageAsset.type || 'image/jpeg'
+              };base64,${imageAsset.base64}`,
+            }));
+          }
+
+          Alert.alert('Success', 'Profile photo updated successfully');
+        } else {
+          throw new Error(result.data?.message || 'Upload failed');
+        }
+      } catch (error) {
+        console.error('ClientProfileScreen: Error uploading photo:', error);
+        Alert.alert('Error', error.message || 'Failed to upload photo.');
+      } finally {
+        setLoading(false);
+      }
+    });
+  };
+
   const handleLogout = async () => {
-    Alert.alert(
-      'Log out',
-      'Are you sure you want to log out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log out',
-          style: 'destructive',
-          onPress: async () => {
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setLoading(true);
             await AsyncStorage.removeItem('auth');
             dispatch(removeAuth({}));
-          },
+          } catch (error) {
+            console.error('Error during logout:', error);
+            Alert.alert('Error', 'Failed to log out. Please try again.');
+          } finally {
+            setLoading(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleDeleteAccount = () => {
@@ -99,16 +286,39 @@ const ClientProfileScreen = ({ navigation }) => {
       'Delete Account',
       'This action cannot be undone. Are you sure you want to delete your account?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        {text: 'Cancel', style: 'cancel'},
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {},
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await profileApi.deleteAccount({
+                confirmation: 'DELETE',
+              });
+
+              if (response.data?.success) {
+                await AsyncStorage.removeItem('auth');
+                dispatch(removeAuth({}));
+                Alert.alert(
+                  'Success',
+                  'Your account has been successfully deleted',
+                );
+              }
+            } catch (error) {
+              console.error('Error deleting account:', error);
+              const message =
+                error.response?.data?.message || 'Failed to delete account';
+              Alert.alert('Error', message);
+            } finally {
+              setLoading(false);
+            }
+          },
         },
-      ]
+      ],
     );
   };
-  
+
   const menuSections = [
     {
       title: 'Account Settings',
@@ -162,7 +372,7 @@ const ClientProfileScreen = ({ navigation }) => {
           id: 'logout',
           title: 'Logout',
           icon: LogoutCurve,
-          color: appColors.danger, 
+          color: appColors.danger,
           onPress: handleLogout,
         },
         {
@@ -172,26 +382,41 @@ const ClientProfileScreen = ({ navigation }) => {
           color: appColors.danger,
           onPress: handleDeleteAccount,
         },
-      ]
-    }
+      ],
+    },
   ];
 
-
-  const renderMenuItem = (item) => {
-    const IconComponent = item.icon; 
+  const renderMenuItem = item => {
+    const IconComponent = item.icon;
     const iconColor = item.color || appColors.primary;
 
     return (
-      <TouchableOpacity key={item.id} onPress={item.onPress} style={styles.menuItem}>
+      <TouchableOpacity
+        key={item.id}
+        onPress={item.onPress}
+        style={styles.menuItem}>
         <RowComponent justify="space-between">
           <RowComponent>
-            <View style={[styles.iconContainer, { backgroundColor: `${iconColor}15` }]}>
+            <View
+              style={[
+                styles.iconContainer,
+                {backgroundColor: `${iconColor}15`},
+              ]}>
               <IconComponent size={22} color={iconColor} />
             </View>
             <View style={styles.menuTextContainer}>
-              <TextComponent text={item.title} size={16} font={fontFamilies.medium} color={item.color || appColors.text}/>
-              {item.subtitle && ( // Chỉ render subtitle nếu có
-                <TextComponent text={item.subtitle} size={12} color={appColors.gray} />
+              <TextComponent
+                text={item.title}
+                size={16}
+                font={fontFamilies.medium}
+                color={item.color || appColors.text}
+              />
+              {item.subtitle && (
+                <TextComponent
+                  text={item.subtitle}
+                  size={12}
+                  color={appColors.gray}
+                />
               )}
             </View>
           </RowComponent>
@@ -201,76 +426,89 @@ const ClientProfileScreen = ({ navigation }) => {
     );
   };
 
+  const isPremium = false; 
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
       <LoadingModal visible={loading} />
-      
-      {/* Header */}
+
       <SafeAreaView style={styles.header} edges={['top']}>
         <View style={styles.headerContent}>
-          <TextComponent 
-            text="My Profile" 
-            size={20} 
-            font={fontFamilies.bold} 
+          <TextComponent
+            text="My Profile"
+            size={20}
+            font={fontFamilies.bold}
             color={appColors.white}
           />
         </View>
       </SafeAreaView>
 
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        bounces={true}
-      >
-        {/* Profile Card */}
+        bounces={true}>
         <View style={styles.profileCard}>
-          {/* Background gradient effect */}
           <View style={styles.profileHeader}>
-            {/* Avatar Section */}
             <View style={styles.avatarSection}>
               <View style={styles.avatarContainer}>
-                {auth.photo ? (
-                  <Image source={{ uri: auth.photo }} style={styles.avatar} />
+                {profile?._tempImageBase64 ? (
+                  <Image
+                    source={{uri: profile._tempImageBase64}}
+                    style={styles.avatar}
+                  />
+                ) : profile?.photoUrl ? (
+                  <Image
+                    source={{uri: profile.photoUrl}}
+                    style={styles.avatar}
+                    onError={e =>
+                      console.log('Error loading image:', e.nativeEvent.error)
+                    }
+                  />
                 ) : (
                   <View style={styles.avatarPlaceholder}>
                     <TextComponent
-                      text={(auth.username || 'A').charAt(0).toUpperCase()}
+                      text={(profile?.username || auth.username || 'A')
+                        .charAt(0)
+                        .toUpperCase()}
                       size={40}
                       color={appColors.primary}
                       font={fontFamilies.bold}
                     />
                   </View>
                 )}
-                <TouchableOpacity style={styles.cameraButton}>
+                <TouchableOpacity
+                  style={styles.cameraButton}
+                  onPress={handleUploadPhoto}>
                   <Camera size={16} color={appColors.white} />
                 </TouchableOpacity>
               </View>
-              
-              <TextComponent 
-                text={auth.username || 'User'} 
-                size={26} 
-                font={fontFamilies.bold} 
+
+              <TextComponent
+                text={profile?.username || auth.username || 'User'}
+                size={26}
+                font={fontFamilies.bold}
                 styles={styles.profileName}
               />
-              
-              {/* Membership Badge */}
-              <View style={styles.membershipBadge}>
-                <Crown size={18} color={appColors.yellow} />
-                <TextComponent 
-                  text="Premium Member" 
-                  size={14} 
-                  color={appColors.yellow}
-                  font={fontFamilies.semiBold}
-                  styles={{ marginLeft: 8 }}
-                />
-              </View>
-              
-              <TextComponent 
-                text={`Member since ${stats.memberSince}`} 
-                size={14} 
+
+              {isPremium && (
+                <View style={styles.membershipBadge}>
+                  <Crown size={18} color={appColors.yellow} />
+                  <TextComponent
+                    text="Premium Member"
+                    size={14}
+                    color={appColors.yellow}
+                    font={fontFamilies.semiBold}
+                    styles={{marginLeft: 8}}
+                  />
+                </View>
+              )}
+
+              <TextComponent
+                text={`Member since ${stats.memberSince}`}
+                size={14}
                 color={appColors.text2}
                 styles={styles.memberSince}
               />
@@ -281,20 +519,44 @@ const ClientProfileScreen = ({ navigation }) => {
           <View style={styles.contactSection}>
             <View style={styles.infoRow}>
               <View style={styles.infoContent}>
-                <TextComponent text="Email Address" size={12} color={appColors.text2} font={fontFamilies.medium} />
-                <TextComponent 
-                  text={auth.email || 'Not provided'} 
-                  size={16} 
+                <TextComponent
+                  text="Email Address"
+                  size={12}
+                  color={appColors.text2}
+                  font={fontFamilies.medium}
+                />
+                <TextComponent
+                  text={profile?.email || auth.email || 'Not provided'}
+                  size={16}
                   font={fontFamilies.medium}
                   color={appColors.text}
-                  styles={{ marginTop: 4 }}
+                  styles={{marginTop: 4}}
                 />
               </View>
             </View>
+
+            {profile?.phoneNumber && (
+              <View style={[styles.infoRow, {marginTop: 12}]}>
+                <View style={styles.infoContent}>
+                  <TextComponent
+                    text="Phone Number"
+                    size={12}
+                    color={appColors.text2}
+                    font={fontFamilies.medium}
+                  />
+                  <TextComponent
+                    text={profile.phoneNumber}
+                    size={16}
+                    font={fontFamilies.medium}
+                    color={appColors.text}
+                    styles={{marginTop: 4}}
+                  />
+                </View>
+              </View>
+            )}
           </View>
         </View>
 
-        {/* Stats Cards */}
         <View style={styles.statsContainer}>
           <TextComponent
             text="Your Fitness Journey"
@@ -304,40 +566,91 @@ const ClientProfileScreen = ({ navigation }) => {
           />
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: `${appColors.primary}15` }]}>
+              <View
+                style={[
+                  styles.statIcon,
+                  {backgroundColor: `${appColors.primary}15`},
+                ]}>
                 <Chart size={24} color={appColors.primary} />
               </View>
-              <TextComponent text={stats.totalWorkouts.toString()} size={24} font={fontFamilies.bold} color={appColors.text} />
-              <TextComponent text="Workouts" size={14} color={appColors.text2} />
+              <TextComponent
+                text={stats.totalWorkouts.toString()}
+                size={24}
+                font={fontFamilies.bold}
+                color={appColors.text}
+              />
+              <TextComponent
+                text="Workouts"
+                size={14}
+                color={appColors.text2}
+              />
             </View>
-            
+
             <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: `${appColors.success}15` }]}>
+              <View
+                style={[
+                  styles.statIcon,
+                  {backgroundColor: `${appColors.success}15`},
+                ]}>
                 <Star1 size={24} color={appColors.success} />
               </View>
-              <TextComponent text={`${stats.currentStreak} days`} size={24} font={fontFamilies.bold} color={appColors.text} />
-              <TextComponent text="Current Streak" size={14} color={appColors.text2} />
+              <TextComponent
+                text={`${stats.currentStreak} days`}
+                size={24}
+                font={fontFamilies.bold}
+                color={appColors.text}
+              />
+              <TextComponent
+                text="Current Streak"
+                size={14}
+                color={appColors.text2}
+              />
             </View>
-            
+
             <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: `${appColors.warning}15` }]}>
+              <View
+                style={[
+                  styles.statIcon,
+                  {backgroundColor: `${appColors.warning}15`},
+                ]}>
                 <Calendar size={24} color={appColors.warning} />
               </View>
-              <TextComponent text={`${stats.totalHours}h`} size={24} font={fontFamilies.bold} color={appColors.text} />
-              <TextComponent text="Training Hours" size={14} color={appColors.text2} />
+              <TextComponent
+                text={`${stats.totalHours}h`}
+                size={24}
+                font={fontFamilies.bold}
+                color={appColors.text}
+              />
+              <TextComponent
+                text="Training Hours"
+                size={14}
+                color={appColors.text2}
+              />
             </View>
-            
+
             <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: `${appColors.info}15` }]}>
+              <View
+                style={[
+                  styles.statIcon,
+                  {backgroundColor: `${appColors.info}15`},
+                ]}>
                 <Crown size={24} color={appColors.info} />
               </View>
-              <TextComponent text={stats.favoriteTrainers.toString()} size={24} font={fontFamilies.bold} color={appColors.text} />
-              <TextComponent text="Favorite PTs" size={14} color={appColors.text2} />
+              <TextComponent
+                text={stats.favoriteTrainers.toString()}
+                size={24}
+                font={fontFamilies.bold}
+                color={appColors.text}
+              />
+              <TextComponent
+                text="Favorite PTs"
+                size={14}
+                color={appColors.text2}
+              />
             </View>
           </View>
         </View>
 
-        {/* Menu Sections */}
         {menuSections.map((section, sectionIndex) => (
           <SectionComponent key={sectionIndex}>
             <TextComponent
@@ -350,7 +663,9 @@ const ClientProfileScreen = ({ navigation }) => {
               {section.items.map((item, itemIndex) => (
                 <View key={item.id}>
                   {renderMenuItem(item)}
-                  {itemIndex < section.items.length - 1 && <View style={styles.separator} />}
+                  {itemIndex < section.items.length - 1 && (
+                    <View style={styles.separator} />
+                  )}
                 </View>
               ))}
             </View>
@@ -365,7 +680,6 @@ const ClientProfileScreen = ({ navigation }) => {
 
 export default ClientProfileScreen;
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -376,7 +690,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     shadowColor: appColors.black,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 8,
@@ -384,7 +698,7 @@ const styles = StyleSheet.create({
   headerContent: {
     paddingHorizontal: 16,
     paddingVertical: 20,
-    alignItems: 'center', 
+    alignItems: 'center',
     justifyContent: 'center',
   },
   scrollView: {
@@ -394,14 +708,13 @@ const styles = StyleSheet.create({
     padding: 16,
     flexGrow: 1,
   },
-  
-  // Profile Card Styles
+
   profileCard: {
     backgroundColor: appColors.white,
     borderRadius: 24,
     marginBottom: 24,
     shadowColor: appColors.black,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: {width: 0, height: 8},
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 12,
@@ -420,7 +733,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginBottom: 20,
     shadowColor: appColors.black,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: {width: 0, height: 8},
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 8,
@@ -455,7 +768,7 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: appColors.white,
     shadowColor: appColors.black,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {width: 0, height: 4},
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 6,
@@ -496,7 +809,7 @@ const styles = StyleSheet.create({
   infoContent: {
     flex: 1,
   },
-  
+
   // Stats Section
   statsContainer: {
     marginBottom: 28,
@@ -514,7 +827,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     shadowColor: appColors.black,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: {width: 0, height: 6},
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 6,
@@ -529,7 +842,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  
+
   // Section Styles
   sectionTitle: {
     marginBottom: 20,
@@ -540,7 +853,7 @@ const styles = StyleSheet.create({
     backgroundColor: appColors.white,
     borderRadius: 20,
     shadowColor: appColors.black,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: {width: 0, height: 6},
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 6,

@@ -34,6 +34,7 @@ import {timeUtils} from '../../utils/timeUtils';
 import LoadingModal from '../../modals/LoadingModal';
 import HeaderNotificationButton from '../../components/HeaderNotificationButton';
 import ptApi from '../../apis/ptApi';
+import profileApi from '../../apis/profileApi';
 
 const {width} = Dimensions.get('window');
 
@@ -58,6 +59,7 @@ const PTHomeScreen = () => {
     },
   });
   const [todayBookings, setTodayBookings] = useState([]);
+  const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -67,9 +69,10 @@ const PTHomeScreen = () => {
       if (showLoading) setLoading(true);
 
       // Load all data in parallel
-      const [profileResponse, bookingsResponse] = await Promise.all([
+      const [profileResponse, bookingsResponse, userProfileResponse] = await Promise.all([
         loadProfile(),
         loadBookings(),
+        loadUserProfile(),
       ]);
 
       console.log('Dashboard data loaded successfully');
@@ -79,6 +82,20 @@ const PTHomeScreen = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const response = await profileApi.getProfile();
+      if (response.data && response.data.success) {
+        setUserProfile(response.data.data);
+        return response.data.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      return null;
     }
   };
 
@@ -180,16 +197,17 @@ const PTHomeScreen = () => {
     bookings.forEach(booking => {
       if (booking.client?._id) {
         uniqueClients.add(booking.client._id);
+      } else if (booking.clientId) {
+        uniqueClients.add(booking.clientId);
       }
     });
     const totalClients = uniqueClients.size;
 
-    // Average rating (mock for now since we don't have reviews API)
+    // Average rating (synthetic calculation based on completed bookings)
     const completedBookings = bookings.filter(b => b.status === 'completed');
-    const rating =
-      completedBookings.length > 0
-        ? Math.min(4.5 + Math.random() * 0.5, 5.0)
-        : 0;
+    const rating = completedBookings.length > 0
+      ? Math.min(3.5 + Math.min(completedBookings.length * 0.1, 1.5), 5.0).toFixed(1)
+      : 0;
 
     // Weekly stats
     const weekStart = now.startOf('week');
@@ -202,18 +220,29 @@ const PTHomeScreen = () => {
     const completedThisWeek = weeklyBookings.filter(
       b => b.status === 'completed',
     ).length;
+    
     const cancelledThisWeek = weeklyBookings.filter(
       b => b.status === 'cancelled_by_client' || b.status === 'rejected_by_pt',
     ).length;
 
-    // Calculate total hours (assuming 1 hour per session)
-    const totalHours = completedThisWeek;
+    // Calculate total hours (assuming 1 hour per session for now)
+    const totalHours = weeklyBookings.reduce((total, booking) => {
+      if (booking.bookingTime?.startTime && booking.bookingTime?.endTime) {
+        const start = dayjs(booking.bookingTime.startTime);
+        const end = dayjs(booking.bookingTime.endTime);
+        const durationHours = end.diff(start, 'hour', true);
+        return total + (durationHours > 0 ? durationHours : 1);
+      }
+      return total + 1; // Default to 1 hour if time data is missing
+    }, 0);
 
     // New clients this week
     const weeklyClients = new Set();
     weeklyBookings.forEach(booking => {
       if (booking.client?._id) {
         weeklyClients.add(booking.client._id);
+      } else if (booking.clientId) {
+        weeklyClients.add(booking.clientId);
       }
     });
     const newClients = weeklyClients.size;
@@ -225,7 +254,7 @@ const PTHomeScreen = () => {
       rating,
       weeklyStats: {
         completedSessions: completedThisWeek,
-        totalHours,
+        totalHours: Math.round(totalHours),
         newClients,
         cancelledSessions: cancelledThisWeek,
       },
@@ -340,7 +369,9 @@ const PTHomeScreen = () => {
     };
 
     return (
-      <TouchableOpacity style={styles.bookingCard}>
+      <TouchableOpacity 
+        style={styles.bookingCard}
+        onPress={() => navigation.navigate('PTBookings')}>
         <View style={styles.bookingHeader}>
           <View style={styles.clientInfo}>
             <Text style={styles.clientName}>
@@ -412,7 +443,8 @@ const PTHomeScreen = () => {
         <View>
           <Text style={styles.greeting}>{getGreeting()},</Text>
           <Text style={styles.userName}>
-            {dashboardData.ptProfile?.name ||
+            {userProfile?.username || 
+              dashboardData.ptProfile?.name ||
               auth.username ||
               auth.email ||
               'PT'}
@@ -443,7 +475,7 @@ const PTHomeScreen = () => {
               <View style={styles.profileSummary}>
                 <View style={styles.profileHeader}>
                   <Text style={styles.profileName}>
-                    {dashboardData.ptProfile.name || auth.username}
+                    {dashboardData.ptProfile.name || userProfile?.username || auth.username}
                   </Text>
                   <TouchableOpacity
                     style={styles.editProfileButton}
@@ -454,7 +486,7 @@ const PTHomeScreen = () => {
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.profileSpecialization}>
-                  {Array.isArray(dashboardData.ptProfile.specializations)
+                  {Array.isArray(dashboardData.ptProfile.specializations) && dashboardData.ptProfile.specializations.length > 0
                     ? dashboardData.ptProfile.specializations
                         .map(spec =>
                           spec
@@ -488,7 +520,7 @@ const PTHomeScreen = () => {
                     0,
                   )}K VND`}
                   color={appColors.success}
-                  onPress={() => navigation.navigate('PTEarnings')}
+                  onPress={() => navigation.navigate('PTBookings')}
                 />
               </View>
               <View style={styles.statsRow}>
@@ -497,14 +529,14 @@ const PTHomeScreen = () => {
                   title="Total Clients"
                   value={dashboardData.totalClients}
                   color={appColors.info}
-                  onPress={() => navigation.navigate('PTClients')}
+                  onPress={() => navigation.navigate('PTBookings')}
                 />
                 <StatCard
                   icon={Star}
                   title="Rating"
                   value={
                     dashboardData.rating > 0
-                      ? dashboardData.rating.toFixed(1)
+                      ? dashboardData.rating
                       : 'New'
                   }
                   subtitle={dashboardData.rating > 0 ? 'out of 5.0' : ''}
@@ -609,18 +641,13 @@ const PTHomeScreen = () => {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.quickAction}
-                  onPress={() => navigation.navigate('PTClients')}>
+                  onPress={() => navigation.navigate('PTBookings')}>
                   <Users size={24} color={appColors.success} strokeWidth={2} />
                   <Text style={styles.quickActionText}>Clients</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.quickAction}
-                  onPress={() =>
-                    Alert.alert(
-                      'Coming Soon',
-                      'Earnings feature will be available soon!',
-                    )
-                  }>
+                  onPress={() => navigation.navigate('PTBookings')}>
                   <TrendingUp
                     size={24}
                     color={appColors.warning}

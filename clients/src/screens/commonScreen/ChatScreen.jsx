@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -18,6 +18,7 @@ import chatApi from '../../apis/chatApi';
 import { authSelector } from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
 import { timeUtils } from '../../utils/timeUtils';
+import { fontFamilies } from '../../constants/fontFamilies';
 
 const ChatScreen = ({ navigation, route }) => {
   const { chatRoomId, otherUser } = route.params;
@@ -28,6 +29,9 @@ const ChatScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [pollingInterval, setPollingInterval] = useState(null);
+  
+  // Reference Flatlist to scroll to bottom
+  const flatListRef = useRef(null);
 
   // Get messages from API
   const loadMessages = async () => {
@@ -36,7 +40,15 @@ const ChatScreen = ({ navigation, route }) => {
       const response = await chatApi.getMessages(auth.accesstoken, chatRoomId);
 
       if (response.success) {
-        setMessages(response.data.messages || []);
+        // Sort messages from oldest to newest
+        const sortedMessages = [...(response.data.messages || [])].sort(
+          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+        );
+        setMessages(sortedMessages);
+        // Scroll to the last message after loading
+        setTimeout(() => {
+          scrollToBottom(false);
+        }, 200);
       }
     } catch (error) {
       console.error('Error loading messages:', error);
@@ -46,13 +58,39 @@ const ChatScreen = ({ navigation, route }) => {
     }
   };
 
+  // Scroll to the last message
+  const scrollToBottom = (animated = true) => {
+    if (flatListRef.current && messages.length > 0) {
+      flatListRef.current.scrollToEnd({ animated });
+    }
+  };
+
   // Poll for new messages
   const startPolling = () => {
     const interval = setInterval(async () => {
       try {
         const response = await chatApi.getMessages(auth.accesstoken, chatRoomId);
         if (response.success) {
-          setMessages(response.data.messages || []);
+          // Sắp xếp tin nhắn từ cũ đến mới (theo thứ tự thời gian)
+          const sortedMessages = [...(response.data.messages || [])].sort(
+            (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+          );
+          
+          // Kiểm tra xem có tin nhắn mới không
+          const shouldScroll = 
+            messages.length < sortedMessages.length ||
+            (sortedMessages.length > 0 && 
+            messages.length > 0 && 
+            sortedMessages[sortedMessages.length-1]._id !== messages[messages.length-1]._id);
+            
+          setMessages(sortedMessages);
+          
+          // Scroll xuống nếu có tin nhắn mới
+          if (shouldScroll) {
+            setTimeout(() => {
+              scrollToBottom();
+            }, 100);
+          }
         }
       } catch (error) {
         console.error('Error polling messages:', error);
@@ -81,8 +119,13 @@ const ChatScreen = ({ navigation, route }) => {
       const response = await chatApi.sendMessage(auth.accesstoken, chatRoomId, messageText);
       
       if (response.success) {
-        // Add the new message to the beginning of the list
-        setMessages(prev => [response.data, ...prev]);
+        // Add the new message to the list
+        setMessages(prev => [...prev, response.data]);
+        
+        // Scroll to the bottom after sending
+        setTimeout(() => {
+          scrollToBottom();
+        }, 100);
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -99,7 +142,7 @@ const ChatScreen = ({ navigation, route }) => {
     return timeUtils.formatMessageTime(date);
   };
 
-  // Render một tin nhắn
+  // Render a message
   const renderMessage = ({ item }) => {
     const isMyMessage = item.sender._id === auth.id;
     
@@ -144,6 +187,7 @@ const ChatScreen = ({ navigation, route }) => {
       <KeyboardAvoidingView 
         style={styles.keyboardContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -175,12 +219,12 @@ const ChatScreen = ({ navigation, route }) => {
 
         {/* Messages List */}
         <FlatList
+          ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item._id}
           renderItem={renderMessage}
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContainer}
-          inverted // Hiển thị tin nhắn mới nhất ở dưới cùng
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             !loading && (
@@ -191,6 +235,11 @@ const ChatScreen = ({ navigation, route }) => {
               </View>
             )
           }
+          onContentSizeChange={() => {
+            if (messages.length > 0 && !loading) {
+              scrollToBottom(false);
+            }
+          }}
         />
 
         {/* Input */}
@@ -281,13 +330,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: fontFamilies.bold,
     color: 'white',
   },
   headerSubtitle: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
+    fontFamily: fontFamilies.regular,
   },
   moreButton: {
     padding: 8,
@@ -298,16 +348,18 @@ const styles = StyleSheet.create({
   messagesContainer: {
     padding: 16,
     flexGrow: 1,
+    paddingBottom: 8,
+    justifyContent: 'flex-end', 
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    transform: [{ scaleY: -1 }], 
+    minHeight: 200,
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     color: appColors.gray,
     marginTop: 8,
   },
@@ -316,6 +368,7 @@ const styles = StyleSheet.create({
     color: appColors.gray,
     textAlign: 'center',
     marginTop: 4,
+    fontFamily: fontFamilies.regular,
   },
   messageContainer: {
     marginBottom: 12,
@@ -358,6 +411,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 20,
     marginBottom: 4,
+    fontFamily: fontFamilies.regular,
   },
   myMessageText: {
     color: 'white',
@@ -368,6 +422,7 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 11,
     opacity: 0.7,
+    fontFamily: fontFamilies.regular,
   },
   myTimeText: {
     color: 'white',
@@ -403,6 +458,7 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     marginRight: 12,
     backgroundColor: '#f8f9fa',
+    fontFamily: fontFamilies.regular,
   },
   sendButton: {
     width: 48,

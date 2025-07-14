@@ -14,14 +14,17 @@ export const timeUtils = {
    * function #1: Create UTC ISO String for Server.
    * This function takes user input (always considered Vietnam time)
    * and converts it to a standard UTC ISO string.
-   * @param {string} dateString 
-   * @param {string} timeString 
+   * @param {string} dateString
+   * @param {string} timeString
    * @returns {string} ISO UTC string, e.g., '2025-07-11T14:30:00.000Z'
    */
   createUtcIsoString(dateString, timeString) {
     if (!dateString || !timeString) return null;
     // 1. Parse date and time as if it's UTC (we'll treat this as Vietnam time)
-    const dateTimeAsUtc = dayjs.utc(`${dateString} ${timeString}`, 'YYYY-MM-DD HH:mm');
+    const dateTimeAsUtc = dayjs.utc(
+      `${dateString} ${timeString}`,
+      'YYYY-MM-DD HH:mm',
+    );
     // 2. Subtract Vietnam offset to get actual UTC time
     const utcTime = dateTimeAsUtc.subtract(VIETNAM_OFFSET_HOURS, 'hour');
     // 3. Return ISO string
@@ -36,15 +39,15 @@ export const timeUtils = {
    */
   formatToVietnameseTime(isoString) {
     if (!isoString) return '';
-    
+
     // Parse as UTC and add Vietnam offset
     const parsed = dayjs.utc(isoString);
-    
+
     if (!parsed.isValid()) {
       console.warn('Invalid date string:', isoString);
       return '';
     }
-    
+
     const vietnamTime = parsed.add(VIETNAM_OFFSET_HOURS, 'hour');
     return vietnamTime.format('h:mm A');
   },
@@ -65,7 +68,7 @@ export const timeUtils = {
     }
     return parsed.add(VIETNAM_OFFSET_HOURS, 'hour').format('HH:mm');
   },
-  
+
   /**
    * Format full date for display.
    * @param {string | Date} dateValue - ISO string or Date object
@@ -74,7 +77,10 @@ export const timeUtils = {
   formatToVietnameseDate(dateValue) {
     if (!dateValue) return '';
     // Parse UTC time and add Vietnam offset
-    return dayjs.utc(dateValue).add(VIETNAM_OFFSET_HOURS, 'hour').format('dddd, DD [tháng] M, YYYY');
+    return dayjs
+      .utc(dateValue)
+      .add(VIETNAM_OFFSET_HOURS, 'hour')
+      .format('dddd, DD [tháng] M, YYYY');
   },
 
   /**
@@ -85,7 +91,10 @@ export const timeUtils = {
   formatToShortDate(dateValue) {
     if (!dateValue) return '';
     // Parse UTC time and add Vietnam offset
-    return dayjs.utc(dateValue).add(VIETNAM_OFFSET_HOURS, 'hour').format('DD/MM/YYYY');
+    return dayjs
+      .utc(dateValue)
+      .add(VIETNAM_OFFSET_HOURS, 'hour')
+      .format('DD/MM/YYYY');
   },
 
   /**
@@ -114,11 +123,11 @@ export const timeUtils = {
    */
   formatMessageTime(dateValue) {
     if (!dateValue) return '';
-    
+
     const messageTime = dayjs.utc(dateValue).add(VIETNAM_OFFSET_HOURS, 'hour');
     const now = dayjs.utc().add(VIETNAM_OFFSET_HOURS, 'hour');
     const diffInDays = now.diff(messageTime, 'day');
-    
+
     if (diffInDays === 0) {
       // Today: only show hour
       return messageTime.format('HH:mm');
@@ -138,21 +147,21 @@ export const timeUtils = {
    */
   formatRelativeTime(dateValue) {
     if (!dateValue) return '';
-    
+
     const targetTime = dayjs.utc(dateValue).add(VIETNAM_OFFSET_HOURS, 'hour');
     const now = dayjs.utc().add(VIETNAM_OFFSET_HOURS, 'hour');
-    
+
     const diffInMinutes = now.diff(targetTime, 'minute');
-    
+
     if (diffInMinutes < 1) return 'Now';
     if (diffInMinutes < 60) return `${diffInMinutes}m`;
-    
+
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours}h`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     if (diffInDays < 7) return `${diffInDays}d`;
-    
+
     return targetTime.format('MMM D');
   },
 
@@ -163,7 +172,10 @@ export const timeUtils = {
    */
   formatJoinDate(dateValue) {
     if (!dateValue) return '';
-    return dayjs.utc(dateValue).add(VIETNAM_OFFSET_HOURS, 'hour').format('MMMM YYYY');
+    return dayjs
+      .utc(dateValue)
+      .add(VIETNAM_OFFSET_HOURS, 'hour')
+      .format('MMMM YYYY');
   },
 
   /**
@@ -175,5 +187,19 @@ export const timeUtils = {
     if (!date) return '';
     // For date picker, we don't need timezone conversion as it's just date
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
-  }
+  },
+
+   /**
+   * Format full date for display (English).
+   * @param {string | Date} dateValue - ISO string or Date object
+   * @returns {string} - e.g., 'Friday, July 11, 2025'
+   */
+  formatToEnglishDate(dateValue) {
+    if (!dateValue) return '';
+    // Parse UTC time and add Vietnam offset
+    return dayjs
+      .utc(dateValue)
+      .add(VIETNAM_OFFSET_HOURS, 'hour')
+      .format('dddd, MMMM D, YYYY');
+  },
 };

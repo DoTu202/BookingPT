@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,19 +9,21 @@ import {
   Alert,
   Platform,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSelector } from 'react-redux';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {useSelector} from 'react-redux';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import chatApi from '../../apis/chatApi';
-import { authSelector } from '../../redux/reducers/authReducer';
+import {authSelector} from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
-import { fontFamilies } from '../../constants/fontFamilies';
+import {fontFamilies} from '../../constants/fontFamilies';
 
-const ChatListScreen = ({ navigation }) => {
+const ChatListScreen = ({navigation}) => {
   const auth = useSelector(authSelector);
   const [chatRooms, setChatRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Get chat list from API
   const loadChatRooms = async () => {
@@ -40,8 +42,14 @@ const ChatListScreen = ({ navigation }) => {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadChatRooms();
+    setRefreshing(false);
+  };
+
   // Get information about the other user (PT or Client)
-  const getOtherUser = (chatRoom) => {
+  const getOtherUser = chatRoom => {
     if (auth.role === 'pt') {
       return chatRoom.clientUser; // PT, show Client chat
     } else {
@@ -50,37 +58,38 @@ const ChatListScreen = ({ navigation }) => {
   };
 
   // Format the last message time
-  const formatLastMessageTime = (date) => {
+  const formatLastMessageTime = date => {
     if (!date) return '';
-    
+
     const now = new Date();
     const messageDate = new Date(date);
     const diffInMinutes = Math.floor((now - messageDate) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return 'Now';
     if (diffInMinutes < 60) return `${diffInMinutes}m`;
-    
+
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours}h`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     return `${diffInDays}d`;
   };
 
   // Render một item chat
-  const renderChatItem = ({ item }) => {
+  const renderChatItem = ({item}) => {
     const otherUser = getOtherUser(item);
-    
+
     if (!otherUser) return null;
 
     return (
       <TouchableOpacity
         style={styles.chatItem}
-        onPress={() => navigation.navigate('ChatScreen', {
-          chatRoomId: item._id,
-          otherUser: otherUser
-        })}
-      >
+        onPress={() =>
+          navigation.navigate('ChatScreen', {
+            chatRoomId: item._id,
+            otherUser: otherUser,
+          })
+        }>
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
@@ -93,10 +102,10 @@ const ChatListScreen = ({ navigation }) => {
           <View style={styles.headerRow}>
             <Text style={styles.userName}>{otherUser.username}</Text>
             <Text style={styles.timeText}>
-              {formatLastMessageTime(item.lastMessageTime)}
+              {formatLastMessageTime(item.lastMessage?.timestamp)}
             </Text>
           </View>
-          
+
           <Text style={styles.lastMessage} numberOfLines={1}>
             {item.lastMessage?.content || 'Start a conversation...'}
           </Text>
@@ -111,15 +120,17 @@ const ChatListScreen = ({ navigation }) => {
     loadChatRooms();
   }, []);
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor={appColors.primary}
+        />
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
+            style={styles.backButton}>
             <Icon name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Messages</Text>
@@ -137,10 +148,9 @@ const ChatListScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
+          style={styles.backButton}>
           <Icon name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Messages</Text>
@@ -157,10 +167,17 @@ const ChatListScreen = ({ navigation }) => {
       ) : (
         <FlatList
           data={chatRooms}
-          keyExtractor={(item) => item._id}
+          keyExtractor={item => item._id}
           renderItem={renderChatItem}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[appColors.primary]}
+            />
+          }
         />
       )}
       <SafeAreaView edges={['bottom']} />
@@ -180,14 +197,15 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 20,
-    height: 140,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    height: Platform.OS === 'ios' ? 140 : 120,
   },
   backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: 20, 
+    fontSize: 20,
     fontFamily: fontFamilies.bold,
     color: 'white',
     flex: 1,
@@ -204,6 +222,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: appColors.gray,
+    fontFamily: fontFamilies.regular,
   },
   emptyContainer: {
     flex: 1,
@@ -214,7 +233,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: fontFamilies.bold,
     color: appColors.text,
     marginTop: 16,
     marginBottom: 8,
@@ -224,6 +243,7 @@ const styles = StyleSheet.create({
     color: appColors.gray,
     textAlign: 'center',
     lineHeight: 20,
+    fontFamily: fontFamilies.regular,
   },
   listContainer: {
     padding: 16,
@@ -237,7 +257,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
@@ -256,7 +276,7 @@ const styles = StyleSheet.create({
   avatarText: {
     color: 'white',
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: fontFamilies.bold,
   },
   chatContent: {
     flex: 1,
@@ -269,17 +289,19 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: fontFamilies.semiBold,
     color: appColors.text,
   },
   timeText: {
     fontSize: 12,
     color: appColors.gray,
+    fontFamily: fontFamilies.regular,
   },
   lastMessage: {
     fontSize: 14,
     color: appColors.gray,
     lineHeight: 18,
+    fontFamily: fontFamilies.regular,
   },
 });
 

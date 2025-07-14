@@ -94,7 +94,7 @@ const ClientHomeScreen = ({navigation}) => {
     return (
       <PtItem
         type="card"
-        size="medium" 
+        size="medium"
         item={{
           _id: item._id,
           title: item.user?.username || 'Personal Trainer',

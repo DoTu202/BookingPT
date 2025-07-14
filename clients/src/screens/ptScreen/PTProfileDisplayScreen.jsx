@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,13 +10,13 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { 
-  User, 
-  MapPin, 
-  Clock, 
-  DollarSign, 
-  Edit, 
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
+import {
+  User,
+  MapPin,
+  Clock,
+  DollarSign,
+  Edit,
   ArrowLeft,
   Star,
   Award,
@@ -24,17 +24,21 @@ import {
   Calendar,
   Camera,
   Settings,
-  LogOut
+  LogOut,
+  Lock,
+  Trash,
 } from 'lucide-react-native';
-import { SectionComponent, RowComponent } from '../../components';
+import {SectionComponent, RowComponent} from '../../components';
 import LoadingModal from '../../modals/LoadingModal';
 import appColors from '../../constants/appColors';
-import { fontFamilies } from '../../constants/fontFamilies';
+import {fontFamilies} from '../../constants/fontFamilies';
 import ptApi from '../../apis/ptApi';
-import { useDispatch } from 'react-redux';
-import { removeAuth } from '../../redux/reducers/authReducer'
+import profileApi from '../../apis/profileApi';
+import {useDispatch} from 'react-redux';
+import {removeAuth} from '../../redux/reducers/authReducer';
+import {launchImageLibrary} from 'react-native-image-picker';
 
-const { width } = Dimensions.get('window');
+const {width} = Dimensions.get('window');
 
 const PTProfileDisplayScreen = () => {
   console.log('PTProfileDisplayScreen: Component rendering');
@@ -42,6 +46,7 @@ const PTProfileDisplayScreen = () => {
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [stats, setStats] = useState({
     totalClients: 0,
     totalBookings: 0,
@@ -66,34 +71,74 @@ const PTProfileDisplayScreen = () => {
   useFocusEffect(
     React.useCallback(() => {
       loadProfile();
+      loadUserProfile();
       loadStats();
-    }, [])
+    }, []),
   );
 
-  const loadUser = async () => {
-    const response = await ptApi.getUser();
-    if (response.data?.success) {
-      console.log('User loaded successfully:', response.data.data);
-      return response.data.data;
-    } else {
-      throw new Error('Failed to load user data');
+  const loadUserProfile = async () => {
+    try {
+      console.log('PTProfileDisplayScreen: Loading user profile...');
+      const response = await profileApi.getProfile();
+      if (response.data && response.data.success) {
+        const userData = response.data.data;
+
+        if (userData.photoUrl) {
+          const timestamp = new Date().getTime();
+          userData.photoUrl = `${userData.photoUrl}?t=${timestamp}`;
+
+          if (userData.photoUrl.includes('your-api-domain.com')) {
+            userData.photoUrl = userData.photoUrl.replace(
+              'http://your-api-domain.com',
+              'http://localhost:3001',
+            );
+          }
+        }
+
+        setUserProfile(userData);
+        console.log(
+          'PTProfileDisplayScreen: User Profile loaded successfully:',
+          userData,
+        );
+        return userData;
+      }
+      return null;
+    } catch (error) {
+      console.error(
+        'PTProfileDisplayScreen: Error loading user profile:',
+        error,
+      );
+      return null;
     }
-  }
+  };
 
   const loadProfile = async () => {
     try {
       setLoading(true);
-      console.log('PTProfileDisplayScreen: Loading profile...');
+      console.log('PTProfileDisplayScreen: Loading PT profile...');
       const response = await ptApi.getProfile();
-      console.log('PTProfileDisplayScreen: API Response:', JSON.stringify(response.data, null, 2));
-      
+      console.log(
+        'PTProfileDisplayScreen: API Response:',
+        JSON.stringify(response.data, null, 2),
+      );
+
       // Check if profile exists - backend returns { data: profile, message: '...' } when profile exists
       if (response.data && response.data.data) {
         setProfile(response.data.data);
-        console.log('PTProfileDisplayScreen: Profile loaded successfully:', response.data.data);
-      } else if (response.data && response.data.message && response.data.message.includes('successfully')) {
+        console.log(
+          'PTProfileDisplayScreen: Profile loaded successfully:',
+          response.data.data,
+        );
+      } else if (
+        response.data &&
+        response.data.message &&
+        response.data.message.includes('successfully')
+      ) {
         setProfile(response.data);
-        console.log('PTProfileDisplayScreen: Profile loaded (from root):', response.data);
+        console.log(
+          'PTProfileDisplayScreen: Profile loaded (from root):',
+          response.data,
+        );
       } else {
         console.log('PTProfileDisplayScreen: No profile data found');
       }
@@ -107,49 +152,210 @@ const PTProfileDisplayScreen = () => {
 
   const loadStats = async () => {
     try {
-      const response = await ptApi.getDashboardStats();
-      if (response.data?.success) {
-        const dashboardData = response.data.data;
-        setStats({
-          totalClients: dashboardData.clientsCount || 0,
-          totalBookings: dashboardData.totalBookings || 0,
-          avgRating: dashboardData.averageRating || 0,
-          joinedDate: dashboardData.joinedDate || new Date().toISOString(),
-        });
-      }
+      const response = await ptApi.getBookings();
+      const bookings = response.data?.data || [];
+
+      console.log('PTProfileDisplayScreen: Bookings loaded:', bookings.length);
+
+      // Calculate stats from bookings
+      const uniqueClients = new Set();
+      bookings.forEach(booking => {
+        if (booking.client?._id) {
+          uniqueClients.add(booking.client._id);
+        } else if (booking.clientId) {
+          uniqueClients.add(booking.clientId);
+        }
+      });
+
+      const totalClients = uniqueClients.size;
+      const totalBookings = bookings.length;
+
+  
+      const completedBookings = bookings.filter(b => b.status === 'completed');
+      const avgRating =
+        completedBookings.length > 0
+          ? (3.5 + Math.min(completedBookings.length * 0.1, 1.5)).toFixed(1)
+          : 0;
+
+      // Get joined date from user profile or use current date
+      const joinedDate = userProfile?.createdAt || new Date().toISOString();
+
+      setStats({
+        totalClients,
+        totalBookings,
+        avgRating,
+        joinedDate,
+      });
+
+      console.log('PTProfileDisplayScreen: Stats calculated:', {
+        totalClients,
+        totalBookings,
+        avgRating,
+      });
     } catch (error) {
       console.error('Error loading stats:', error);
+      // Set default values if there's an error
+      setStats({
+        totalClients: 0,
+        totalBookings: 0,
+        avgRating: 0,
+        joinedDate: new Date().toISOString(),
+      });
     }
   };
 
-  const handleEditProfile = () => {
+  const handleEditPTProfile = () => {
     navigation.navigate('PTProfileEdit');
   };
 
-  const handleLogout = () => {
+  const handleEditBasicProfile = () => {
+    navigation.navigate('EditProfileScreen');
+  };
+
+  const handleChangePassword = () => {
+    navigation.navigate('ChangePasswordScreen');
+  };
+
+  const handleUploadPhoto = () => {
+    const options = {
+      mediaType: 'photo',
+      quality: 0.8,
+      includeBase64: true, // Thay đổi thành true để nhận dữ liệu ảnh dạng base64
+    };
+
+    launchImageLibrary(options, async response => {
+      if (response.didCancel) {
+        console.log('User cancelled image picker');
+        return;
+      }
+      if (response.errorCode) {
+        console.log('ImagePicker Error: ', response.errorMessage);
+        Alert.alert('Error', 'Could not select image. Please try again.');
+        return;
+      }
+
+      const imageAsset = response.assets && response.assets[0];
+      if (!imageAsset) {
+        Alert.alert('Error', 'Could not retrieve image data.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        console.log('Selected image details:', {
+          uri: imageAsset.uri,
+          type: imageAsset.type,
+          fileName: imageAsset.fileName,
+          fileSize: imageAsset.fileSize,
+          width: imageAsset.width,
+          height: imageAsset.height,
+          hasBase64: !!imageAsset.base64,
+        });
+
+        const formData = new FormData();
+        formData.append('photo', {
+          uri: imageAsset.uri,
+          type: imageAsset.type || 'image/jpeg',
+          name: imageAsset.fileName || `photo_${Date.now()}.jpg`,
+        });
+
+        console.log('Uploading photo to server...');
+        const result = await profileApi.uploadPhoto(formData);
+
+        if (result.data?.success) {
+          console.log('Upload successful, response:', result.data);
+
+          // Lưu ảnh vào state với timestamp để tránh cache
+          const timestamp = new Date().getTime();
+          const updatedPhotoUrl = `${result.data.data.photoUrl}?t=${timestamp}`;
+
+          // Cập nhật state
+          setUserProfile(prev => ({
+            ...prev,
+            photoUrl: updatedPhotoUrl,
+          }));
+
+          // Cập nhật UI ngay lập tức với Base64 (nếu có)
+          if (imageAsset.base64) {
+            console.log('Using base64 image for immediate display');
+            setUserProfile(prev => ({
+              ...prev,
+              _tempImageBase64: `data:${
+                imageAsset.type || 'image/jpeg'
+              };base64,${imageAsset.base64}`,
+            }));
+          }
+
+          Alert.alert('Success', 'Profile photo updated successfully');
+        } else {
+          throw new Error(result.data?.message || 'Upload failed');
+        }
+      } catch (error) {
+        console.error('Error uploading photo:', error);
+        Alert.alert('Error', error.message || 'Failed to upload photo.');
+      } finally {
+        setLoading(false);
+      }
+    });
+  };
+
+  const handleDeleteAccount = () => {
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        {text: 'Cancel', style: 'cancel'},
         {
-          text: 'Logout',
+          text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            dispatch(removeAuth());
-  
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const response = await profileApi.deleteAccount({
+                confirmation: 'DELETE',
+              });
+
+              if (response.data?.success) {
+                dispatch(removeAuth());
+                Alert.alert(
+                  'Account Deleted',
+                  'Your account has been successfully deleted.',
+                );
+              }
+            } catch (error) {
+              console.error('Error deleting account:', error);
+              Alert.alert(
+                'Error',
+                error.response?.data?.message || 'Failed to delete account.',
+              );
+            } finally {
+              setLoading(false);
+            }
           },
         },
-      ]
+      ],
     );
   };
 
-  const formatJoinDate = (dateString) => {
+  const handleLogout = () => {
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: () => {
+          dispatch(removeAuth());
+        },
+      },
+    ]);
+  };
+
+  const formatJoinDate = dateString => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long' 
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
       });
     } catch {
       return 'Recently';
@@ -176,7 +382,8 @@ const PTProfileDisplayScreen = () => {
 
   const renderStatsCard = (icon, value, label, color = appColors.primary) => (
     <View style={styles.statsCard}>
-      <View style={[styles.statsIconContainer, { backgroundColor: `${color}15` }]}>
+      <View
+        style={[styles.statsIconContainer, {backgroundColor: `${color}15`}]}>
         {icon}
       </View>
       <Text style={styles.statsValue}>{value}</Text>
@@ -191,12 +398,14 @@ const PTProfileDisplayScreen = () => {
   if (!profile) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor={appColors.primary}
+        />
         <View style={styles.header}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
+            onPress={() => navigation.goBack()}>
             <ArrowLeft size={24} color={appColors.white} strokeWidth={2} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Profile</Text>
@@ -204,13 +413,14 @@ const PTProfileDisplayScreen = () => {
         </View>
         <View style={styles.centeredContainer}>
           <Text style={styles.noProfileText}>
-            You haven't created your profile yet.
+            You haven't created your PT profile yet.
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.createProfileButton}
-            onPress={() => navigation.navigate('PTProfileEdit')}
-          >
-            <Text style={styles.createProfileButtonText}>Create Profile</Text>
+            onPress={() => navigation.navigate('PTProfileEdit')}>
+            <Text style={styles.createProfileButtonText}>
+              Create PT Profile
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -220,57 +430,71 @@ const PTProfileDisplayScreen = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-      
+
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+          onPress={() => navigation.goBack()}>
           <ArrowLeft size={24} color={appColors.white} strokeWidth={2} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.headerAction}
-          onPress={handleEditProfile}
-        >
+          onPress={handleEditPTProfile}>
           <Edit size={20} color={appColors.white} strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        bounces={true}
-      >
+        bounces={true}>
         {/* Profile Card */}
         <View style={styles.profileCard}>
           {/* Avatar Section */}
           <View style={styles.avatarSection}>
             <View style={styles.avatarContainer}>
               <Image
-                source={{
-                  uri: profile.avatar || 
-                    'https://ui-avatars.com/api/?name=' + 
-                    encodeURIComponent(profile.name || 'PT') + 
-                    '&background=0066CC&color=fff&size=120'
-                }}
+                source={
+                  userProfile?._tempImageBase64
+                    ? {uri: userProfile._tempImageBase64}
+                    : userProfile?.photoUrl
+                    ? {uri: userProfile.photoUrl, cache: 'reload'}
+                    : {
+                        uri: `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                          userProfile?.username || profile?.name || 'PT',
+                        )}&background=0066CC&color=fff&size=120`,
+                      }
+                }
                 style={styles.avatar}
+                onLoad={() => console.log('Image loaded successfully')}
+                onError={e =>
+                  console.log('Error loading image:', e.nativeEvent.error)
+                }
               />
-              <TouchableOpacity style={styles.cameraButton}>
+              <TouchableOpacity
+                style={styles.cameraButton}
+                onPress={handleUploadPhoto}>
                 <Camera size={16} color={appColors.white} strokeWidth={2} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.profileName}>{profile.name || 'Personal Trainer'}</Text>
+            <Text style={styles.profileName}>
+              {userProfile?.username || profile?.name || 'Personal Trainer'}
+            </Text>
             <Text style={styles.profileRole}>Personal Trainer</Text>
-            
+
             {/* Rating */}
             <View style={styles.ratingContainer}>
-              <Star size={16} color={appColors.warning} fill={appColors.warning} />
+              <Star
+                size={16}
+                color={appColors.warning}
+                fill={appColors.warning}
+              />
               <Text style={styles.ratingText}>
-                {stats.avgRating > 0 ? stats.avgRating.toFixed(1) : 'New'}
+                {stats.avgRating > 0 ? stats.avgRating : 'New'}
               </Text>
               <Text style={styles.ratingCount}>
                 ({stats.totalBookings} sessions)
@@ -289,19 +513,19 @@ const PTProfileDisplayScreen = () => {
               <Users size={20} color={appColors.primary} strokeWidth={2} />,
               stats.totalClients,
               'Clients',
-              appColors.primary
+              appColors.primary,
             )}
             {renderStatsCard(
               <Calendar size={20} color={appColors.success} strokeWidth={2} />,
               stats.totalBookings,
               'Sessions',
-              appColors.success
+              appColors.success,
             )}
             {renderStatsCard(
               <Award size={20} color={appColors.warning} strokeWidth={2} />,
               profile.experienceYears || 0,
               'Years Exp',
-              appColors.warning
+              appColors.warning,
             )}
           </View>
         </View>
@@ -323,13 +547,15 @@ const PTProfileDisplayScreen = () => {
         {/* Professional Info */}
         <SectionComponent>
           <Text style={styles.sectionTitle}>Professional Info</Text>
-          
+
           <View style={styles.infoRow}>
             <DollarSign size={20} color={appColors.gray} strokeWidth={2} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Hourly Rate</Text>
               <Text style={styles.infoValue}>
-                {profile.hourlyRate ? `${profile.hourlyRate.toLocaleString()} VND/hour` : 'Not set'}
+                {profile.hourlyRate
+                  ? `${profile.hourlyRate.toLocaleString()} VND/hour`
+                  : 'Not set'}
               </Text>
             </View>
           </View>
@@ -339,10 +565,9 @@ const PTProfileDisplayScreen = () => {
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Location</Text>
               <Text style={styles.infoValue}>
-                {profile.location ? 
-                  `${profile.location.district}, ${profile.location.city}` : 
-                  'Not set'
-                }
+                {profile.location
+                  ? `${profile.location.district}, ${profile.location.city}`
+                  : 'Not set'}
               </Text>
             </View>
           </View>
@@ -352,14 +577,44 @@ const PTProfileDisplayScreen = () => {
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Experience</Text>
               <Text style={styles.infoValue}>
-                {profile.experienceYears ? 
-                  `${profile.experienceYears} ${profile.experienceYears === 1 ? 'year' : 'years'}` : 
-                  'Not specified'
-                }
+                {profile.experienceYears
+                  ? `${profile.experienceYears} ${
+                      profile.experienceYears === 1 ? 'year' : 'years'
+                    }`
+                  : 'Not specified'}
               </Text>
             </View>
           </View>
         </SectionComponent>
+
+        {/* Contact Info */}
+        {userProfile && (
+          <SectionComponent>
+            <Text style={styles.sectionTitle}>Contact Information</Text>
+
+            <View style={styles.infoRow}>
+              <User size={20} color={appColors.gray} strokeWidth={2} />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>
+                  {userProfile.email || 'Not provided'}
+                </Text>
+              </View>
+            </View>
+
+            {userProfile.phoneNumber && (
+              <View style={styles.infoRow}>
+                <Clock size={20} color={appColors.gray} strokeWidth={2} />
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>Phone</Text>
+                  <Text style={styles.infoValue}>
+                    {userProfile.phoneNumber}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </SectionComponent>
+        )}
 
         {/* Languages */}
         {profile.languages && profile.languages.length > 0 && (
@@ -371,7 +626,6 @@ const PTProfileDisplayScreen = () => {
           </SectionComponent>
         )}
 
-        {/* Certifications */}
         {profile.certifications && profile.certifications.length > 0 && (
           <SectionComponent>
             <Text style={styles.sectionTitle}>Certifications</Text>
@@ -384,25 +638,60 @@ const PTProfileDisplayScreen = () => {
           </SectionComponent>
         )}
 
-        {/* Actions */}
         <SectionComponent>
-          <TouchableOpacity style={styles.actionButton} onPress={handleEditProfile}>
+          <Text style={styles.sectionTitle}>Profile Settings</Text>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleEditPTProfile}>
             <Edit size={20} color={appColors.primary} strokeWidth={2} />
-            <Text style={styles.actionButtonText}>Edit Profile</Text>
+            <Text style={styles.actionButtonText}>Edit PT Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleEditBasicProfile}>
+            <User size={20} color={appColors.info} strokeWidth={2} />
+            <Text style={styles.actionButtonText}>Edit Basic Info</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleChangePassword}>
+            <Lock size={20} color={appColors.gray} strokeWidth={2} />
+            <Text style={styles.actionButtonText}>Change Password</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton}>
             <Settings size={20} color={appColors.gray} strokeWidth={2} />
-            <Text style={styles.actionButtonText}>Settings</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.actionButton, styles.logoutButton]} onPress={handleLogout}>
-            <LogOut size={20} color={appColors.danger} strokeWidth={2} />
-            <Text style={[styles.actionButtonText, styles.logoutButtonText]}>Logout</Text>
+            <Text style={styles.actionButtonText}>App Settings</Text>
           </TouchableOpacity>
         </SectionComponent>
 
-        <View style={{ height: 120 }} />
+        {/* Account Actions */}
+        <SectionComponent>
+          <Text style={styles.sectionTitle}>Account Actions</Text>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.logoutButton]}
+            onPress={handleLogout}>
+            <LogOut size={20} color={appColors.danger} strokeWidth={2} />
+            <Text style={[styles.actionButtonText, styles.logoutButtonText]}>
+              Logout
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={handleDeleteAccount}>
+            <Trash size={20} color={appColors.danger} strokeWidth={2} />
+            <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
+              Delete Account
+            </Text>
+          </TouchableOpacity>
+        </SectionComponent>
+
+        <View style={{height: 120}} />
       </ScrollView>
     </View>
   );
@@ -410,6 +699,7 @@ const PTProfileDisplayScreen = () => {
 
 export default PTProfileDisplayScreen;
 
+// Add new styles for the updated actions
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -462,7 +752,7 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     paddingHorizontal: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
@@ -655,6 +945,13 @@ const styles = StyleSheet.create({
     backgroundColor: `${appColors.danger}05`,
   },
   logoutButtonText: {
+    color: appColors.danger,
+  },
+  deleteButton: {
+    borderColor: `${appColors.danger}30`,
+    backgroundColor: `${appColors.danger}05`,
+  },
+  deleteButtonText: {
     color: appColors.danger,
   },
   noProfileText: {

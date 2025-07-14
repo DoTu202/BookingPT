@@ -8,18 +8,17 @@ import PTTabNavigator from './PTTabNavigator';
 import DrawerNavigator from './DrawerNavigator';
 
 import {
+  EditProfileScreen,
   NotificationScreen,
-  ReviewScreen,
   ChatScreen,
   ChatListScreen,
+  ChangePasswordScreen
 } from '../screens/commonScreen';
 
 import {
   PTDetailScreen,
   PaymentScreen,
   ClientProfileScreen,
-  EditProfileScreen,
-  ChangePasswordScreen,
   SearchPtScreen,
   ClientBookingsScreen,
 } from '../screens/clientScreen';
@@ -74,6 +73,20 @@ const MainNavigator = () => {
           <Stack.Screen
             name="ChatListScreen"
             component={ChatListScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="EditProfileScreen"
+            component={EditProfileScreen}
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="ChangePasswordScreen"
+            component={ChangePasswordScreen}
             options={{
               headerShown: false,
             }}
@@ -154,15 +167,6 @@ const MainNavigator = () => {
             options={{
               headerShown: true,
               title: 'Chat',
-            }}
-          />
-
-          <Stack.Screen
-            name="Review"
-            component={ReviewScreen}
-            options={{
-              headerShown: true,
-              title: 'Write Review',
             }}
           />
 
