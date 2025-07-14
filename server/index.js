@@ -8,6 +8,8 @@ const ptRouter = require('./src/routers/ptRouter');
 const clientRouter = require('./src/routers/clientRouter');
 const notificationRouter = require('./src/routers/notificationRouter');
 const chatRouter = require('./src/routers/chatRouter');
+const profileRouter = require('./src/routers/profileRouter');
+const path = require('path');
 
 dotenv.config();
 const PORT = process.env.PORT || 3001; 
@@ -21,6 +23,9 @@ app.use('/api/pt', ptRouter);
 app.use('/api/client', clientRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/profile', profileRouter);
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 connectDB();
 
