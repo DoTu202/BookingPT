@@ -71,12 +71,12 @@ const ChatScreen = ({ navigation, route }) => {
       try {
         const response = await chatApi.getMessages(auth.accesstoken, chatRoomId);
         if (response.success) {
-          // Sắp xếp tin nhắn từ cũ đến mới (theo thứ tự thời gian)
+          // Sort messages from oldest to newest
           const sortedMessages = [...(response.data.messages || [])].sort(
             (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
           );
           
-          // Kiểm tra xem có tin nhắn mới không
+          // Check if there are new messages
           const shouldScroll = 
             messages.length < sortedMessages.length ||
             (sortedMessages.length > 0 && 
@@ -85,7 +85,7 @@ const ChatScreen = ({ navigation, route }) => {
             
           setMessages(sortedMessages);
           
-          // Scroll xuống nếu có tin nhắn mới
+          // Scroll to bottom if there are new messages
           if (shouldScroll) {
             setTimeout(() => {
               scrollToBottom();

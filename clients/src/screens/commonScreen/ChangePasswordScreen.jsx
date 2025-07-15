@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
   StyleSheet,
   View,
@@ -7,14 +7,9 @@ import {
   Alert,
   StatusBar,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  ArrowLeft,
-  Lock,
-  Eye,
-  EyeOff,
-} from 'iconsax-react-native';
+import {useNavigation} from '@react-navigation/native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {ArrowLeft, LockCircle, Eye, EyeOff} from 'iconsax-react-native';
 import {
   TextComponent,
   InputComponent,
@@ -25,7 +20,7 @@ import {
 } from '../../components';
 import LoadingModal from '../../modals/LoadingModal';
 import appColors from '../../constants/appColors';
-import { fontFamilies } from '../../constants/fontFamilies';
+import {fontFamilies} from '../../constants/fontFamilies';
 import profileApi from '../../apis/profileApi';
 
 const ChangePasswordScreen = () => {
@@ -42,7 +37,7 @@ const ChangePasswordScreen = () => {
     confirmPassword: '',
   });
 
-  const togglePasswordVisibility = (field) => {
+  const togglePasswordVisibility = field => {
     setShowPasswords(prev => ({
       ...prev,
       [field]: !prev[field],
@@ -90,7 +85,8 @@ const ChangePasswordScreen = () => {
       }
     } catch (error) {
       console.error('Error changing password:', error);
-      const message = error.response?.data?.message || 'Failed to change password';
+      const message =
+        error.response?.data?.message || 'Failed to change password';
       Alert.alert('Error', message);
     } finally {
       setLoading(false);
@@ -113,15 +109,16 @@ const ChangePasswordScreen = () => {
       <View style={styles.header}>
         <RowComponent justify="space-between">
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft size={24} color={appColors.white} />
+            <ArrowLeft size={24} color={appColors.white} style={{marginTop: 40}} />
           </TouchableOpacity>
           <TextComponent
             text="Change Password"
-            size={18}
-            font={fontFamilies.semiBold}
+            size={20}
+            font={fontFamilies.bold}
             color={appColors.white}
+            styles={{marginTop: 40}}
           />
-          <View style={{ width: 24 }} />
+          <View style={{width: 24}} />
         </RowComponent>
       </View>
 
@@ -144,19 +141,11 @@ const ChangePasswordScreen = () => {
           {/* Current Password */}
           <InputComponent
             value={formData.currentPassword}
-            onChangeText={(text) => updateFormData('currentPassword', text)}
+            onChangeText={text => updateFormData('currentPassword', text)}
             placeholder="Current password"
             isPassword
-            prefix={<Lock size={20} color={appColors.gray} />}
-            suffix={
-              <TouchableOpacity onPress={() => togglePasswordVisibility('current')}>
-                {showPasswords.current ? (
-                  <EyeOff size={20} color={appColors.gray} />
-                ) : (
-                  <Eye size={20} color={appColors.gray} />
-                )}
-              </TouchableOpacity>
-            }
+            allowClear
+            affix={<LockCircle size={20} color={appColors.gray} />}
             secureTextEntry={!showPasswords.current}
           />
           <SpaceComponent height={16} />
@@ -164,19 +153,11 @@ const ChangePasswordScreen = () => {
           {/* New Password */}
           <InputComponent
             value={formData.newPassword}
-            onChangeText={(text) => updateFormData('newPassword', text)}
+            onChangeText={text => updateFormData('newPassword', text)}
             placeholder="New password"
             isPassword
-            prefix={<Lock size={20} color={appColors.gray} />}
-            suffix={
-              <TouchableOpacity onPress={() => togglePasswordVisibility('new')}>
-                {showPasswords.new ? (
-                  <EyeOff size={20} color={appColors.gray} />
-                ) : (
-                  <Eye size={20} color={appColors.gray} />
-                )}
-              </TouchableOpacity>
-            }
+            allowClear
+            affix={<LockCircle size={20} color={appColors.gray} />}
             secureTextEntry={!showPasswords.new}
           />
           <SpaceComponent height={16} />
@@ -184,25 +165,16 @@ const ChangePasswordScreen = () => {
           {/* Confirm Password */}
           <InputComponent
             value={formData.confirmPassword}
-            onChangeText={(text) => updateFormData('confirmPassword', text)}
+            onChangeText={text => updateFormData('confirmPassword', text)}
             placeholder="Confirm new password"
             isPassword
-            prefix={<Lock size={20} color={appColors.gray} />}
-            suffix={
-              <TouchableOpacity onPress={() => togglePasswordVisibility('confirm')}>
-                {showPasswords.confirm ? (
-                  <EyeOff size={20} color={appColors.gray} />
-                ) : (
-                  <Eye size={20} color={appColors.gray} />
-                )}
-              </TouchableOpacity>
-            }
+            allowClear
+            affix={<LockCircle size={20} color={appColors.gray} />}
             secureTextEntry={!showPasswords.confirm}
           />
 
           <SpaceComponent height={20} />
 
-          {/* Password Requirements */}
           <View style={styles.requirementsContainer}>
             <TextComponent
               text="Password requirements:"
@@ -230,7 +202,7 @@ const ChangePasswordScreen = () => {
             type="primary"
             onPress={handleChangePassword}
             loading={loading}
-            icon={<Lock size={20} color={appColors.white} />}
+            icon={<LockCircle size={20} color={appColors.white} />}
           />
         </SectionComponent>
 
@@ -248,9 +220,10 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: appColors.primary,
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    paddingBottom: 20,
+    paddingTop: 20,
+    height: 140,
+    borderRadius: 20,
   },
   content: {
     flex: 1,

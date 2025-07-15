@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {ArrowLeft, Save, User, Sms, Call, Calendar} from 'iconsax-react-native';
+import {ArrowLeft, TickSquare, User, Sms, Call, Calendar, DocumentUpload} from 'iconsax-react-native';
 import {
   TextComponent,
   InputComponent,
@@ -177,16 +177,17 @@ const EditProfileScreen = () => {
       <View style={styles.header}>
         <RowComponent justify="space-between">
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft size={24} color={appColors.white} />
+            <ArrowLeft size={24} color={appColors.white} style={{marginTop: 40}} />
           </TouchableOpacity>
           <TextComponent
             text="Edit Profile"
-            size={18}
-            font={fontFamilies.semiBold}
+            size={20}
+            font={fontFamilies.bold}
             color={appColors.white}
+            styles={{marginTop: 40}}
           />
           <TouchableOpacity onPress={handleSave} disabled={saving}>
-            <Save size={24} color={appColors.white} />
+            <DocumentUpload size={24} color={appColors.white} style={{marginTop: 40}} />
           </TouchableOpacity>
         </RowComponent>
       </View>
@@ -254,7 +255,7 @@ const EditProfileScreen = () => {
               type="primary"
               onPress={handleSave}
               loading={saving}
-              icon={<Save size={20} color={appColors.white} />}
+              icon={<TickSquare size={20} color={appColors.white} />}
             />
           </SectionComponent>
 
@@ -273,9 +274,10 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: appColors.primary,
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    paddingBottom: 20,
+    paddingTop: 20,
+    height: 140,
+    borderRadius: 20,
   },
   content: {
     flex: 1,

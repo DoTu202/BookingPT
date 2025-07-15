@@ -16,6 +16,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import notificationApi from '../../apis/notificationApi';
 import { authSelector } from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
+import { fontFamilies } from '../../constants/fontFamilies';
 
 const NotificationScreen = ({ navigation }) => {
   const auth = useSelector(authSelector);
@@ -23,7 +24,7 @@ const NotificationScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Lấy danh sách thông báo từ API
+  // Fetch notifications from API
   const fetchNotifications = async () => {
     try {
       setLoading(true);
@@ -40,12 +41,12 @@ const NotificationScreen = ({ navigation }) => {
     }
   };
 
-  // Đánh dấu thông báo đã đọc
+  // Handle notification click
   const markAsRead = async (notificationId) => {
     try {
       await notificationApi.markAsRead(auth.accesstoken, notificationId);
       
-      // Cập nhật local state
+      // Update local state to mark notification as read
       setNotifications(prev => 
         prev.map(notif => 
           notif._id === notificationId 
@@ -58,7 +59,7 @@ const NotificationScreen = ({ navigation }) => {
     }
   };
 
-  // Đánh dấu tất cả thông báo đã đọc
+  // 
   const markAllAsRead = async () => {
     try {
       await notificationApi.markAllAsRead(auth.accesstoken);
@@ -72,14 +73,14 @@ const NotificationScreen = ({ navigation }) => {
     }
   };
 
-  // Refresh danh sách thông báo
+  // Refresh notification list
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchNotifications();
     setRefreshing(false);
   };
 
-  // Định dạng thời gian hiển thị
+  // Format notification time
   const formatTime = (date) => {
     if (!date) return '';
     
@@ -97,7 +98,7 @@ const NotificationScreen = ({ navigation }) => {
     return `${diffInDays}d ago`;
   };
 
-  // Lấy icon theo loại thông báo
+  // Get notification icon based on type
   const getNotificationIcon = (type) => {
     switch (type) {
       case 'booking_confirmed': return 'check-circle';
@@ -109,7 +110,7 @@ const NotificationScreen = ({ navigation }) => {
     }
   };
 
-  // Render một item thông báo
+  // Render notification item
   const renderNotificationItem = ({ item }) => (
     <TouchableOpacity 
       style={[
@@ -241,11 +242,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontFamily: fontFamilies.bold,
     color: 'white',
     flex: 1,
     textAlign: 'center',
-    marginRight: 40, // Để cân bằng với back button
+    marginRight: 40, 
   },
   markAllButton: {
     paddingHorizontal: 14,

@@ -12,7 +12,7 @@ import {
   NotificationScreen,
   ChatScreen,
   ChatListScreen,
-  ChangePasswordScreen
+  ChangePasswordScreen,
 } from '../screens/commonScreen';
 
 import {
@@ -93,8 +93,6 @@ const MainNavigator = () => {
           />
         </>
       ) : (
-        
-        
         //CLIENT FLOW
         <>
           <Stack.Screen
@@ -134,23 +132,10 @@ const MainNavigator = () => {
             name="PTDetailScreen"
             component={PTDetailScreen}
             options={{
-              headerShown: true,
-              title: 'Trainer Profile',
-              headerTintColor: appColors.white,
-              headerStyle: {
-                backgroundColor: appColors.primary,
-              },
+              headerShown: false,
             }}
           />
 
-          <Stack.Screen
-            name="Payment"
-            component={PaymentScreen}
-            options={{
-              headerShown: true,
-              title: 'Payment',
-            }}
-          />
 
           {/* client common screen  */}
           <Stack.Screen
