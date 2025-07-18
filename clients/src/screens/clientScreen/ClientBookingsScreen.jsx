@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, {useState, useEffect} from 'react';
 
 import {
   StyleSheet,
@@ -17,17 +17,25 @@ import {
   CardComponent,
   SpaceComponent,
 } from '../../components';
-import { Calendar, Clock, User, More, Refresh2, MessageCircle, CloseCircle } from 'iconsax-react-native';
+import {
+  Calendar,
+  Clock,
+  User,
+  More,
+  Refresh2,
+  MessageCircle,
+  CloseCircle,
+} from 'iconsax-react-native';
 import dayjs from 'dayjs';
 import appColors from '../../constants/appColors';
 import clientApi from '../../apis/clientApi';
-import { timeUtils } from '../../utils/timeUtils';
-import { useSelector } from 'react-redux';
-import { authSelector } from '../../redux/reducers/authReducer';
+import {timeUtils} from '../../utils/timeUtils';
+import {useSelector} from 'react-redux';
+import {authSelector} from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import chatApi from '../../apis/chatApi';
 
-const ClientBookingsScreen = ({ navigation }) => {
+const ClientBookingsScreen = ({navigation}) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,32 +49,19 @@ const ClientBookingsScreen = ({ navigation }) => {
 
   const loadBookings = async () => {
     try {
-      console.log('User role:', currentUser?.role);
-      console.log('User ID:', currentUser?.id);
-      
       // Check AsyncStorage token
       const authData = await AsyncStorage.getItem('auth');
       if (authData) {
         const parsedAuth = JSON.parse(authData);
-        console.log('Token from storage:', parsedAuth.accesstoken || parsedAuth.token);
-        console.log('Role from storage:', parsedAuth.role);
       }
-      
       setLoading(true);
       const response = await clientApi.getMyBookings();
-      
-      console.log('My bookings response:', response.data);
-      console.log('Response.data.data array:', response.data.data);
-      console.log('First booking detail:', JSON.stringify(response.data.data[0], null, 2));
-      
+
       if (response.data?.data && Array.isArray(response.data.data)) {
-        console.log('Setting bookings from data.data:', response.data.data.length, 'items');
         setBookings(response.data.data);
       } else if (Array.isArray(response.data)) {
-        console.log('Setting bookings from data:', response.data.length, 'items');
         setBookings(response.data);
       } else {
-        console.log('No valid bookings data found, setting empty array');
         setBookings([]);
       }
     } catch (error) {
@@ -83,7 +78,7 @@ const ClientBookingsScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = status => {
     switch (status) {
       case 'confirmed':
         return appColors.success;
@@ -100,7 +95,7 @@ const ClientBookingsScreen = ({ navigation }) => {
     }
   };
 
-  const getStatusText = (status) => {
+  const getStatusText = status => {
     switch (status) {
       case 'confirmed':
         return 'Confirmed';
@@ -119,12 +114,12 @@ const ClientBookingsScreen = ({ navigation }) => {
     }
   };
 
-  const handleCancelBooking = (booking) => {
+  const handleCancelBooking = booking => {
     Alert.alert(
       'Cancel Booking',
       'Are you sure you want to cancel this booking?',
       [
-        { text: 'No', style: 'cancel' },
+        {text: 'No', style: 'cancel'},
         {
           text: 'Yes, Cancel',
           style: 'destructive',
@@ -132,28 +127,26 @@ const ClientBookingsScreen = ({ navigation }) => {
             try {
               await clientApi.cancelBooking(booking._id);
               Alert.alert('Success', 'Booking cancelled successfully');
-              loadBookings(); // Refresh list
+              loadBookings();
             } catch (error) {
               console.error('Error cancelling booking:', error);
               Alert.alert('Error', 'Failed to cancel booking');
             }
           },
         },
-      ]
+      ],
     );
   };
 
-  const handleStartChat = async (ptId) => {
+  const handleStartChat = async ptId => {
     try {
       setLoading(true);
-      // Get or create chat room with PT
       const response = await chatApi.startChat(currentUser.accesstoken, ptId);
-      
+
       if (response.success) {
-        // Navigate to chat screen
         navigation.navigate('ChatScreen', {
           chatRoomId: response.data._id,
-          otherUser: response.data.ptUser
+          otherUser: response.data.ptUser,
         });
       }
     } catch (error) {
@@ -167,8 +160,10 @@ const ClientBookingsScreen = ({ navigation }) => {
   const renderBookingItem = (booking, index) => {
     const startTime = dayjs(booking.bookingTime?.startTime);
     const endTime = dayjs(booking.bookingTime?.endTime);
-    const canCancel = booking.status === 'pending_confirmation' || booking.status === 'confirmed';
-    
+    const canCancel =
+      booking.status === 'pending_confirmation' ||
+      booking.status === 'confirmed';
+
     return (
       <CardComponent key={booking._id || index} styles={styles.bookingCard}>
         {/* Header with PT info and status */}
@@ -196,7 +191,11 @@ const ClientBookingsScreen = ({ navigation }) => {
               />
             </View>
           </RowComponent>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
+          <View
+            style={[
+              styles.statusBadge,
+              {backgroundColor: getStatusColor(booking.status)},
+            ]}>
             <TextComponent
               text={getStatusText(booking.status)}
               size={12}
@@ -214,20 +213,26 @@ const ClientBookingsScreen = ({ navigation }) => {
             <Calendar size={16} color={appColors.primary} />
             <SpaceComponent width={8} />
             <TextComponent
-              text={startTime.tz('Asia/Ho_Chi_Minh').format('dddd, MMM DD, YYYY')}
+              text={startTime
+                .tz('Asia/Ho_Chi_Minh')
+                .format('dddd, MMM DD, YYYY')}
               size={14}
               color={appColors.black}
               font="Poppins-Medium"
             />
           </RowComponent>
-          
+
           <SpaceComponent height={8} />
-          
+
           <RowComponent>
             <Clock size={16} color={appColors.primary} />
             <SpaceComponent width={8} />
             <TextComponent
-              text={`${timeUtils.formatToVietnameseTime(booking.bookingTime?.startTime)} - ${timeUtils.formatToVietnameseTime(booking.bookingTime?.endTime)}`}
+              text={`${timeUtils.formatToVietnameseTime(
+                booking.bookingTime?.startTime,
+              )} - ${timeUtils.formatToVietnameseTime(
+                booking.bookingTime?.endTime,
+              )}`}
               size={14}
               color={appColors.black}
               font="Poppins-Medium"
@@ -245,11 +250,7 @@ const ClientBookingsScreen = ({ navigation }) => {
           <SpaceComponent height={8} />
 
           <RowComponent justify="space-between">
-            <TextComponent
-              text="Total:"
-              size={14}
-              color={appColors.gray}
-            />
+            <TextComponent text="Total:" size={14} color={appColors.gray} />
             <TextComponent
               text={`${(booking.priceAtBooking || 0).toLocaleString()} VND`}
               size={16}
@@ -286,10 +287,13 @@ const ClientBookingsScreen = ({ navigation }) => {
             <RowComponent justify="space-between">
               <TouchableOpacity
                 style={[styles.actionButton, styles.cancelButton]}
-                onPress={() => handleCancelBooking(booking)}
-              >
+                onPress={() => handleCancelBooking(booking)}>
                 <RowComponent justify="center">
-                  <CloseCircle size={16} color={appColors.white} variant="Bold" />
+                  <CloseCircle
+                    size={16}
+                    color={appColors.white}
+                    variant="Bold"
+                  />
                   <SpaceComponent width={8} />
                   <TextComponent
                     text="Cancel"
@@ -299,13 +303,16 @@ const ClientBookingsScreen = ({ navigation }) => {
                   />
                 </RowComponent>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={[styles.actionButton, styles.chatButtonAction]}
-                onPress={() => handleStartChat(booking.pt?._id)}
-              >
+                onPress={() => handleStartChat(booking.pt?._id)}>
                 <RowComponent justify="center">
-                  <MessageCircle size={16} color={appColors.white} variant="Bold" />
+                  <MessageCircle
+                    size={16}
+                    color={appColors.white}
+                    variant="Bold"
+                  />
                   <SpaceComponent width={8} />
                   <TextComponent
                     text="Chat"
@@ -318,30 +325,34 @@ const ClientBookingsScreen = ({ navigation }) => {
             </RowComponent>
           </>
         )}
-        
+
         {/* Chat button for completed/confirmed bookings */}
-        {(booking.status === 'confirmed' || booking.status === 'completed') && !canCancel && (
-          <>
-            <SpaceComponent height={16} />
-            <RowComponent justify="center">
-              <TouchableOpacity
-                style={[styles.actionButton, styles.chatButtonSingle]}
-                onPress={() => handleStartChat(booking.pt?._id)}
-              >
-                <RowComponent justify="center">
-                  <MessageCircle size={18} color={appColors.white} variant="Bold" />
-                  <SpaceComponent width={8} />
-                  <TextComponent
-                    text="Chat with PT"
-                    size={14}
-                    color={appColors.white}
-                    font="Poppins-SemiBold"
-                  />
-                </RowComponent>
-              </TouchableOpacity>
-            </RowComponent>
-          </>
-        )}
+        {(booking.status === 'confirmed' || booking.status === 'completed') &&
+          !canCancel && (
+            <>
+              <SpaceComponent height={16} />
+              <RowComponent justify="center">
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.chatButtonSingle]}
+                  onPress={() => handleStartChat(booking.pt?._id)}>
+                  <RowComponent justify="center">
+                    <MessageCircle
+                      size={18}
+                      color={appColors.white}
+                      variant="Bold"
+                    />
+                    <SpaceComponent width={8} />
+                    <TextComponent
+                      text="Chat with PT"
+                      size={14}
+                      color={appColors.white}
+                      font="Poppins-SemiBold"
+                    />
+                  </RowComponent>
+                </TouchableOpacity>
+              </RowComponent>
+            </>
+          )}
       </CardComponent>
     );
   };
@@ -350,7 +361,10 @@ const ClientBookingsScreen = ({ navigation }) => {
     return (
       <View style={styles.container}>
         <View style={styles.loadingContainer}>
-          <TextComponent text="Loading your bookings..." color={appColors.gray} />
+          <TextComponent
+            text="Loading your bookings..."
+            color={appColors.gray}
+          />
         </View>
       </View>
     );
@@ -364,8 +378,7 @@ const ClientBookingsScreen = ({ navigation }) => {
           <RowComponent>
             <TouchableOpacity
               onPress={() => navigation.goBack()}
-              style={styles.backButton}
-            >
+              style={styles.backButton}>
               <TextComponent
                 text="←"
                 size={24}
@@ -397,8 +410,7 @@ const ClientBookingsScreen = ({ navigation }) => {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        contentContainerStyle={styles.scrollContent}
-      >
+        contentContainerStyle={styles.scrollContent}>
         <SectionComponent>
           <TextComponent
             text="Manage your training sessions"
@@ -429,14 +441,14 @@ const ClientBookingsScreen = ({ navigation }) => {
               size={18}
               font="Poppins-SemiBold"
               color={appColors.gray}
-              styles={{ textAlign: 'center' }}
+              styles={{textAlign: 'center'}}
             />
             <SpaceComponent height={8} />
             <TextComponent
               text="Start booking sessions with personal trainers"
               size={14}
               color={appColors.gray}
-              styles={{ textAlign: 'center' }}
+              styles={{textAlign: 'center'}}
             />
             <SpaceComponent height={20} />
             <ButtonComponent

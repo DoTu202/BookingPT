@@ -75,7 +75,7 @@ const ChatListScreen = ({navigation}) => {
     return `${diffInDays}d`;
   };
 
-  // Render một item chat
+  // Render each chat item
   const renderChatItem = ({item}) => {
     const otherUser = getOtherUser(item);
 

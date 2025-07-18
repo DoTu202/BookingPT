@@ -50,7 +50,7 @@ const SearchPtScreen = ({navigation, route}) => {
   });
   const [refreshing, setRefreshing] = useState(false);
 
-  // Searc h PTs when the screen loads or when searchQuery or filters change
+  // Search PTs when the screen loads or when searchQuery or filters change
   useEffect(() => {
     const handler = setTimeout(() => {
       searchPTs();
@@ -365,7 +365,7 @@ const SearchPtScreen = ({navigation, route}) => {
               style={styles.applyFiltersButton}
               onPress={() => {
                 setShowFilters(false);
-                searchPTs(); // Gọi ngay lập tức để áp dụng bộ lọc
+                searchPTs();
               }}>
               <TextComponent
                 text="Apply Filters"
@@ -483,7 +483,6 @@ const SearchPtScreen = ({navigation, route}) => {
                 </RowComponent>
               </RowComponent>
 
-              {/* Hiển thị các bộ lọc đang được áp dụng */}
               {(filters.specialization ||
                 filters.location ||
                 filters.minRate ||

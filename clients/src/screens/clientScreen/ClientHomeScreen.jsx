@@ -74,7 +74,6 @@ const ClientHomeScreen = ({navigation}) => {
       } else if (response.data && Array.isArray(response.data)) {
         setPtList(response.data);
       } else {
-        console.log('Unexpected response format:', response);
         setError('Failed to load trainers');
       }
     } catch (err) {
@@ -182,7 +181,7 @@ const ClientHomeScreen = ({navigation}) => {
           {/* Welcome Message */}
           <View style={styles.welcomeSection}>
             <TextComponent
-              text={`Hello, ${auth.username || 'User'}! 👋`}
+              text={`Hello, ${auth.username || 'User'}! `}
               color={appColors.white}
               size={24}
               font={fontFamilies.bold}

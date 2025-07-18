@@ -19,6 +19,7 @@ import { authSelector } from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
 import { timeUtils } from '../../utils/timeUtils';
 import { fontFamilies } from '../../constants/fontFamilies';
+import profileApi from '../../apis/profileApi';
 
 const ChatScreen = ({ navigation, route }) => {
   const { chatRoomId, otherUser } = route.params;
@@ -121,8 +122,6 @@ const ChatScreen = ({ navigation, route }) => {
       if (response.success) {
         // Add the new message to the list
         setMessages(prev => [...prev, response.data]);
-        
-        // Scroll to the bottom after sending
         setTimeout(() => {
           scrollToBottom();
         }, 100);
@@ -142,7 +141,6 @@ const ChatScreen = ({ navigation, route }) => {
     return timeUtils.formatMessageTime(date);
   };
 
-  // Render a message
   const renderMessage = ({ item }) => {
     const isMyMessage = item.sender._id === auth.id;
     
@@ -172,6 +170,7 @@ const ChatScreen = ({ navigation, route }) => {
     );
   };
 
+  // Load messages and start polling when the component mounts
   useEffect(() => {
     loadMessages();
     startPolling();

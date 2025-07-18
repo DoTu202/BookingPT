@@ -65,15 +65,16 @@ const LoginScreen = ({navigation}) => {
 
         const authData = res.data.data || res.data;
         dispatch(addAuth(authData));
-        await AsyncStorage.setItem(
-          'auth',
-          isRemember ? JSON.stringify(authData) : email,
-        );
+        if (isRemember) {
+          await AsyncStorage.setItem('auth', JSON.stringify(authData));
+        } else {
+          await AsyncStorage.removeItem('auth');
+        }
       } catch (error) {
         console.log(error);
       }
     } else {
-      setErrorMessage('Email is not valid');
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
     }
   };
 

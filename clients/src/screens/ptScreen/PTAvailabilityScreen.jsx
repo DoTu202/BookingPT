@@ -62,7 +62,6 @@ const PTAvailabilityScreen = ({navigation}) => {
     try {
       setLoading(true);
       const dateString = dayjs(selectedDate).format('YYYY-MM-DD');
-
       const response = await ptApi.getAvailabilitySlots({date: dateString});
 
       // API returns an array of availability slots with startTime and endTime as UTC ISO strings
@@ -125,7 +124,6 @@ const PTAvailabilityScreen = ({navigation}) => {
   };
 
   const handleDeleteSlot = async slotId => {
-    // Logic to delete remains unchanged
     Alert.alert(
       'Delete Time Slot',
       'Are you sure you want to delete this time slot?',

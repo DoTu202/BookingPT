@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     backgroundColor: appColors.primary,
     paddingHorizontal: 16,
     paddingBottom: 20,
-    paddingTop: 50, // Thêm padding top để tránh status bar
+    paddingTop: 70, 
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

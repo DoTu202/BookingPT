@@ -197,7 +197,7 @@ const PTDetailScreen = ({navigation, route}) => {
             selectedSlot.startTime,
           )} - ${timeUtils.formatToVietnameseTime(
             selectedSlot.endTime,
-          )}\nDate: ${timeUtils.formatToVietnameseDate(
+          )}\nDate: ${timeUtils.formatToEnglishDate(
             selectedDate,
           )}\nTotal: ${sessionDetails.totalPrice.toLocaleString()} VND\n\nThe trainer will confirm your booking soon.`,
           [

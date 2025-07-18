@@ -29,7 +29,7 @@ import {
 } from 'iconsax-react-native';
 import {fontFamilies} from '../../constants/fontFamilies';
 
-// --- DỮ LIỆU MẪU ---
+//Mock data
 const progressData = {
   weight: {value: '72.5', unit: 'kg', change: '-1.5kg'},
   bodyFat: {value: '18.2', unit: '%', change: '-0.8%'},
@@ -124,7 +124,7 @@ const ProgressScreen = ({navigation}) => {
     <View style={{flex: 1, backgroundColor: appColors.white}}>
       <StatusBar barStyle={'light-content'} />
 
-      {/* --- HEADER --- */}
+
       <View style={styles.header}>
         <RowComponent>
           <TouchableOpacity onPress={() => navigation.openDrawer()}>
@@ -139,7 +139,6 @@ const ProgressScreen = ({navigation}) => {
         </RowComponent>
       </View>
 
-      {/* --- NỘI DUNG CHÍNH --- */}
       <ScrollView showsVerticalScrollIndicator={false} style={{flex: 1}}>
         {!hasData ? (
             <View style={styles.emptyContainer}>
@@ -156,7 +155,7 @@ const ProgressScreen = ({navigation}) => {
             </View>
         ) : (
             <View>
-                {/* Phần các chỉ số tổng quan */}
+
                 <TagBarComponent title="Overall Stats" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal: 20}}>
                     <StatCard icon={<Weight size="20" color={appColors.primary}/>} {...progressData.weight} name="Weight"/>
@@ -166,7 +165,7 @@ const ProgressScreen = ({navigation}) => {
                     <StatCard icon={<Heart size="20" color={appColors.primary}/>} {...progressData.bmi} name="BMI"/>
                 </ScrollView>
 
-                {/* Phần hoạt động gần đây */}
+  
                 <TagBarComponent title="Recent Activity" />
                 <View style={{paddingHorizontal: 20}}>
                     {activityData.map(item => <ActivityItem item={item} key={item.id}/>)}

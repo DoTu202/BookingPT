@@ -57,7 +57,6 @@ const ClientProfileScreen = ({navigation}) => {
     memberSince: 'December 2024',
   });
 
-  // Load user profile when component mounts
   useEffect(() => {
     loadUserProfile();
     loadUserStats();
@@ -66,22 +65,19 @@ const ClientProfileScreen = ({navigation}) => {
   const loadUserProfile = async () => {
     try {
       setLoading(true);
-      console.log('ClientProfileScreen: Loading user profile...');
       const response = await profileApi.getProfile();
 
       if (response.data?.success) {
         const userData = response.data.data || response.data;
-        console.log('ClientProfileScreen: Profile data loaded:', userData);
 
         if (userData.photoUrl) {
           const timestamp = new Date().getTime();
           userData.photoUrl = `${userData.photoUrl}?t=${timestamp}`;
 
-    
           if (userData.photoUrl.includes('your-api-domain.com')) {
             userData.photoUrl = userData.photoUrl.replace(
               'http://your-api-domain.com',
-              'http://localhost:3001', 
+              'http://localhost:3001',
             );
           }
         }
@@ -97,8 +93,6 @@ const ClientProfileScreen = ({navigation}) => {
 
   const loadUserStats = async () => {
     try {
-      console.log('ClientProfileScreen: Loading user stats...');
-
       // Determine member since date
       const memberSince = profile?.createdAt
         ? formatJoinDate(profile.createdAt)
@@ -108,13 +102,11 @@ const ClientProfileScreen = ({navigation}) => {
       const bookingResponse = await clientApi.getMyBookings();
       const bookings = bookingResponse.data?.data || [];
 
-      console.log(`ClientProfileScreen: Found ${bookings.length} bookings`);
-
       // Filter completed bookings
       const completedBookings = bookings.filter(b => b.status === 'completed');
       const totalWorkouts = completedBookings.length;
 
-      // Calculate total hours 
+      // Calculate total hours
       let totalHours = 0;
       completedBookings.forEach(booking => {
         totalHours += 1;
@@ -179,15 +171,10 @@ const ClientProfileScreen = ({navigation}) => {
 
     launchImageLibrary(options, async response => {
       if (response.didCancel) {
-        console.log('ClientProfileScreen: User cancelled image picker');
         return;
       }
 
       if (response.errorCode) {
-        console.log(
-          'ClientProfileScreen: ImagePicker Error:',
-          response.errorMessage,
-        );
         Alert.alert('Error', 'Could not select image. Please try again.');
         return;
       }
@@ -426,7 +413,7 @@ const ClientProfileScreen = ({navigation}) => {
     );
   };
 
-  const isPremium = false; 
+  const isPremium = false;
 
   return (
     <View style={styles.container}>

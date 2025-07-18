@@ -2,9 +2,9 @@ import axiosClient from './axiosClient';
 
 const clientApi = {
   // PT Search and Information
-  searchPTs: async (params = {}) => {
+  searchPTs: async (params = {}, config = {}) => {
     const url = '/api/client/pt';
-    return axiosClient.get(url, { params });
+    return axiosClient.get(url, { params, ...config });
   },
 
   getPTProfile: async (ptId) => {

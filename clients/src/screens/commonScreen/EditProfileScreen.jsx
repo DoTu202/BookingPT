@@ -11,7 +11,15 @@ import {
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {ArrowLeft, TickSquare, User, Sms, Call, Calendar, DocumentUpload} from 'iconsax-react-native';
+import {
+  ArrowLeft,
+  TickSquare,
+  User,
+  Sms,
+  Call,
+  Calendar,
+  DocumentUpload,
+} from 'iconsax-react-native';
 import {
   TextComponent,
   InputComponent,
@@ -48,7 +56,6 @@ const EditProfileScreen = () => {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      console.log('Loading profile data...');
       const response = await profileApi.getProfile();
 
       if (response.data?.success) {
@@ -105,7 +112,6 @@ const EditProfileScreen = () => {
       Alert.alert('Error', 'Date of birth should be in YYYY-MM-DD format');
       return;
     }
-
     try {
       setSaving(true);
       console.log('Saving profile data...');
@@ -177,7 +183,11 @@ const EditProfileScreen = () => {
       <View style={styles.header}>
         <RowComponent justify="space-between">
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft size={24} color={appColors.white} style={{marginTop: 40}} />
+            <ArrowLeft
+              size={24}
+              color={appColors.white}
+              style={{marginTop: 40}}
+            />
           </TouchableOpacity>
           <TextComponent
             text="Edit Profile"
@@ -187,7 +197,11 @@ const EditProfileScreen = () => {
             styles={{marginTop: 40}}
           />
           <TouchableOpacity onPress={handleSave} disabled={saving}>
-            <DocumentUpload size={24} color={appColors.white} style={{marginTop: 40}} />
+            <DocumentUpload
+              size={24}
+              color={appColors.white}
+              style={{marginTop: 40}}
+            />
           </TouchableOpacity>
         </RowComponent>
       </View>
