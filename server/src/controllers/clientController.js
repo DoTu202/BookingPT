@@ -1,9 +1,9 @@
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcrypt');
 const User = require('../models/userModel');
-const PTProfile = require('../models/PTProfileModel'); 
+const PTProfile = require('../models/PTProfileModel');
 const Availability = require('../models/AvailabilityModel');
-const { createNotification } = require('./notificationController');
+const {createNotification} = require('./notificationController');
 const Booking = require('../models/bookingModel');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
@@ -26,7 +26,6 @@ const searchPTs = asyncHandler(async (req, res) => {
   const pageSize = parseInt(req.query.pageSize) || 10;
   const page = parseInt(req.query.pageNumber) || 1;
 
-  // Validate sortBy and order
   const profileQueryConditions = {};
 
   if (specialization) {
@@ -38,96 +37,80 @@ const searchPTs = asyncHandler(async (req, res) => {
   if (location) {
     profileQueryConditions.location = {$regex: location, $options: 'i'};
   }
-  if (minRate) {
-    profileQueryConditions.hourlyRate = {
-      ...profileQueryConditions.hourlyRate,
-      $gte: parseFloat(minRate),
-    };
+  if (minRate || maxRate) {
+    profileQueryConditions.hourlyRate = {};
+    if (minRate) {
+      profileQueryConditions.hourlyRate.$gte = parseFloat(minRate);
+    }
+    if (maxRate) {
+      profileQueryConditions.hourlyRate.$lte = parseFloat(maxRate);
+    }
   }
-  if (maxRate) {
-    profileQueryConditions.hourlyRate = {
-      ...profileQueryConditions.hourlyRate,
-      $lte: parseFloat(maxRate),
-    };
-  }
+  //
+  const userIdFilters = [];
 
-  // Filter PTs by name if provided
-  const userQueryConditions = {role: 'pt'};
+  // Filter PT username
   if (name) {
-    userQueryConditions.username = {$regex: name, $options: 'i'};
+    const usersFound = await User.find({
+      role: 'pt',
+      username: {$regex: name, $options: 'i'},
+    }).select('_id');
+
+    // Get IDs of users found by name filter
+    const idsFromNameFilter = usersFound.map(user => user._id);
+    if (idsFromNameFilter.length === 0) {
+      return res.status(200).json({data: [], page, pages: 0, count: 0});
+    }
+    userIdFilters.push(idsFromNameFilter);
   }
 
-  let ptUserIds = (await User.find(userQueryConditions).select('_id')).map(
-    user => user._id,
-  );
-
-  if (name && ptUserIds.length === 0) {
-    return res
-      .status(200)
-      .json({
-        data: [],
-        page,
-        pages: 0,
-        count: 0,
-        message: 'Can not find any PTs matching the name filter.',
-      });
-  }
-
-  if (ptUserIds.length > 0) {
-    profileQueryConditions.user = {$in: ptUserIds};
-  }
-
+  // Filter PTs by available date
   if (availableDate) {
-    // Convert date from Vietnam timezone to UTC for database query
-    const startOfDay = dayjs.tz(availableDate, 'Asia/Ho_Chi_Minh').startOf('day').utc().toDate();
-    const endOfDay = dayjs.tz(availableDate, 'Asia/Ho_Chi_Minh').endOf('day').utc().toDate();
+    const startOfDay = dayjs
+      .tz(availableDate, 'Asia/Ho_Chi_Minh')
+      .startOf('day')
+      .utc()
+      .toDate();
+    const endOfDay = dayjs
+      .tz(availableDate, 'Asia/Ho_Chi_Minh')
+      .endOf('day')
+      .utc()
+      .toDate();
 
-    const ptIdsCurrentlyInQuery = profileQueryConditions.user
-      ? profileQueryConditions.user.$in
-      : null;
-
-    const availabilityQuery = {
+    const availablePTs = await Availability.find({
       status: 'available',
       startTime: {$lte: endOfDay},
       endTime: {$gte: startOfDay},
-    };
-    if (ptIdsCurrentlyInQuery && ptIdsCurrentlyInQuery.length > 0) {
-      availabilityQuery.pt = {$in: ptIdsCurrentlyInQuery};
+    }).distinct('pt');
+
+    if (availablePTs.length === 0) {
+      return res.status(200).json({data: [], page, pages: 0, count: 0});
+    }
+    userIdFilters.push(availablePTs);
+  }
+
+  if (userIdFilters.length > 0) {
+    let finalUserIds = userIdFilters[0];
+
+    for (let i = 1; i < userIdFilters.length; i++) {
+      const currentSet = new Set(userIdFilters[i].map(id => id.toString()));
+      finalUserIds = finalUserIds.filter(id => currentSet.has(id.toString()));
     }
 
-    // Find PTs with available slots on the selected date
-    const availablePTsFromSlots = await Availability.find(
-      availabilityQuery,
-    ).distinct('pt');
-
-    if (availablePTsFromSlots.length === 0) {
-      return res
-        .status(200)
-        .json({
-          data: [],
-          page,
-          pages: 0,
-          count: 0,
-          message: 'Do not find any PTs available on the selected date.',
-        });
+    if (finalUserIds.length === 0) {
+      return res.status(200).json({data: [], page, pages: 0, count: 0});
     }
-    profileQueryConditions.user = {$in: availablePTsFromSlots};
+
+    profileQueryConditions.user = {$in: finalUserIds};
   }
 
   const count = await PTProfile.countDocuments(profileQueryConditions);
+
   if (count === 0) {
-    return res
-      .status(200)
-      .json({
-        data: [],
-        page,
-        pages: 0,
-        count: 0,
-        message: 'Can not find any PTs matching the criteria.',
-      });
+    return res.status(200).json({data: [], page, pages: 0, count: 0});
   }
 
-  let sortOptions = {averageRating: -1}; 
+  let sortOptions = {averageRating: -1};
   if (sortBy === 'hourlyRate') {
     sortOptions = {hourlyRate: order === 'desc' ? -1 : 1};
   } else if (sortBy === 'experienceYears') {
@@ -135,7 +118,7 @@ const searchPTs = asyncHandler(async (req, res) => {
   }
 
   const ptProfiles = await PTProfile.find(profileQueryConditions)
-    .populate('user', 'username email photoUrl') 
+    .populate('user', 'username email photoUrl')
     .limit(pageSize)
     .skip(pageSize * (page - 1))
     .sort(sortOptions);
@@ -149,7 +132,6 @@ const searchPTs = asyncHandler(async (req, res) => {
   });
 });
 
-
 // View PT Profile details
 const viewPTProfile = asyncHandler(async (req, res) => {
   const {ptId} = req.params;
@@ -162,8 +144,8 @@ const viewPTProfile = asyncHandler(async (req, res) => {
 
   const profile = await PTProfile.findOne({user: ptId}).populate(
     'user',
-    'username email photoUrl phoneNumber dob role imageGallery', 
-  ); 
+    'username email photoUrl phoneNumber dob role imageGallery',
+  );
 
   if (!profile) {
     return res.status(200).json({
@@ -179,7 +161,6 @@ const viewPTProfile = asyncHandler(async (req, res) => {
   }
   res.status(200).json(profile);
 });
-
 
 //Client get PT Profile details and availability
 const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
@@ -199,13 +180,21 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
 
   if (startDate) {
     // Convert date from Vietnam timezone to UTC for database query
-    const startOfDay = dayjs.tz(startDate, 'Asia/Ho_Chi_Minh').startOf('day').utc().toDate();
+    const startOfDay = dayjs
+      .tz(startDate, 'Asia/Ho_Chi_Minh')
+      .startOf('day')
+      .utc()
+      .toDate();
     queryOptions.startTime = {$gte: startOfDay};
   }
-  
+
   if (endDate) {
     // Convert date from Vietnam timezone to UTC for database query
-    const endOfDay = dayjs.tz(endDate, 'Asia/Ho_Chi_Minh').endOf('day').utc().toDate();
+    const endOfDay = dayjs
+      .tz(endDate, 'Asia/Ho_Chi_Minh')
+      .endOf('day')
+      .utc()
+      .toDate();
     if (queryOptions.startTime) {
       queryOptions.startTime = {...queryOptions.startTime, $lte: endOfDay};
     } else {
@@ -223,8 +212,7 @@ const getPTAvailabilityForClient = asyncHandler(async (req, res) => {
   });
 });
 
-
-//Create booking request 
+//Create booking request
 const createBookingRequest = asyncHandler(async (req, res) => {
   const {ptId, availabilitySlotId, notesFromClient} = req.body;
   const clientId = req.user._id;
@@ -266,7 +254,6 @@ const createBookingRequest = asyncHandler(async (req, res) => {
     throw new Error('Cannot book past time slots.');
   }
 
-
   const existingClientBooking = await Booking.findOne({
     client: clientId,
     status: {$in: ['pending_confirmation', 'confirmed']},
@@ -295,7 +282,6 @@ const createBookingRequest = asyncHandler(async (req, res) => {
   });
 
   const createdBooking = await newBooking.save();
-  
 
   try {
     await createNotification({
@@ -303,23 +289,22 @@ const createBookingRequest = asyncHandler(async (req, res) => {
       sender: clientId,
       type: 'new_booking_request',
       message: `New booking request from ${req.user.username}`,
-      relatedBooking: createdBooking._id
+      relatedBooking: createdBooking._id,
     });
   } catch (error) {
     console.error('Error sending booking notification:', error);
   }
-  
+
   res.status(201).json({
-    message: 'Your booking request has been sent successfully and is waiting for PT confirmation.',
+    message:
+      'Your booking request has been sent successfully and is waiting for PT confirmation.',
     data: createdBooking,
   });
 });
 
-
-
-// Get client all bookings 
+// Get client all bookings
 const getClientBookings = asyncHandler(async (req, res) => {
-  const {status, upcoming} = req.query; 
+  const {status, upcoming} = req.query;
   const pageSize = parseInt(req.query.pageSize) || 10;
   const page = parseInt(req.query.pageNumber) || 1;
 
@@ -334,13 +319,13 @@ const getClientBookings = asyncHandler(async (req, res) => {
       queryOptions.status = {$in: ['pending_confirmation', 'confirmed']};
     }
   }
-  
+
   if (upcoming === 'false') {
     queryOptions['bookingTime.startTime'] = {$lt: new Date()};
   }
 
   const count = await Booking.countDocuments(queryOptions);
-  
+
   const bookings = await Booking.find(queryOptions)
     .populate('pt', 'username email photoUrl')
     .populate('availabilitySlot', 'startTime endTime')
@@ -348,23 +333,23 @@ const getClientBookings = asyncHandler(async (req, res) => {
     .skip(pageSize * (page - 1))
     .sort({'bookingTime.startTime': upcoming === 'true' ? 'asc' : 'desc'});
 
-
   const enrichedBookings = await Promise.all(
-    bookings.map(async (booking) => {
+    bookings.map(async booking => {
       if (booking.pt && booking.pt._id) {
-        const ptProfile = await PTProfile.findOne({ user: booking.pt._id })
-          .select('hourlyRate specializations location');
-        
+        const ptProfile = await PTProfile.findOne({
+          user: booking.pt._id,
+        }).select('hourlyRate specializations location');
+
         return {
           ...booking.toObject(),
           pt: {
             ...booking.pt.toObject(),
-            ptProfile: ptProfile || null
-          }
+            ptProfile: ptProfile || null,
+          },
         };
       }
       return booking.toObject();
-    })
+    }),
   );
 
   res.status(200).json({
@@ -375,7 +360,6 @@ const getClientBookings = asyncHandler(async (req, res) => {
     count,
   });
 });
-
 
 // Client cancel booking
 const cancelBookingByClient = asyncHandler(async (req, res) => {
@@ -393,7 +377,7 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
 
   const now = new Date();
   const bookingStartTime = new Date(booking.bookingTime.startTime);
-  const hoursBeforeAllowedToCancel = 24; 
+  const hoursBeforeAllowedToCancel = 24;
 
   if (
     booking.status === 'confirmed' &&
@@ -408,9 +392,7 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
 
   if (!['pending_confirmation', 'confirmed'].includes(booking.status)) {
     res.status(400);
-    throw new Error(
-      `Cannot cancel booking in "${booking.status}" status.`,
-    );
+    throw new Error(`Cannot cancel booking in "${booking.status}" status.`);
   }
 
   const originalStatus = booking.status;
@@ -424,7 +406,7 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
     if (slot && slot.status === 'booked') {
       const otherBookingsForSlot = await Booking.findOne({
         availabilitySlot: slot._id,
-        _id: {$ne: booking._id}, 
+        _id: {$ne: booking._id},
         status: {$in: ['pending_confirmation', 'confirmed']},
       });
       if (!otherBookingsForSlot) {
@@ -438,7 +420,6 @@ const cancelBookingByClient = asyncHandler(async (req, res) => {
     .status(200)
     .json({message: 'Booking cancelled successfully.', data: updatedBooking});
 });
-
 
 module.exports = {
   searchPTs,

@@ -50,7 +50,6 @@ const confirmBooking = asyncHandler(async (req, res) => {
     if (booking.status !== 'pending_confirmation') {
         res.status(400); throw new Error(`Booking is currently in "${booking.status}" status, cannot confirm.`);
     }
-
     booking.status = 'confirmed';
 
 

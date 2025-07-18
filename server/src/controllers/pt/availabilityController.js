@@ -104,7 +104,7 @@ const updateAvailability = asyncHandler(async (req, res) => {
     throw new Error('End time must be after start time');
   }
 
-  // Check for overlapping slots 
+  // Check for overlapping slots
   const overlappingAvailability = await Availability.findOne({
     pt: ptId,
     _id: {$ne: availabilityId}, // Exclude current slot
@@ -135,10 +135,9 @@ const updateAvailability = asyncHandler(async (req, res) => {
   });
 });
 
-
 const getAvailabilitySlots = asyncHandler(async (req, res) => {
   const ptId = req.user._id;
-  const {date} = req.query; 
+  const {date} = req.query;
 
   let query = {pt: ptId};
 
