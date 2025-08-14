@@ -26,6 +26,7 @@ const searchPTs = asyncHandler(async (req, res) => {
   const pageSize = parseInt(req.query.pageSize) || 10;
   const page = parseInt(req.query.pageNumber) || 1;
 
+  // These filters applied directly to the PTProfile model.
   const profileQueryConditions = {};
 
   if (specialization) {

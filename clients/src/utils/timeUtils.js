@@ -2,7 +2,6 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 
-// Cài đặt các plugin cần thiết cho dayjs
 dayjs.extend(utc);
 dayjs.extend(customParseFormat);
 
@@ -16,7 +15,7 @@ export const timeUtils = {
    * and converts it to a standard UTC ISO string.
    * @param {string} dateString
    * @param {string} timeString
-   * @returns {string} ISO UTC string, e.g., '2025-07-11T14:30:00.000Z'
+   * @returns {string} 
    */
   createUtcIsoString(dateString, timeString) {
     if (!dateString || !timeString) return null;
@@ -35,7 +34,7 @@ export const timeUtils = {
    * function #2: Format time from Server for Display.
    * This function takes a UTC string from the server and displays it in Vietnam time.
    * @param {string} isoString - ISO string from server
-   * @returns {string} - e.g., '9:30 PM'
+   * @returns {string} 
    */
   formatToVietnameseTime(isoString) {
     if (!isoString) return '';
@@ -56,7 +55,7 @@ export const timeUtils = {
    * function #3: Format time for 24-hour input.
    * This function takes a UTC string from the server and displays it in 24-hour format (HH:mm).
    * @param {string} isoString - ISO string from server
-   * @returns {string} - e.g., '21:30'
+   * @returns {string} 
    */
   formatTo24HourTime(isoString) {
     if (!isoString) return '';
@@ -72,7 +71,7 @@ export const timeUtils = {
   /**
    * Format full date for display.
    * @param {string | Date} dateValue - ISO string or Date object
-   * @returns {string} - e.g., 'Thứ Sáu, 11 tháng 7, 2025'
+   * @returns {string} 
    */
   formatToVietnameseDate(dateValue) {
     if (!dateValue) return '';
@@ -86,7 +85,7 @@ export const timeUtils = {
   /**
    * Format short date for display.
    * @param {string | Date} dateValue - ISO string or Date object
-   * @returns {string} - e.g., '11/07/2025'
+   * @returns {string} 
    */
   formatToShortDate(dateValue) {
     if (!dateValue) return '';
@@ -99,7 +98,7 @@ export const timeUtils = {
 
   /**
    * Get current hour in Vietnam timezone for greeting
-   * @returns {number} - hour in Vietnam timezone (0-23)
+   * @returns {number} 
    */
   getCurrentVietnamHour() {
     return dayjs.utc().add(VIETNAM_OFFSET_HOURS, 'hour').hour();
@@ -108,7 +107,7 @@ export const timeUtils = {
   /**
    * Format date for earnings display
    * @param {string | Date} dateValue - ISO string or Date object
-   * @returns {string} - e.g., 'Jul 11, 2:30 PM'
+   * @returns {string} 
    */
   formatEarningsDate(dateValue) {
     if (!dateValue) return '';
@@ -119,7 +118,7 @@ export const timeUtils = {
   /**
    * Format message time for chat
    * @param {string | Date} dateValue - ISO string or Date object
-   * @returns {string} - e.g., '14:30' or 'Yesterday' or 'Jul 11'
+   * @returns {string} 
    */
   formatMessageTime(dateValue) {
     if (!dateValue) return '';
@@ -143,7 +142,7 @@ export const timeUtils = {
   /**
    * Format relative time for notifications and chat list
    * @param {string | Date} dateValue - ISO string or Date object
-   * @returns {string} - e.g., 'Now', '5m', '2h', '3d'
+   * @returns {string} 
    */
   formatRelativeTime(dateValue) {
     if (!dateValue) return '';
@@ -168,7 +167,7 @@ export const timeUtils = {
   /**
    * Format join date for profile display
    * @param {string | Date} dateValue - ISO string or Date object
-   * @returns {string} - e.g., 'January 2025'
+   * @returns {string} 
    */
   formatJoinDate(dateValue) {
     if (!dateValue) return '';
@@ -181,7 +180,7 @@ export const timeUtils = {
   /**
    * Format date for date picker display
    * @param {Date} date - Date object
-   * @returns {string} - e.g., '11/7/2025'
+   * @returns {string} 
    */
   formatDatePickerDate(date) {
     if (!date) return '';
@@ -192,7 +191,7 @@ export const timeUtils = {
    /**
    * Format full date for display (English).
    * @param {string | Date} dateValue - ISO string or Date object
-   * @returns {string} - e.g., 'Friday, July 11, 2025'
+   * @returns {string} 
    */
   formatToEnglishDate(dateValue) {
     if (!dateValue) return '';

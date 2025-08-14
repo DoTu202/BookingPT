@@ -726,8 +726,8 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontFamily: fontFamilies.semiBold,
+    fontSize: 24,
+    fontFamily: fontFamilies.bold,
     color: appColors.white,
     marginTop: 20,
   },
