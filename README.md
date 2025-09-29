@@ -2,7 +2,7 @@
 
 Dự án cá nhân - một ứng dụng di động được xây dựng với mục tiêu tạo ra nền tảng kết nối trực tiếp và tiện lợi giữa các Huấn luyện viên cá nhân (Personal Trainers - PT) tự do và khách hàng có nhu cầu. Ứng dụng giúp đơn giản hóa quá trình tìm kiếm, đặt lịch và quản lý các buổi tập một cách hiệu quả.
 
-## ✨ Tính năng nổi bật
+## Các chức năng chính
 
 Ứng dụng được thiết kế với hai luồng người dùng chính với các chức năng riêng biệt:
 
@@ -35,6 +35,12 @@ Dự án được xây dựng theo kiến trúc MERN stack, bao gồm:
 | **API** | `RESTful API`                                                |
 | **Authentication**| `JSON Web Tokens (JWT)`, `bcrypt`                            |
 | **Tools & Platforms**| `Git`, `Figma`, `Xcode`, `Android Studio`, `Postman`         |
+
+## Screenshot màn hình của dự án 
+
+Tất cả hình ảnh và tính năng của án đã được tổng hợp trong một file PDF Screenshot để tiện cho việc theo dõi.
+
+### **[Nhấn vào đây để xem file PDF các màn hình của ứng dụng](./docs/screenshot.pdf)**
 
 ## Liên hệ
 
