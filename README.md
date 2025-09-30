@@ -40,7 +40,7 @@ Dự án được xây dựng theo kiến trúc MERN stack, bao gồm:
 
 Tất cả hình ảnh và tính năng của án đã được tổng hợp trong một file PDF Screenshot để tiện cho việc theo dõi.
 
-### **[Nhấn vào đây để xem file PDF các màn hình của ứng dụng](./docs/screenshot.pdf)**
+### **[Nhấn vào đây để xem file PDF các màn hình của ứng dụng](./docs/screenshot.pdf.zip)**
 
 ## Liên hệ
 
