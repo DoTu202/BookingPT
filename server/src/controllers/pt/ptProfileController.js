@@ -36,8 +36,6 @@ const updatePtProfile = asyncHandler(async (req, res) => {
   const {bio, specializations, experienceYears, location, hourlyRate} =
     req.body;
 
-  console.log('Received profile data:', req.body);
-
   if (
     hourlyRate !== undefined &&
     (isNaN(parseFloat(hourlyRate)) || parseFloat(hourlyRate) < 10000)
@@ -74,7 +72,17 @@ const updatePtProfile = asyncHandler(async (req, res) => {
     profileFields.experienceYears = parseInt(experienceYears);
   if (hourlyRate !== undefined)
     profileFields.hourlyRate = parseFloat(hourlyRate);
-  if (location !== undefined) profileFields.location = location;
+  if (location !== undefined) {
+    // Only copy known string fields so arbitrary objects are never stored.
+    const pick = value => (typeof value === 'string' ? value.trim().slice(0, 100) : '');
+    profileFields.location = {
+      city: pick(location?.city),
+      district: pick(location?.district),
+    };
+  }
+  if (typeof req.body.isAcceptingClients === 'boolean') {
+    profileFields.isAcceptingClients = req.body.isAcceptingClients;
+  }
 
   try {
     let profile = await PTProfile.findOneAndUpdate(
@@ -83,15 +91,12 @@ const updatePtProfile = asyncHandler(async (req, res) => {
       {new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true},
     ).populate('user', 'username email photoUrl');
 
-    console.log('Profile saved successfully:', profile);
-
     res.status(200).json({
       message: 'PT profile updated successfully',
       data: profile,
       success: true,
     });
   } catch (error) {
-    console.error('Error saving profile:', error);
     if (error.name === 'ValidationError') {
       return res.status(400).json({
         message:

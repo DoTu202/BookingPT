@@ -37,7 +37,8 @@ const bookingSchema = new mongoose.Schema({
     notesFromClient: {
         type: String,
         default: '',
-        trim: true
+        trim: true,
+        maxlength: 500
     },
     priceAtBooking: { 
         type: Number,
@@ -48,6 +49,9 @@ const bookingSchema = new mongoose.Schema({
         enum: ['pending', 'paid', 'failed', 'refunded'],
         default: 'pending'
     },
+    // Set when one side deletes their account; the booking is kept for history.
+    clientDeleted: { type: Boolean, default: false },
+    ptDeleted: { type: Boolean, default: false },
 }, {
     timestamps: true
 });

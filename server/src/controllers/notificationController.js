@@ -1,205 +1,128 @@
+const asyncHandler = require('express-async-handler');
 const Notification = require('../models/NotificationModel');
-const User = require('../models/userModel');
-const Booking = require('../models/bookingModel');
+const {assertValidId, parsePagination} = require('../utils/helpers');
 
-// Get all notifications for user
-const getNotifications = async (req, res) => {
-    try {
-        const userId = req.user._id; 
-        const { page = 1, limit = 20, isRead } = req.query;
+const getNotifications = asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const {page, size, skip} = parsePagination(req.query, {
+    pageKey: 'page',
+    sizeKey: 'limit',
+    defaultSize: 20,
+  });
 
-        // Build filter
-        const filter = { recipient: userId };
-        if (isRead !== undefined) {
-            filter.isRead = isRead === 'true';
-        }
+  const filter = {recipient: userId};
+  if (req.query.isRead !== undefined) {
+    filter.isRead = req.query.isRead === 'true';
+  }
 
-        const notifications = await Notification.find(filter)
-            .populate('sender', 'username photoUrl')
-            .populate('relatedBooking', 'bookingTime status')
-            .populate('relatedUser', 'username photoUrl')
-            .sort({ createdAt: -1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
+  const [notifications, total, unreadCount] = await Promise.all([
+    Notification.find(filter)
+      .populate('sender', 'username photoUrl')
+      .populate('relatedBooking', 'bookingTime status')
+      .populate('relatedUser', 'username photoUrl')
+      .sort({createdAt: -1})
+      .skip(skip)
+      .limit(size),
+    Notification.countDocuments(filter),
+    Notification.countDocuments({recipient: userId, isRead: false}),
+  ]);
 
-        const total = await Notification.countDocuments(filter);
-        const unreadCount = await Notification.countDocuments({ 
-            recipient: userId, 
-            isRead: false 
-        });
+  res.status(200).json({
+    success: true,
+    data: {
+      notifications,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / size),
+        total,
+        hasMore: page * size < total,
+      },
+      unreadCount,
+    },
+  });
+});
 
-        res.status(200).json({
-            success: true,
-            data: {
-                notifications,
-                pagination: {
-                    currentPage: page,
-                    totalPages: Math.ceil(total / limit),
-                    total,
-                    hasMore: page * limit < total
-                },
-                unreadCount
-            }
-        });
-    } catch (error) {
-        console.error('Error getting notifications:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get notifications',
-            error: error.message
-        });
-    }
-};
+const markAsRead = asyncHandler(async (req, res) => {
+  const {notificationId} = req.params;
+  assertValidId(res, notificationId, 'notification id');
 
-// Mark notification as read
-const markAsRead = async (req, res) => {
-    try {
-        const { notificationId } = req.params;
-        const userId = req.user._id;
+  // Filtering by recipient means users can only touch their own notifications.
+  const notification = await Notification.findOneAndUpdate(
+    {_id: notificationId, recipient: req.user._id},
+    {isRead: true},
+    {new: true},
+  );
 
-        const notification = await Notification.findOneAndUpdate(
-            { _id: notificationId, recipient: userId },
-            { isRead: true },
-            { new: true }
-        );
+  if (!notification) {
+    res.status(404);
+    throw new Error('Notification not found');
+  }
 
-        if (!notification) {
-            return res.status(404).json({
-                success: false,
-                message: 'Notification not found'
-            });
-        }
+  res.status(200).json({success: true, data: notification});
+});
 
-        res.status(200).json({
-            success: true,
-            data: notification
-        });
-    } catch (error) {
-        console.error('Error marking notification as read:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to mark notification as read',
-            error: error.message
-        });
-    }
-};
+const markAllAsRead = asyncHandler(async (req, res) => {
+  await Notification.updateMany(
+    {recipient: req.user._id, isRead: false},
+    {isRead: true},
+  );
 
-// Mark all notifications as read
-const markAllAsRead = async (req, res) => {
-    try {
-        const userId = req.user._id;
+  res.status(200).json({success: true, message: 'All notifications marked as read'});
+});
 
-        await Notification.updateMany(
-            { recipient: userId, isRead: false },
-            { isRead: true }
-        );
+const deleteNotification = asyncHandler(async (req, res) => {
+  const {notificationId} = req.params;
+  assertValidId(res, notificationId, 'notification id');
 
-        res.status(200).json({
-            success: true,
-            message: 'All notifications marked as read'
-        });
-    } catch (error) {
-        console.error('Error marking all notifications as read:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to mark all notifications as read',
-            error: error.message
-        });
-    }
-};
+  const notification = await Notification.findOneAndDelete({
+    _id: notificationId,
+    recipient: req.user._id,
+  });
 
-// Delete notification
-const deleteNotification = async (req, res) => {
-    try {
-        const { notificationId } = req.params;
-        const userId = req.user._id;
+  if (!notification) {
+    res.status(404);
+    throw new Error('Notification not found');
+  }
 
-        const notification = await Notification.findOneAndDelete({
-            _id: notificationId,
-            recipient: userId
-        });
+  res.status(200).json({success: true, message: 'Notification deleted successfully'});
+});
 
-        if (!notification) {
-            return res.status(404).json({
-                success: false,
-                message: 'Notification not found'
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'Notification deleted successfully'
-        });
-    } catch (error) {
-        console.error('Error deleting notification:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete notification',
-            error: error.message
-        });
-    }
-};
-
-// Create notification
-const createNotification = async ({
+// Internal helper used by booking flows (not an HTTP handler).
+const createNotification = ({
+  recipient,
+  sender = null,
+  senderType = 'User',
+  type,
+  message,
+  relatedBooking = null,
+  relatedReview = null,
+  relatedUser = null,
+}) =>
+  Notification.create({
     recipient,
-    sender = null,
-    senderType = 'User',
+    sender,
+    senderType,
     type,
     message,
-    relatedBooking = null,
-    relatedReview = null,
-    relatedUser = null
-}) => {
-    try {
-        const notification = new Notification({
-            recipient,
-            sender,
-            senderType,
-            type,
-            message,
-            relatedBooking,
-            relatedReview,
-            relatedUser
-        });
+    relatedBooking,
+    relatedReview,
+    relatedUser,
+  });
 
-        await notification.save();
-        return notification;
-    } catch (error) {
-        console.error('Error creating notification:', error);
-        throw error;
-    }
-};
+const getUnreadCount = asyncHandler(async (req, res) => {
+  const unreadCount = await Notification.countDocuments({
+    recipient: req.user._id,
+    isRead: false,
+  });
 
-// Get unread count
-const getUnreadCount = async (req, res) => {
-    try {
-        const userId = req.user._id;
-        
-        const unreadCount = await Notification.countDocuments({
-            recipient: userId,
-            isRead: false
-        });
-
-        res.status(200).json({
-            success: true,
-            data: { unreadCount }
-        });
-    } catch (error) {
-        console.error('Error getting unread count:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get unread count',
-            error: error.message
-        });
-    }
-};
+  res.status(200).json({success: true, data: {unreadCount}});
+});
 
 module.exports = {
-    getNotifications,
-    markAsRead,
-    markAllAsRead,
-    deleteNotification,
-    createNotification,
-    getUnreadCount
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+  deleteNotification,
+  createNotification,
+  getUnreadCount,
 };

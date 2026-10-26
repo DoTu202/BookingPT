@@ -1,307 +1,202 @@
+const fs = require('fs/promises');
+const path = require('path');
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcrypt');
 const User = require('../models/userModel');
 const PTProfile = require('../models/PTProfileModel');
 const Booking = require('../models/bookingModel');
 const Availability = require('../models/AvailabilityModel');
+const Notification = require('../models/NotificationModel');
+const {PUBLIC_URL} = require('../configs/env');
+const {PROFILE_DIR} = require('../middleware/uploadMiddleware');
+const {BCRYPT_ROUNDS, MIN_PASSWORD_LENGTH} = require('./authController');
+const {buildAuthResponse} = require('../services/tokenService');
 
-// Get user profile (basic info from User model)
+const str = value => (typeof value === 'string' ? value.trim() : '');
+
+// Removes a previously uploaded profile photo from disk. Only files inside
+// the profile upload folder are ever touched.
+const removeLocalPhoto = async photoUrl => {
+  if (!photoUrl) {
+    return;
+  }
+  const filename = path.basename(photoUrl.split('?')[0]);
+  if (!filename.startsWith('profile-')) {
+    return;
+  }
+  await fs.unlink(path.join(PROFILE_DIR, filename)).catch(() => {});
+};
+
 const getUserProfile = asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    // Get user basic info
-    const user = await User.findById(userId).select('-password');
-    if (!user) {
-      return res.status(404).json({
-        message: 'User not found',
-        success: false,
-      });
-    }
-
-    res.status(200).json({
-      message: 'Profile retrieved successfully',
-      data: user,
-      success: true,
-    });
-  } catch (error) {
-    console.error('Error getting user profile:', error);
-    res.status(500).json({
-      message: 'Failed to get profile',
-      success: false,
-      error: error.message,
-    });
-  }
+  res.status(200).json({
+    message: 'Profile retrieved successfully',
+    data: req.user,
+    success: true,
+  });
 });
 
-// Update basic user info (username, email, phone, etc.)
 const updateUserProfile = asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const {username, email, phoneNumber, dob} = req.body;
+  const userId = req.user._id;
+  const username = str(req.body.username);
+  const email = str(req.body.email).toLowerCase();
+  const phoneNumber = str(req.body.phoneNumber);
+  const dob = str(req.body.dob);
 
-    // Validate user exists
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        message: 'User not found',
-        success: false,
-      });
+  if (email && email !== req.user.email) {
+    if (await User.exists({email, _id: {$ne: userId}})) {
+      res.status(400);
+      throw new Error('Email is already in use');
     }
-
-    // Check if email is already taken by another user
-    if (email && email !== user.email) {
-      const existingUser = await User.findOne({email, _id: {$ne: userId}});
-      if (existingUser) {
-        return res.status(400).json({
-          message: 'Email is already in use',
-          success: false,
-        });
-      }
-    }
-
-    // Check if username is already taken by another user
-    if (username && username !== user.username) {
-      const existingUser = await User.findOne({username, _id: {$ne: userId}});
-      if (existingUser) {
-        return res.status(400).json({
-          message: 'Username is already in use',
-          success: false,
-        });
-      }
-    }
-
-    // Prepare update data
-    const updateData = {};
-    if (username) updateData.username = username.trim();
-    if (email) updateData.email = email.trim().toLowerCase();
-    if (phoneNumber) updateData.phoneNumber = phoneNumber.trim();
-    if (dob) updateData.dob = new Date(dob);
-
-    // Update user
-    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
-      new: true,
-      runValidators: true,
-    }).select('-password');
-
-    res.status(200).json({
-      message: 'Profile updated successfully',
-      data: updatedUser,
-      success: true,
-    });
-  } catch (error) {
-    console.error('Error updating user profile:', error);
-
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({
-        message:
-          'Validation failed: ' +
-          Object.values(error.errors)
-            .map(e => e.message)
-            .join(', '),
-        success: false,
-      });
-    }
-
-    res.status(500).json({
-      message: 'Failed to update profile',
-      success: false,
-      error: error.message,
-    });
   }
+  if (username && username !== req.user.username) {
+    if (await User.exists({username, _id: {$ne: userId}})) {
+      res.status(400);
+      throw new Error('Username is already in use');
+    }
+  }
+  if (phoneNumber && !/^\d{9,12}$/.test(phoneNumber)) {
+    res.status(400);
+    throw new Error('Phone number is not valid');
+  }
+
+  // Whitelist: role, password, isActive... can never be changed here.
+  const updateData = {updateAt: new Date()};
+  if (username) updateData.username = username;
+  if (email) updateData.email = email;
+  if (phoneNumber) updateData.phoneNumber = phoneNumber;
+  if (dob) {
+    const date = new Date(dob);
+    if (Number.isNaN(date.getTime()) || date > new Date()) {
+      res.status(400);
+      throw new Error('Date of birth is not valid');
+    }
+    updateData.dob = date;
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+    new: true,
+    runValidators: true,
+  });
+
+  res.status(200).json({
+    message: 'Profile updated successfully',
+    data: updatedUser,
+    success: true,
+  });
 });
 
-// Change password
 const changePassword = asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const {currentPassword, newPassword, confirmPassword} = req.body;
+  const {currentPassword, newPassword, confirmPassword} = req.body;
 
-    // Validation
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      return res.status(400).json({
-        message:
-          'Current password, new password, and confirm password are required',
-        success: false,
-      });
-    }
-
-    if (newPassword !== confirmPassword) {
-      return res.status(400).json({
-        message: 'New password and confirm password do not match',
-        success: false,
-      });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({
-        message: 'New password must be at least 6 characters long',
-        success: false,
-      });
-    }
-
-    // Get user with password
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        message: 'User not found',
-        success: false,
-      });
-    }
-
-    // Verify current password
-    const isCurrentPasswordValid = await bcrypt.compare(
-      currentPassword,
-      user.password,
-    );
-    if (!isCurrentPasswordValid) {
-      return res.status(400).json({
-        message: 'Current password is incorrect',
-        success: false,
-      });
-    }
-
-    // Hash new password
-    const saltRounds = 10;
-    const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
-
-    // Update password
-    await User.findByIdAndUpdate(userId, {password: hashedNewPassword});
-
-    res.status(200).json({
-      message: 'Password changed successfully',
-      success: true,
-    });
-  } catch (error) {
-    console.error('Error changing password:', error);
-    res.status(500).json({
-      message: 'Failed to change password',
-      success: false,
-      error: error.message,
-    });
+  if (
+    typeof currentPassword !== 'string' ||
+    typeof newPassword !== 'string' ||
+    typeof confirmPassword !== 'string' ||
+    !currentPassword ||
+    !newPassword
+  ) {
+    res.status(400);
+    throw new Error('Current password, new password, and confirm password are required');
   }
+  if (newPassword !== confirmPassword) {
+    res.status(400);
+    throw new Error('New password and confirm password do not match');
+  }
+  if (newPassword.length < MIN_PASSWORD_LENGTH || newPassword.length > 72) {
+    res.status(400);
+    throw new Error(`New password must be ${MIN_PASSWORD_LENGTH}-72 characters long`);
+  }
+
+  const user = await User.findById(req.user._id).select('+password');
+  if (!(await bcrypt.compare(currentPassword, user.password))) {
+    res.status(400);
+    throw new Error('Current password is incorrect');
+  }
+
+  user.password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  // Signs out every other device: tokens issued before this are rejected.
+  // Back-dated by 1s because JWT iat has second precision.
+  user.passwordChangedAt = new Date(Date.now() - 1000);
+  await user.save({validateModifiedOnly: true});
+
+  res.status(200).json({
+    message: 'Password changed successfully',
+    success: true,
+    // Fresh token so the current device stays signed in.
+    data: buildAuthResponse(user),
+  });
 });
 
 const uploadProfilePhoto = asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    if (!req.file) {
-      return res.status(400).json({
-        message: 'No image file provided',
-        success: false,
-      });
-    }
-
-    const serverUrl = 'http://localhost:3001';
-    const photoUrl = `${serverUrl}/uploads/profiles/${req.file.filename}`;
-
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      {photoUrl},
-      {new: true},
-    ).select('-password');
-
-    if (!updatedUser) {
-      return res.status(404).json({
-        message: 'User not found',
-        success: false,
-      });
-    }
-
-    res.status(200).json({
-      message: 'Profile photo updated successfully',
-      data: {
-        photoUrl: updatedUser.photoUrl,
-        user: updatedUser,
-      },
-      success: true,
-    });
-  } catch (error) {
-    console.error('Error uploading profile photo:', error);
-    res.status(500).json({
-      message: 'Failed to upload profile photo',
-      success: false,
-      error: error.message,
-    });
+  if (!req.file) {
+    res.status(400);
+    throw new Error('No image file provided');
   }
+
+  // Build an absolute URL the app can load. Previously this was hardcoded to
+  // http://localhost:3001, which does not resolve on a phone.
+  const baseUrl = PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+  const photoUrl = `${baseUrl}/uploads/profiles/${req.file.filename}`;
+  const previousPhotoUrl = req.user.photoUrl;
+
+  const updatedUser = await User.findByIdAndUpdate(req.user._id, {photoUrl}, {new: true});
+
+  await removeLocalPhoto(previousPhotoUrl);
+
+  res.status(200).json({
+    message: 'Profile photo updated successfully',
+    data: {
+      photoUrl: updatedUser.photoUrl,
+      user: updatedUser,
+    },
+    success: true,
+  });
 });
 
-// Delete account
 const deleteAccount = asyncHandler(async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const {password, confirmDelete} = req.body;
+  const userId = req.user._id;
+  const {password, confirmDelete} = req.body;
 
-    // Validation
-    if (!password) {
-      return res.status(400).json({
-        message: 'Password is required to delete account',
-        success: false,
-      });
-    }
-
-    if (confirmDelete !== 'DELETE') {
-      return res.status(400).json({
-        message: 'Please type "DELETE" to confirm account deletion',
-        success: false,
-      });
-    }
-
-    // Get user with password
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        message: 'User not found',
-        success: false,
-      });
-    }
-
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      return res.status(400).json({
-        message: 'Incorrect password',
-        success: false,
-      });
-    }
-
-    // Check for active bookings
-    const activeBookings = await Booking.find({
-      $or: [{client: userId}, {pt: userId}],
-      status: {$in: ['pending_confirmation', 'confirmed']},
-    });
-
-    if (activeBookings.length > 0) {
-      return res.status(400).json({
-        message: `Cannot delete account. You have ${activeBookings.length} active booking(s). Please cancel or complete them first.`,
-        success: false,
-      });
-    }
-
-    await Promise.all([
-      PTProfile.findOneAndDelete({user: userId}),
-
-      Availability.deleteMany({pt: userId}),
-
-      Booking.updateMany({client: userId}, {$set: {clientDeleted: true}}),
-      Booking.updateMany({pt: userId}, {$set: {ptDeleted: true}}),
-    ]);
-
-    await User.findByIdAndDelete(userId);
-
-    res.status(200).json({
-      message: 'Account deleted successfully',
-      success: true,
-    });
-  } catch (error) {
-    console.error('Error deleting account:', error);
-    res.status(500).json({
-      message: 'Failed to delete account',
-      success: false,
-      error: error.message,
-    });
+  if (typeof password !== 'string' || !password) {
+    res.status(400);
+    throw new Error('Password is required to delete account');
   }
+  if (confirmDelete !== 'DELETE') {
+    res.status(400);
+    throw new Error('Please type "DELETE" to confirm account deletion');
+  }
+
+  const user = await User.findById(userId).select('+password');
+  if (!(await bcrypt.compare(password, user.password))) {
+    res.status(400);
+    throw new Error('Incorrect password');
+  }
+
+  const activeBookings = await Booking.countDocuments({
+    $or: [{client: userId}, {pt: userId}],
+    status: {$in: ['pending_confirmation', 'confirmed']},
+  });
+  if (activeBookings > 0) {
+    res.status(400);
+    throw new Error(
+      `Cannot delete account. You have ${activeBookings} active booking(s). Please cancel or complete them first.`,
+    );
+  }
+
+  await Promise.all([
+    PTProfile.deleteOne({user: userId}),
+    Availability.deleteMany({pt: userId}),
+    Notification.deleteMany({recipient: userId}),
+    Booking.updateMany({client: userId}, {$set: {clientDeleted: true}}),
+    Booking.updateMany({pt: userId}, {$set: {ptDeleted: true}}),
+    removeLocalPhoto(user.photoUrl),
+  ]);
+  await User.deleteOne({_id: userId});
+
+  res.status(200).json({
+    message: 'Account deleted successfully',
+    success: true,
+  });
 });
 
 module.exports = {

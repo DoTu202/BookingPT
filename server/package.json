@@ -1,33 +1,42 @@
 {
-  "name": "fitness",
+  "name": "bookingpt-server",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "debug": "nodemon --inspect index.js"
+    "debug": "nodemon --inspect index.js",
+    "test": "jest --runInBand",
+    "seed": "node scripts/seed.js"
   },
-  "author": "me",
+  "author": "Do Minh Tu",
   "license": "ISC",
-  "description": "",
+  "description": "REST API for BookingPT - personal trainer booking platform",
   "dependencies": {
-    "axios": "^1.10.0",
-    "bcrypt": "^5.1.1",
-    "bcryptjs": "^3.0.2",
-    "body-parser": "^2.2.0",
-    "colors": "^1.4.0",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dayjs": "^1.11.13",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "express-async-handler": "^1.2.0",
-    "express-validator": "^7.2.1",
+    "express-rate-limit": "^7.5.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.13.2",
     "multer": "^2.0.1",
-    "nodemailer": "^7.0.3",
-    "nodemon": "^3.1.9"
+    "nodemailer": "^10.2.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "mongodb-memory-server": "^11.3.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testTimeout": 30000
   }
 }

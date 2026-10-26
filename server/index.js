@@ -1,38 +1,29 @@
-const express = require('express');
-const cors = require('cors');
-const app = express();
-const authRouter = require('./src/routers/authRouter');
+const mongoose = require('mongoose');
+const {PORT} = require('./src/configs/env');
 const connectDB = require('./src/configs/connectDB');
-const dotenv = require('dotenv');
-const ptRouter = require('./src/routers/ptRouter');
-const clientRouter = require('./src/routers/clientRouter');
-const notificationRouter = require('./src/routers/notificationRouter');
-const chatRouter = require('./src/routers/chatRouter');
-const profileRouter = require('./src/routers/profileRouter');
-const path = require('path');
+const app = require('./src/app');
 
-dotenv.config();
-const PORT = process.env.PORT || 3001; 
-
-app.use(express.json());
-app.use(cors());
-
-app.use('/auth', authRouter);
-app.use('/api/pt', ptRouter);
-app.use('/api/client', clientRouter);
-app.use('/api/notifications', notificationRouter);
-app.use('/api/chat', chatRouter);
-app.use('/api/profile', profileRouter);
-
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-connectDB();
-
-app.listen(PORT, '0.0.0.0', err => {
-  if (err) {
-    console.error('Error starting server:', err);
-  } else {
-    console.log(`Server is running on:`);
-    console.log(`Local: http://localhost:${PORT}`);
+const start = async () => {
+  try {
+    await connectDB();
+  } catch (error) {
+    console.error('MongoDB connection error:', error.message);
+    process.exit(1);
   }
-});
+
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+
+  const shutdown = signal => {
+    console.log(`${signal} received, shutting down gracefully...`);
+    server.close(async () => {
+      await mongoose.connection.close();
+      process.exit(0);
+    });
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+};
+
+start();

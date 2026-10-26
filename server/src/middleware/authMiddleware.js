@@ -1,66 +1,64 @@
-const jwt = require('jsonwebtoken');
 const UserModal = require('../models/userModel');
-require('dotenv').config();
+const {verifyAccessToken} = require('../services/tokenService');
+const {isValidId} = require('../utils/helpers');
 
-const JWT_SECRET = process.env.SECRET_KEY;
+const unauthorized = (res, message = 'Unauthorized') =>
+  res.status(401).json({success: false, message});
 
 const authenticateToken = async (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const authHeader = req.headers.authorization || '';
+  const [scheme, token] = authHeader.split(' ');
 
-  if (token == null) {
-    return res.status(401).json({
-      message: 'Unauthorized',
-    });
+  if (scheme !== 'Bearer' || !token) {
+    return unauthorized(res);
   }
-  jwt.verify(token, JWT_SECRET, async (error, decodePayload) => {
-    if (error) {
-      if (error.name === 'TokenExpiredError') {
-        return res.status(401).json({
-          message: 'Token expired',
-        });
-      }
-      return res.status(403).json({
-        message: 'Forbidden',
-      });
+
+  let payload;
+  try {
+    payload = verifyAccessToken(token);
+  } catch (error) {
+    return unauthorized(
+      res,
+      error.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token',
+    );
+  }
+
+  if (!isValidId(payload.id)) {
+    return unauthorized(res, 'Invalid token');
+  }
+
+  try {
+    const user = await UserModal.findById(payload.id);
+    if (!user || !user.isActive) {
+      return unauthorized(res);
     }
 
-    try {
-      const user = await UserModal.findById(decodePayload.id).select(
-        '-password',
-      );
-      if (!user) {
-        return res.status(401).json({
-          message: 'Unauthorized',
-        });
-      }
-      req.user = user;
-      next();
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Internal server error',
-      });
+    // Tokens issued before the last password change are no longer valid.
+    // JWT iat has second precision, so compare in seconds.
+    if (
+      user.passwordChangedAt &&
+      payload.iat < Math.floor(user.passwordChangedAt.getTime() / 1000)
+    ) {
+      return unauthorized(res, 'Token expired');
     }
-  });
+
+    req.user = user;
+    next();
+  } catch (error) {
+    next(error);
+  }
 };
 
-//authorizeRoles
 const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user || !req.user.role) {
-      return res.status(401).json({
-        message: 'Unauthorized',
-      });
+      return unauthorized(res);
     }
 
-    const userRole = req.user.role;
-
-    if (allowedRoles.includes(userRole)) {
+    if (allowedRoles.includes(req.user.role)) {
       next();
     } else {
-      return res.status(403).json({
-        message: 'Forbidden',
-      });
+      return res.status(403).json({success: false, message: 'Forbidden'});
     }
   };
 };
