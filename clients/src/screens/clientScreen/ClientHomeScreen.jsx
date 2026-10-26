@@ -11,7 +11,8 @@ import {
   Dimensions,
   Image,
 } from 'react-native';
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
+import {useFocusEffect} from '@react-navigation/native';
 import {useDispatch} from 'react-redux';
 import {authSelector} from '../../redux/reducers/authReducer';
 import {globalStyles} from '../../styles/globalStyles';
@@ -51,10 +52,47 @@ const ClientHomeScreen = ({navigation}) => {
   const [ptList, setPtList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [stats, setStats] = useState({completed: 0, upcoming: 0, hours: 0});
 
   useEffect(() => {
     fetchFeaturedPTs();
   }, []);
+
+  // Refresh the summary every time Home is shown (e.g. after booking).
+  useFocusEffect(
+    useCallback(() => {
+      fetchStats();
+    }, []),
+  );
+
+  // Real numbers from the user's bookings (previously hardcoded mock values).
+  const fetchStats = async () => {
+    try {
+      const response = await clientApi.getMyBookings({pageSize: 50});
+      const bookings = response.data?.data || [];
+      const now = Date.now();
+      const completed = bookings.filter(b => b.status === 'completed');
+      const upcoming = bookings.filter(
+        b =>
+          ['pending_confirmation', 'confirmed'].includes(b.status) &&
+          new Date(b.bookingTime?.startTime).getTime() > now,
+      );
+      const minutes = completed.reduce(
+        (total, b) =>
+          total +
+          (new Date(b.bookingTime.endTime) - new Date(b.bookingTime.startTime)) /
+            60000,
+        0,
+      );
+      setStats({
+        completed: completed.length,
+        upcoming: upcoming.length,
+        hours: Math.round(minutes / 60),
+      });
+    } catch (err) {
+      console.log('Error loading booking stats:', err.message);
+    }
+  };
 
   const fetchFeaturedPTs = async () => {
     try {
@@ -127,24 +165,11 @@ const ClientHomeScreen = ({navigation}) => {
             </TouchableOpacity>
 
             <View style={styles.locationContainer}>
-              <RowComponent justify="center">
-                <TextComponent
-                  text="Current Location"
-                  color={appColors.white}
-                  size={12}
-                  font={fontFamilies.regular}
-                />
-                <ArrowDown
-                  color={appColors.white}
-                  size={14}
-                  style={styles.locationIcon}
-                />
-              </RowComponent>
               <TextComponent
-                text="Cau Giay, Hanoi"
+                text="BookingPT"
                 color={appColors.white}
                 font={fontFamilies.bold}
-                size={16}
+                size={18}
                 styles={styles.locationText}
               />
             </View>
@@ -242,27 +267,27 @@ const ClientHomeScreen = ({navigation}) => {
             <View style={styles.statCard}>
               <TextComponent text="💪" size={24} styles={styles.statIcon} />
               <TextComponent
-                text="12"
+                text={String(stats.completed)}
                 size={20}
                 font={fontFamilies.bold}
                 color={appColors.text}
               />
               <TextComponent
-                text="Sessions"
+                text="Completed"
                 size={12}
                 color={appColors.text2}
               />
             </View>
             <View style={styles.statCard}>
-              <TextComponent text="🔥" size={24} styles={styles.statIcon} />
+              <TextComponent text="📅" size={24} styles={styles.statIcon} />
               <TextComponent
-                text="2.4k"
+                text={String(stats.upcoming)}
                 size={20}
                 font={fontFamilies.bold}
                 color={appColors.text}
               />
               <TextComponent
-                text="Calories"
+                text="Upcoming"
                 size={12}
                 color={appColors.text2}
               />
@@ -270,7 +295,7 @@ const ClientHomeScreen = ({navigation}) => {
             <View style={styles.statCard}>
               <TextComponent text="⏱️" size={24} styles={styles.statIcon} />
               <TextComponent
-                text="18h"
+                text={`${stats.hours}h`}
                 size={20}
                 font={fontFamilies.bold}
                 color={appColors.text}
@@ -409,17 +434,6 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     marginLeft: 8,
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: appColors.warning,
-    borderWidth: 1,
-    borderColor: appColors.white,
   },
 
   // Welcome Section

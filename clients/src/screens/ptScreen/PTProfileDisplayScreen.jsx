@@ -35,7 +35,8 @@ import {fontFamilies} from '../../constants/fontFamilies';
 import ptApi from '../../apis/ptApi';
 import profileApi from '../../apis/profileApi';
 import {useDispatch} from 'react-redux';
-import {removeAuth} from '../../redux/reducers/authReducer';
+import DeleteAccountModal from '../../modals/DeleteAccountModal';
+import {signOut} from '../../utils/session';
 import {launchImageLibrary} from 'react-native-image-picker';
 
 const {width} = Dimensions.get('window');
@@ -45,6 +46,7 @@ const PTProfileDisplayScreen = () => {
   const navigation = useNavigation();
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [profile, setProfile] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [stats, setStats] = useState({
@@ -299,43 +301,7 @@ const PTProfileDisplayScreen = () => {
     });
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action cannot be undone.',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const response = await profileApi.deleteAccount({
-                confirmation: 'DELETE',
-              });
-
-              if (response.data?.success) {
-                dispatch(removeAuth());
-                Alert.alert(
-                  'Account Deleted',
-                  'Your account has been successfully deleted.',
-                );
-              }
-            } catch (error) {
-              console.error('Error deleting account:', error);
-              Alert.alert(
-                'Error',
-                error.response?.data?.message || 'Failed to delete account.',
-              );
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ],
-    );
-  };
+  const handleDeleteAccount = () => setShowDeleteModal(true);
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -343,9 +309,7 @@ const PTProfileDisplayScreen = () => {
       {
         text: 'Logout',
         style: 'destructive',
-        onPress: () => {
-          dispatch(removeAuth());
-        },
+        onPress: () => signOut(dispatch),
       },
     ]);
   };
@@ -693,6 +657,10 @@ const PTProfileDisplayScreen = () => {
 
         <View style={{height: 120}} />
       </ScrollView>
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+      />
     </View>
   );
 };

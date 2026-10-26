@@ -27,7 +27,8 @@ import {
 } from 'lucide-react-native';
 import dayjs from 'dayjs';
 
-import {authSelector, removeAuth} from '../../redux/reducers/authReducer';
+import {authSelector} from '../../redux/reducers/authReducer';
+import {signOut} from '../../utils/session';
 import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
 import {timeUtils} from '../../utils/timeUtils';
@@ -120,6 +121,8 @@ const PTHomeScreen = () => {
         ...prev,
         hasProfile,
         ptProfile,
+        // Real rating stored on the PT profile (was a made-up formula).
+        rating: ptProfile?.rating ? Number(ptProfile.rating).toFixed(1) : 0,
       }));
 
       return ptProfile;
@@ -203,11 +206,6 @@ const PTHomeScreen = () => {
     });
     const totalClients = uniqueClients.size;
 
-    // Average rating (synthetic calculation based on completed bookings)
-    const completedBookings = bookings.filter(b => b.status === 'completed');
-    const rating = completedBookings.length > 0
-      ? Math.min(3.5 + Math.min(completedBookings.length * 0.1, 1.5), 5.0).toFixed(1)
-      : 0;
 
     // Weekly stats
     const weekStart = now.startOf('week');
@@ -251,7 +249,6 @@ const PTHomeScreen = () => {
       todayBookings: todayBookingsCount,
       monthlyEarnings,
       totalClients,
-      rating,
       weeklyStats: {
         completedSessions: completedThisWeek,
         totalHours: Math.round(totalHours),
@@ -285,7 +282,7 @@ const PTHomeScreen = () => {
       {
         text: 'Logout',
         style: 'destructive',
-        onPress: () => dispatch(removeAuth()),
+        onPress: () => signOut(dispatch),
       },
     ]);
   };

@@ -1,28 +1,26 @@
 import {
   StyleSheet,
-  Text,
   View,
   Platform,
   TouchableOpacity,
   Image,
   FlatList,
+  Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
 import {StatusBar} from 'react-native';
-import {ButtonComponent, RowComponent, TextComponent} from './';
+import {RowComponent, TextComponent} from './';
 import appColors from '../constants/appColors';
-import MaterialCommunity from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useSelector} from 'react-redux';
 import {authSelector} from '../redux/reducers/authReducer';
 import {removeAuth} from '../redux/reducers/authReducer';
 import {
-  Bookmark2,
   Calendar,
+  Lock,
   Logout,
   Message2,
-  MessageQuestion,
-  Setting2,
-  Sms,
+  SearchNormal1,
   User,
 } from 'iconsax-react-native';
 import {useDispatch} from 'react-redux';  
@@ -35,93 +33,95 @@ const DrawerCustom = ({navigation}) => {
   const color = appColors.gray;
   const dispatch = useDispatch();
 
+  // Every entry leads somewhere real; placeholder items (Bookmark, Settings,
+  // Upgrade Pro...) that did nothing have been removed.
+  const goToTab = screen => () =>
+    navigation.navigate('ClientTabNavigator', {screen});
+
   const profileMenu = [
     {
       key: 'MyProfile',
       title: 'My Profile',
       icon: <User size={size} color={color} />,
+      onPress: goToTab('ClientProfile'),
     },
     {
-      key: 'Message',
-      title: 'Message',
-      icon: <Message2 size={size} color={color} />,
-    },
-    {
-      key: 'Calendar',
-      title: 'Calendar',
+      key: 'Bookings',
+      title: 'My Bookings',
       icon: <Calendar size={size} color={color} />,
+      onPress: goToTab('ClientBookings'),
     },
     {
-      key: 'Bookmark',
-      title: 'Bookmark',
-      icon: <Bookmark2 size={size} color={color} />,
+      key: 'Messages',
+      title: 'Messages',
+      icon: <Message2 size={size} color={color} />,
+      onPress: goToTab('Messages'),
     },
     {
-      key: 'ContactUs',
-      title: 'Contact Us',
-      icon: <Sms size={size} color={color} />,
+      key: 'FindTrainer',
+      title: 'Find a Trainer',
+      icon: <SearchNormal1 size={size} color={color} />,
+      onPress: () => navigation.navigate('SearchPtScreen'),
     },
     {
-      key: 'Settings',
-      title: 'Settings',
-      icon: <Setting2 size={size} color={color} />,
-    },
-    {
-      key: 'HelpAndFAQs',
-      title: 'Help & FAQs',
-      icon: <MessageQuestion size={size} color={color} />,
-    },
-    {
-      key: 'SignOut',
-      title: 'Sign Out',
-      icon: <Logout size={size} color={color} />,
+      key: 'ChangePassword',
+      title: 'Change Password',
+      icon: <Lock size={size} color={color} />,
+      onPress: () => navigation.navigate('ChangePasswordScreen'),
     },
   ];
 
-  const handleSignOut = async () => {
-    dispatch(removeAuth({}));
-
-  }
+  // Also clear persisted credentials; otherwise "Remember me" users were
+  // signed straight back in on the next app launch.
+  const handleSignOut = () => {
+    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          await AsyncStorage.removeItem('auth');
+          dispatch(removeAuth());
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={[localStyles.container]}>
-      <TouchableOpacity
-        onPress={() => {
-          navigation.closeDrawer();
-          navigation.navigate('ClientProfile');
-        }}>
+      <TouchableOpacity onPress={goToTab('ClientProfile')}>
         <Image
           source={user.photoUrl ? {uri: user.photoUrl} : defaultAvatar}
           style={localStyles.avatar}
         />
         <TextComponent text={user.username} title size={18} />
       </TouchableOpacity>
-      <FlatList showsVerticalScrollIndicator={false}
-        style={{flex: 1, marginVertical: 24}}
+      <FlatList
+        showsVerticalScrollIndicator={false}
+        style={localStyles.list}
         data={profileMenu}
-        renderItem={({item, index}) => (
-          <RowComponent styles={[localStyles.listItem]} onPress={
-            item.key === 'SignOut' ? () => handleSignOut() : () => {
+        keyExtractor={item => item.key}
+        renderItem={({item}) => (
+          <RowComponent
+            styles={[localStyles.listItem]}
+            onPress={() => {
               navigation.closeDrawer();
-              console.log(item.key);
-            }
-          }>
+              item.onPress();
+            }}>
             {item.icon}
-            <TextComponent text={item.title} />
+            <TextComponent text={item.title} styles={localStyles.itemText} />
           </RowComponent>
         )}
       />
 
-      <RowComponent>
-        <ButtonComponent
-          text="Upgrade Pro"
-          color={appColors.primary}
-          type="primary"
-          textColor={appColors.white}
-          icon={
-            <MaterialCommunity name="crown" size={20} color={appColors.white} />
-          }
-          iconFlex="left"
+      <RowComponent
+        styles={[localStyles.listItem, localStyles.signOut]}
+        onPress={handleSignOut}>
+        <Logout size={size} color={appColors.danger} />
+        <TextComponent
+          text="Sign Out"
+          color={appColors.danger}
+          styles={localStyles.itemText}
         />
       </RowComponent>
     </View>
@@ -144,8 +144,19 @@ const localStyles = StyleSheet.create({
     marginBottom: 20,
   },
 
+  list: {
+    flex: 1,
+    marginVertical: 24,
+  },
   listItem: {
     paddingVertical: 16,
     justifyContent: 'flex-start',
+  },
+  itemText: {
+    marginLeft: 12,
+  },
+  signOut: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: appColors.gray4,
   },
 });

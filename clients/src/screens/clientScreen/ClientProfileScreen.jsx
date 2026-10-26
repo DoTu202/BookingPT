@@ -40,6 +40,7 @@ import profileApi from '../../apis/profileApi';
 import clientApi from '../../apis/clientApi';
 import {fontFamilies} from '../../constants/fontFamilies';
 import {LoadingModal} from '../../modals';
+import DeleteAccountModal from '../../modals/DeleteAccountModal';
 import {launchImageLibrary} from 'react-native-image-picker';
 
 const {width} = Dimensions.get('window');
@@ -48,6 +49,7 @@ const ClientProfileScreen = ({navigation}) => {
   const dispatch = useDispatch();
   const auth = useSelector(authSelector);
   const [loading, setLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState({
     totalWorkouts: 0,
@@ -268,43 +270,7 @@ const ClientProfileScreen = ({navigation}) => {
     ]);
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This action cannot be undone. Are you sure you want to delete your account?',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const response = await profileApi.deleteAccount({
-                confirmation: 'DELETE',
-              });
-
-              if (response.data?.success) {
-                await AsyncStorage.removeItem('auth');
-                dispatch(removeAuth({}));
-                Alert.alert(
-                  'Success',
-                  'Your account has been successfully deleted',
-                );
-              }
-            } catch (error) {
-              console.error('Error deleting account:', error);
-              const message =
-                error.response?.data?.message || 'Failed to delete account';
-              Alert.alert('Error', message);
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ],
-    );
-  };
+  const handleDeleteAccount = () => setShowDeleteModal(true);
 
   const menuSections = [
     {
@@ -419,6 +385,10 @@ const ClientProfileScreen = ({navigation}) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
       <LoadingModal visible={loading} />
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+      />
 
       <SafeAreaView style={styles.header} edges={['top']}>
         <View style={styles.headerContent}>
