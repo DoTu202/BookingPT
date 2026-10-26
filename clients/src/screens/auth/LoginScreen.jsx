@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Switch,
+  Alert,
 } from 'react-native';
 import React from 'react';
 import {useEffect} from 'react';
@@ -34,6 +35,8 @@ const LoginScreen = ({navigation}) => {
   const [isRemember, setIsRemember] = useState(false);
   const [isDisable, setIsDisable] = useState(false);
   const [isForgotPressed, setIsForgotPressed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -53,28 +56,31 @@ const LoginScreen = ({navigation}) => {
   );
 
   const handleLogin = async () => {
-    const emailValidation = Validate.email(email);
-
-    if (emailValidation) {
-      try {
-        const res = await authApi.HandleAuthentication(
-          '/login',
-          {email, password},
-          'post',
-        );
-
-        const authData = res.data.data || res.data;
-        dispatch(addAuth(authData));
-        if (isRemember) {
-          await AsyncStorage.setItem('auth', JSON.stringify(authData));
-        } else {
-          await AsyncStorage.removeItem('auth');
-        }
-      } catch (error) {
-        console.log(error);
-      }
-    } else {
+    if (!Validate.email(email)) {
       Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+
+    setError('');
+    setIsLoading(true);
+    try {
+      const res = await authApi.HandleAuthentication(
+        '/login',
+        {email, password},
+        'post',
+      );
+
+      const authData = res.data.data || res.data;
+      if (isRemember) {
+        await AsyncStorage.setItem('auth', JSON.stringify(authData));
+      } else {
+        await AsyncStorage.removeItem('auth');
+      }
+      dispatch(addAuth(authData));
+    } catch (err) {
+      setError(err.message || 'Unable to sign in. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -154,13 +160,23 @@ const LoginScreen = ({navigation}) => {
             />
           </RowComponent>
         </SectionComponent>
+        {error ? (
+          <TextComponent
+            text={error}
+            styles={{
+              color: appColors.primary,
+              marginBottom: 10,
+              alignSelf: 'center',
+            }}
+          />
+        ) : null}
         <ButtonComponent
-          text="Sign In"
+          text={isLoading ? 'Signing in...' : 'Sign In'}
           onPress={handleLogin}
           styles={styles.button}
           type="primary"
           textFont={fontFamilies.semiBold}
-          disable={isDisable}
+          disable={isDisable || isLoading}
         />
       </View>
 

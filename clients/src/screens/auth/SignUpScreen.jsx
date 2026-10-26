@@ -29,7 +29,7 @@ import SocialLogin from './components/SocialLogin';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {LoadingModal} from '../../modals';
 import authApi from '../../apis/authApi';
-import {Validate} from '../../utils/validate';
+import {Validate, MIN_PASSWORD_LENGTH} from '../../utils/validate';
 import {useDispatch} from 'react-redux';
 import {SectionComponent} from '../../components';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -95,7 +95,11 @@ const SignUpScreen = ({navigation}) => {
         break;
 
       case 'password':
-        message = !values.password ? 'Password is required!' : '';
+        message = !values.password
+          ? 'Password is required!'
+          : !Validate.password(values.password)
+          ? `Password must be at least ${MIN_PASSWORD_LENGTH} characters`
+          : '';
         break;
 
       case 'confirmPassword':
@@ -114,7 +118,7 @@ const SignUpScreen = ({navigation}) => {
   };
 
   const formatDate = date => {
-    if (!date) return 'Select your birthday';
+    if (!date) {return 'Select your birthday';}
     return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
   };
 
@@ -141,24 +145,19 @@ const SignUpScreen = ({navigation}) => {
       Alert.alert('Error', 'Please fill in all required fields.');
       return;
     }
-    
+
     const api = '/verification';
     setIsLoading(true);
     try {
-      const res = await authApi.HandleAuthentication(
-        api,
-        {email: values.email},
-        'post',
-      );
+      await authApi.HandleAuthentication(api, {email: values.email}, 'post');
       navigation.navigate('VerifyCodeScreen', {
-        code: res.data.data.verificationCode,
         ...values,
         dob: values.dob.toISOString(),
         role: values.role,
       });
     } catch (error) {
       console.log(error);
-      const message = error.response?.data?.message || 'Failed to send verification code';
+      const message = error.message || 'Failed to send verification code';
       Alert.alert('Error', message);
     } finally {
       setIsLoading(false);

@@ -118,7 +118,9 @@ const PTDetailScreen = ({navigation, route}) => {
       // Format selectedDate to YYYY-MM-DD string if it's a Date object
       let dateString = selectedDate;
       if (selectedDate instanceof Date) {
-        dateString = selectedDate.toISOString().split('T')[0];
+        // Local calendar day; toISOString() would give the UTC day, which is
+        // the previous day in Vietnam between 00:00 and 07:00.
+        dateString = dayjs(selectedDate).format('YYYY-MM-DD');
       } else if (
         typeof selectedDate === 'string' &&
         selectedDate.includes('T')

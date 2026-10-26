@@ -56,30 +56,6 @@ const ptApi = {
     const url = `/api/pt/bookings/${bookingId}/complete`;
     return axiosClient.post(url);
   },
-  getNotifications: async () => {
-    try {
-      return {data: []};
-    } catch (error) {
-      console.error('Error getting notifications:', error);
-      return {data: []};
-    }
-  },
-
-  // Set PT Availability APIs
-  setAvailability: (data, token) => {
-    const url = '/pts/availability';
-    return axiosClient.post(url, data, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-  },
-
-  // Get PT Availability APIs
-  getAvailability: (ptId, date) => {
-    const url = `/pts/${ptId}/availability/${date}`;
-    return axiosClient.get(url);
-  },
 };
 
 export default ptApi;

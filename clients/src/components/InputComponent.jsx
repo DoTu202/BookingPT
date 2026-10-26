@@ -3,7 +3,7 @@ import {useState} from 'react';
 import React from 'react';
 import appColors from '../constants/appColors';
 import AntDesign from 'react-native-vector-icons/AntDesign';
-import {EyeSlash} from 'iconsax-react-native';
+import {EyeSlash, Eye} from 'iconsax-react-native';
 import {TouchableOpacity} from 'react-native';
 import {fontFamilies} from '../constants/fontFamilies';
 
@@ -24,7 +24,7 @@ const InputComponent = props => {
     onEnd,
     ...otherProps // Pass through other props like multiline, numberOfLines, style
   } = props;
-  const [isShowPass, setIsShowPass] = useState(isPassword ?? false);
+  const [isShowPass, setIsShowPass] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
   // Use prefix or affix
@@ -35,27 +35,29 @@ const InputComponent = props => {
       style={[
         styles.inputContainer,
         isFocused && {borderColor: appColors.primary},
-        isOtp && styles.otpInput
+        isOtp && styles.otpInput,
       ]}>
       {/* {affix ?? affix} */}
       {/* {affix && <View style={styles.affixWrapper}>{affix}</View>} */}
+
       <TextInput
         style={[
-          styles.input, 
+          styles.input,
           {backgroundColor: 'transparent'},
           isOtp && styles.otpText,
-          otherProps.style // Allow custom style override
+          otherProps.style, // Allow custom style override
         ]}
         placeholder={placeholder ?? ''}
         value={value}
         onChangeText={val => (onChangeText || onChange)?.(val)} // Support both props
-        secureTextEntry={isShowPass}
         placeholderTextColor={appColors.placeholder}
         keyboardType={type || (isOtp ? 'numeric' : 'default')}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         maxLength={maxLength}
         {...otherProps} // Pass through other TextInput props like multiline, numberOfLines
+        // After the spread so a caller's secureTextEntry cannot break the toggle.
+        secureTextEntry={isPassword && !isShowPass}
         textAlign={isOtp ? 'center' : 'left'} //OTP
         autoCapitalize="none"
         onEndEditing={onEnd}
@@ -68,7 +70,11 @@ const InputComponent = props => {
             isPassword ? () => setIsShowPass(!isShowPass) : () => (onChangeText || onChange)?.('')
           }>
           {isPassword ? (
-            <EyeSlash size={22} color={appColors.gray} />
+            isShowPass ? (
+              <Eye size={22} color={appColors.gray} />
+            ) : (
+              <EyeSlash size={22} color={appColors.gray} />
+            )
           ) : (
             value.length > 0 &&
             allowClear && (
@@ -125,5 +131,5 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.medium,
     textAlign: 'center',
     paddingHorizontal: 0,
-  }
+  },
 });

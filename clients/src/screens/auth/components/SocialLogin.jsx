@@ -7,7 +7,14 @@ import {fontFamilies} from '../../../constants/fontFamilies'
 import { Google } from '../../../assets/svg'
 import { Facebook } from '../../../assets/svg'
 
+// Hidden until Google/Facebook OAuth is implemented on the server: buttons
+// that do nothing when tapped are worse UX than no buttons.
+const SOCIAL_LOGIN_ENABLED = false;
+
 const SocialLogin = () => {
+  if (!SOCIAL_LOGIN_ENABLED) {
+    return null;
+  }
   return (
     <View style={{alignItems: 'center', paddingVertical: 20, width: '100%'}}>
       {/* <TextComponent 

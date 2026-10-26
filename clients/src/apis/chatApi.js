@@ -1,36 +1,25 @@
-import axios from 'axios';
-import {appInfo} from '../constants/appInfos';
+import axiosClient from './axiosClient';
 
-const BASE_URL = `${appInfo.BASE_URL}/api/chat`;
-
+// The accessToken parameters are kept for backwards compatibility with
+// existing callers; the token is attached by axiosClient.
 class ChatApi {
-  async getChatRooms(accessToken) {
-    const response = await axios.get(`${BASE_URL}/rooms`, {
-      headers: {Authorization: `Bearer ${accessToken}`},
-    });
+  async getChatRooms(_accessToken) {
+    const response = await axiosClient.get('/api/chat/rooms');
     return response.data;
   }
 
-  async startChat(accessToken, otherUserId) {
-    const response = await axios.get(`${BASE_URL}/room/${otherUserId}`, {
-      headers: {Authorization: `Bearer ${accessToken}`},
-    });
+  async startChat(_accessToken, otherUserId) {
+    const response = await axiosClient.get(`/api/chat/room/${otherUserId}`);
     return response.data;
   }
 
-  async getMessages(accessToken, chatRoomId) {
-    const response = await axios.get(`${BASE_URL}/messages/${chatRoomId}`, {
-      headers: {Authorization: `Bearer ${accessToken}`},
-    });
+  async getMessages(_accessToken, chatRoomId) {
+    const response = await axiosClient.get(`/api/chat/messages/${chatRoomId}`);
     return response.data;
   }
 
-  async sendMessage(accessToken, chatRoomId, content) {
-    const response = await axios.post(
-      `${BASE_URL}/send/${chatRoomId}`,
-      {content},
-      {headers: {Authorization: `Bearer ${accessToken}`}},
-    );
+  async sendMessage(_accessToken, chatRoomId, content) {
+    const response = await axiosClient.post(`/api/chat/send/${chatRoomId}`, {content});
     return response.data;
   }
 }

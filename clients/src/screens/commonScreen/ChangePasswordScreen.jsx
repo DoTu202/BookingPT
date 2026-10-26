@@ -22,9 +22,14 @@ import LoadingModal from '../../modals/LoadingModal';
 import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
 import profileApi from '../../apis/profileApi';
+import {Validate, MIN_PASSWORD_LENGTH} from '../../utils/validate';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {useDispatch} from 'react-redux';
+import {addAuth} from '../../redux/reducers/authReducer';
 
 const ChangePasswordScreen = () => {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
   const [loading, setLoading] = useState(false);
   const [showPasswords, setShowPasswords] = useState({
     current: false,
@@ -56,8 +61,11 @@ const ChangePasswordScreen = () => {
       return;
     }
 
-    if (formData.newPassword.length < 6) {
-      Alert.alert('Error', 'New password must be at least 6 characters');
+    if (!Validate.password(formData.newPassword)) {
+      Alert.alert(
+        'Error',
+        `New password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+      );
       return;
     }
 
@@ -76,6 +84,15 @@ const ChangePasswordScreen = () => {
       });
 
       if (response.data?.success) {
+        // Changing the password revokes all older tokens; keep this device
+        // signed in with the fresh token returned by the server.
+        const authData = response.data.data;
+        if (authData?.accesstoken) {
+          if (await AsyncStorage.getItem('auth')) {
+            await AsyncStorage.setItem('auth', JSON.stringify(authData));
+          }
+          dispatch(addAuth(authData));
+        }
         Alert.alert('Success', 'Password changed successfully', [
           {
             text: 'OK',
@@ -85,8 +102,7 @@ const ChangePasswordScreen = () => {
       }
     } catch (error) {
       console.error('Error changing password:', error);
-      const message =
-        error.response?.data?.message || 'Failed to change password';
+      const message = error.message || 'Failed to change password';
       Alert.alert('Error', message);
     } finally {
       setLoading(false);

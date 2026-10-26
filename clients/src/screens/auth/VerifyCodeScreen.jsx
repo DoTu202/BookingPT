@@ -16,13 +16,10 @@ import authApi from '../../apis/authApi';
 import {useDispatch} from 'react-redux';
 import {addAuth} from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {appInfo} from '../../constants/appInfos';
 
 const VerifyCodeScreen = ({navigation, route}) => {
-  const {code, email, password, username, dob, phoneNumber, role} =
-    route.params;
+  const {email, password, username, dob, phoneNumber, role} = route.params;
 
-  const [currentCode, setCurrentCode] = useState(code);
   const [codeValues, setCodeValues] = useState(['']);
   const [newCode, setNewCode] = useState(['']);
   const [limit, setLimit] = useState(60);
@@ -51,7 +48,7 @@ const VerifyCodeScreen = ({navigation, route}) => {
   }, [limit]);
 
   useEffect(() => {
-    let item = ``;
+    let item = '';
     codeValues.forEach(val => (item += val));
     setNewCode(item);
   }, [codeValues]);
@@ -65,63 +62,37 @@ const VerifyCodeScreen = ({navigation, route}) => {
   const handleResendVerifaction = async () => {
     setCodeValues(['', '', '', '']);
     setNewCode('');
-    const api = '/verification';
+    setErrorMessage(null);
     setIsLoading(true);
     try {
-      const res = await authApi.HandleAuthentication(
-        api,
-        {email},
-        'post',
-      );
+      await authApi.HandleAuthentication('/verification', {email}, 'post');
       setLimit(60);
-      setCurrentCode(res.data.data.verificationCode);
-    } catch {
-      console.log(`Error in resend verification ${error}`);
+    } catch (error) {
+      setErrorMessage(error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // The code is checked by the server as part of registration; the app never
+  // sees the real code.
   const handleVerification = async () => {
-    if (limit > 0) {
-      if (parseInt(newCode) !== parseInt(currentCode)) {
-        setErrorMessage('Code is not correct');
-      } else {
-        setIsLoading(true);
+    setErrorMessage(null);
+    setIsLoading(true);
+    try {
+      const res = await authApi.HandleAuthentication(
+        '/register',
+        {email, password, username, dob, phoneNumber, role, code: newCode},
+        'post',
+      );
 
-        const api = '/register';
-
-        const data = {
-          email,
-          password,
-          username,
-          dob,
-          phoneNumber,
-          role,
-        };
-        try {
-          const res = await authApi.HandleAuthentication(
-            api,
-            data,
-            'post',
-          );
-          
-          // Extract the actual auth data from nested response
-          const authData = res.data.data || res.data;
-          
-          dispatch(addAuth(authData));
-          await AsyncStorage.setItem('auth', JSON.stringify(authData));
-          setIsLoading(false);
-        } catch (error) {
-          console.log(`Error in verification ${error}`);
-          const message =
-            error.response?.data?.message || 'An unexpected error occurred.';
-          setErrorMessage(message);
-          setIsLoading(false);
-        }
-      }
-    } else {
-      setErrorMessage('Code expired, please resend');
+      const authData = res.data.data || res.data;
+      await AsyncStorage.setItem('auth', JSON.stringify(authData));
+      dispatch(addAuth(authData));
+    } catch (error) {
+      setErrorMessage(error.message || 'An unexpected error occurred.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
