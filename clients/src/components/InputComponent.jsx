@@ -1,19 +1,23 @@
-import {StyleSheet, Text, View, TextInput} from 'react-native';
-import {useState} from 'react';
-import React from 'react';
+import React, {useState} from 'react';
+import {StyleSheet, TextInput, TouchableOpacity, View} from 'react-native';
+import {CloseCircle, Eye, EyeSlash} from 'iconsax-react-native';
+import TextComponent from './TextComponent';
 import appColors from '../constants/appColors';
-import AntDesign from 'react-native-vector-icons/AntDesign';
-import {EyeSlash, Eye} from 'iconsax-react-native';
-import {TouchableOpacity} from 'react-native';
 import {fontFamilies} from '../constants/fontFamilies';
+import {radius, spacing, TOUCH_TARGET} from '../constants/theme';
 
-const InputComponent = props => {
+// Text field with optional label, helper/error text and leading icon.
+// `isPassword` owns secureTextEntry and the show/hide toggle.
+const InputComponent = React.forwardRef((props, ref) => {
   const {
-    value,
+    value = '',
     onChange,
-    onChangeText, // Add support for onChangeText
+    onChangeText,
+    label,
+    error,
+    helperText,
     affix,
-    prefix, // Add support for prefix (alias for affix)
+    prefix,
     suffix,
     placeholder,
     isPassword,
@@ -22,114 +26,175 @@ const InputComponent = props => {
     isOtp,
     maxLength,
     onEnd,
-    ...otherProps // Pass through other props like multiline, numberOfLines, style
+    editable = true,
+    containerStyles,
+    labelColor,
+    multiline,
+    style,
+    onFocus,
+    onBlur,
+    ...otherProps
   } = props;
   const [isShowPass, setIsShowPass] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
-  // Use prefix or affix
-  const prefixIcon = prefix || affix;
+  const leading = prefix || affix;
+  const handleChange = val => (onChangeText || onChange)?.(val);
+  const borderColor = error
+    ? appColors.danger
+    : isFocused
+    ? appColors.primary
+    : appColors.border;
 
   return (
-    <View
-      style={[
-        styles.inputContainer,
-        isFocused && {borderColor: appColors.primary},
-        isOtp && styles.otpInput,
-      ]}>
-      {/* {affix ?? affix} */}
-      {/* {affix && <View style={styles.affixWrapper}>{affix}</View>} */}
-
-      <TextInput
+    <View style={[styles.wrapper, containerStyles]}>
+      {label ? (
+        <TextComponent
+          text={label}
+          size={13}
+          font={fontFamilies.medium}
+          color={labelColor ?? appColors.text}
+          styles={styles.label}
+        />
+      ) : null}
+      <View
         style={[
-          styles.input,
-          {backgroundColor: 'transparent'},
-          isOtp && styles.otpText,
-          otherProps.style, // Allow custom style override
-        ]}
-        placeholder={placeholder ?? ''}
-        value={value}
-        onChangeText={val => (onChangeText || onChange)?.(val)} // Support both props
-        placeholderTextColor={appColors.placeholder}
-        keyboardType={type || (isOtp ? 'numeric' : 'default')}
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        maxLength={maxLength}
-        {...otherProps} // Pass through other TextInput props like multiline, numberOfLines
-        // After the spread so a caller's secureTextEntry cannot break the toggle.
-        secureTextEntry={isPassword && !isShowPass}
-        textAlign={isOtp ? 'center' : 'left'} //OTP
-        autoCapitalize="none"
-        onEndEditing={onEnd}
-      />
-      {/* {suffix ?? suffix} */}
-      {suffix && <View style={styles.suffixWrapper}>{suffix}</View>}
-      {!isOtp && (
-        <TouchableOpacity
-          onPress={
-            isPassword ? () => setIsShowPass(!isShowPass) : () => (onChangeText || onChange)?.('')
-          }>
-          {isPassword ? (
-            isShowPass ? (
-              <Eye size={22} color={appColors.gray} />
+          styles.inputContainer,
+          {borderColor},
+          isFocused && !error && styles.focused,
+          multiline && styles.multilineContainer,
+          isOtp && styles.otpInput,
+          !editable && styles.disabled,
+        ]}>
+        {leading ? <View style={styles.leading}>{leading}</View> : null}
+        <TextInput
+          ref={ref}
+          style={[
+            styles.input,
+            multiline && styles.multilineInput,
+            isOtp && styles.otpText,
+            style,
+          ]}
+          placeholder={placeholder ?? ''}
+          value={value}
+          onChangeText={handleChange}
+          placeholderTextColor={appColors.placeholder}
+          keyboardType={type || (isOtp ? 'number-pad' : 'default')}
+          onFocus={event => {
+            setIsFocused(true);
+            onFocus?.(event);
+          }}
+          onBlur={event => {
+            setIsFocused(false);
+            onBlur?.(event);
+          }}
+          maxLength={maxLength}
+          editable={editable}
+          multiline={multiline}
+          autoCapitalize="none"
+          accessibilityLabel={label || placeholder}
+          {...otherProps}
+          // After the spread so a caller's secureTextEntry cannot break the toggle.
+          secureTextEntry={Boolean(isPassword) && !isShowPass}
+          textAlign={isOtp ? 'center' : 'left'}
+          onEndEditing={onEnd}
+        />
+        {suffix ? <View style={styles.trailing}>{suffix}</View> : null}
+        {isPassword ? (
+          <TouchableOpacity
+            onPress={() => setIsShowPass(!isShowPass)}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+            accessibilityRole="button"
+            accessibilityLabel={isShowPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}>
+            {isShowPass ? (
+              <Eye size={20} color={appColors.textMuted} />
             ) : (
-              <EyeSlash size={22} color={appColors.gray} />
-            )
-          ) : (
-            value.length > 0 &&
-            allowClear && (
-              <AntDesign name="close" size={22} color={appColors.gray} />
-            )
-          )}
-        </TouchableOpacity>
-        )}
-
+              <EyeSlash size={20} color={appColors.textMuted} />
+            )}
+          </TouchableOpacity>
+        ) : allowClear && !isOtp && editable && String(value).length > 0 ? (
+          <TouchableOpacity
+            onPress={() => handleChange('')}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+            accessibilityRole="button"
+            accessibilityLabel="Xóa nội dung">
+            <CloseCircle size={18} color={appColors.placeholder} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {error ? (
+        <TextComponent text={error} size={12} color={appColors.danger} styles={styles.helper} />
+      ) : helperText ? (
+        <TextComponent
+          text={helperText}
+          size={12}
+          color={appColors.textMuted}
+          styles={styles.helper}
+        />
+      ) : null}
     </View>
   );
-};
+});
 
 export default InputComponent;
 
 const styles = StyleSheet.create({
+  wrapper: {
+    width: '100%',
+  },
+  label: {
+    marginBottom: 6,
+  },
   inputContainer: {
     flexDirection: 'row',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: appColors.gray,
-    width: '100%',
-    height: 40,
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    width: '100%',
+    minHeight: TOUCH_TARGET,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    paddingHorizontal: spacing.md,
+    backgroundColor: appColors.surface,
+  },
+  focused: {
     backgroundColor: appColors.white,
   },
+  multilineContainer: {
+    alignItems: 'flex-start',
+    paddingVertical: spacing.sm,
+  },
+  disabled: {
+    backgroundColor: appColors.gray6,
+  },
   input: {
+    flex: 1,
     padding: 0,
     margin: 0,
-    paddingHorizontal: 10,
-    flex: 1,
-
+    paddingVertical: spacing.sm,
+    fontSize: 15,
+    fontFamily: fontFamilies.regular,
+    color: appColors.text,
   },
-  affixWrapper: {
-    marginRight: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+  multilineInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
   },
-  suffixWrapper: {
-    marginLeft: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+  leading: {
+    marginRight: spacing.sm,
+  },
+  trailing: {
+    marginLeft: spacing.sm,
+  },
+  helper: {
+    marginTop: 4,
   },
   otpInput: {
-    height: 55,
+    height: 56,
     paddingHorizontal: 0,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   otpText: {
     fontSize: 24,
-    fontFamily: fontFamilies.medium,
-    textAlign: 'center',
+    fontFamily: fontFamilies.semiBold,
     paddingHorizontal: 0,
   },
 });

@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {appInfo} from '../constants/appInfos';
 import store from '../redux/store';
 import {removeAuth} from '../redux/reducers/authReducer';
+import {NETWORK_ERROR, GENERIC_ERROR, translateServerMessage} from '../utils/errorMessage';
 
 const axiosClient = axios.create({
   baseURL: appInfo.BASE_URL,
@@ -35,23 +36,23 @@ axiosClient.interceptors.response.use(
     if (status === 401 && getToken()) {
       try {
         await AsyncStorage.removeItem('auth');
-      } catch (storageError) {
-        console.log('Error clearing auth data:', storageError);
+      } catch {
+        // Nothing else to clean up; Redux is cleared below.
       }
       store.dispatch(removeAuth());
     }
 
+    // Screens show error.message directly, so it is always Vietnamese.
     let message;
     if (error.response) {
-      message =
-        error.response.data?.message || error.response.statusText || 'Server Error';
+      message = translateServerMessage(error.response.data?.message) || GENERIC_ERROR;
     } else if (error.request) {
-      message = 'Network Error - No response from server';
+      message = NETWORK_ERROR;
     } else {
-      message = error.message || 'Unknown error occurred';
+      message = GENERIC_ERROR;
     }
 
-    // Keep `response` so screens can read error.response?.data?.message.
+    // Keep `response` so screens can read the raw server message if needed.
     const wrapped = new Error(message);
     wrapped.status = status;
     wrapped.response = error.response;

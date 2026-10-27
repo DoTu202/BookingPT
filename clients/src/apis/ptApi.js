@@ -14,6 +14,15 @@ const ptApi = {
     return axiosClient.put(url, data);
   },
 
+  // Reviews written about the signed-in PT
+  getMyReviews: async (params = {}) => {
+    const url = '/api/pt/reviews';
+    return axiosClient.get(url, {params});
+  },
+
+  // Dashboard statistics: {period: 'week'|'month'|'year', offset: 0 = current}
+  getDashboard: async (params = {}) => axiosClient.get('/api/pt/dashboard', {params}),
+
   // Availability APIs
   getAvailabilitySlots: async (params = {}) => {
     const url = '/api/pt/availability';
@@ -47,9 +56,16 @@ const ptApi = {
     return axiosClient.post(url);
   },
 
-  rejectBooking: async bookingId => {
+  // `reason` is optional for rejecting a request...
+  rejectBooking: async (bookingId, reason) => {
     const url = `/api/pt/bookings/${bookingId}/reject`;
-    return axiosClient.post(url);
+    return axiosClient.post(url, {reason});
+  },
+
+  // ...and required for cancelling a confirmed session.
+  cancelBooking: async (bookingId, reason) => {
+    const url = `/api/pt/bookings/${bookingId}/cancel`;
+    return axiosClient.post(url, {reason});
   },
 
   markBookingAsCompleted: async bookingId => {

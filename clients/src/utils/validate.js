@@ -1,4 +1,4 @@
-// Keep in sync with the server rules in server/src/controllers/authController.js
+// Keep in sync with the server rules in server/src/utils/validators.js
 export const MIN_PASSWORD_LENGTH = 8;
 
 export class Validate {
@@ -7,4 +7,6 @@ export class Validate {
   }
 
   static password = val => val.length >= MIN_PASSWORD_LENGTH;
+
+  static phone = val => /^\d{9,12}$/.test(val);
 }

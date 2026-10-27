@@ -1,162 +1,143 @@
-import {
-  StyleSheet,
-  View,
-  Platform,
-  TouchableOpacity,
-  Image,
-  FlatList,
-  Alert,
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
-import {StatusBar} from 'react-native';
-import {RowComponent, TextComponent} from './';
-import appColors from '../constants/appColors';
-import {useSelector} from 'react-redux';
-import {authSelector} from '../redux/reducers/authReducer';
-import {removeAuth} from '../redux/reducers/authReducer';
+import {Alert, ScrollView, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {useDispatch, useSelector} from 'react-redux';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {
   Calendar,
+  Chart,
   Lock,
-  Logout,
+  LogoutCurve,
   Message2,
+  Notification,
   SearchNormal1,
   User,
 } from 'iconsax-react-native';
-import {useDispatch} from 'react-redux';  
-
-const defaultAvatar = require('../../assets/images/default.png');
+import Avatar from './Avatar';
+import GradientView from './GradientView';
+import TextComponent from './TextComponent';
+import {authSelector} from '../redux/reducers/authReducer';
+import {signOut} from '../utils/session';
+import appColors from '../constants/appColors';
+import {fontFamilies} from '../constants/fontFamilies';
+import {header, radius, spacing} from '../constants/theme';
 
 const DrawerCustom = ({navigation}) => {
   const user = useSelector(authSelector);
-  const size = 24;
-  const color = appColors.gray;
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
 
-  // Every entry leads somewhere real; placeholder items (Bookmark, Settings,
-  // Upgrade Pro...) that did nothing have been removed.
-  const goToTab = screen => () =>
-    navigation.navigate('ClientTabNavigator', {screen});
+  const goToTab = screen => () => navigation.navigate('ClientTabNavigator', {screen});
 
-  const profileMenu = [
-    {
-      key: 'MyProfile',
-      title: 'My Profile',
-      icon: <User size={size} color={color} />,
-      onPress: goToTab('ClientProfile'),
-    },
-    {
-      key: 'Bookings',
-      title: 'My Bookings',
-      icon: <Calendar size={size} color={color} />,
-      onPress: goToTab('ClientBookings'),
-    },
-    {
-      key: 'Messages',
-      title: 'Messages',
-      icon: <Message2 size={size} color={color} />,
-      onPress: goToTab('Messages'),
-    },
-    {
-      key: 'FindTrainer',
-      title: 'Find a Trainer',
-      icon: <SearchNormal1 size={size} color={color} />,
-      onPress: () => navigation.navigate('SearchPtScreen'),
-    },
-    {
-      key: 'ChangePassword',
-      title: 'Change Password',
-      icon: <Lock size={size} color={color} />,
-      onPress: () => navigation.navigate('ChangePasswordScreen'),
-    },
+  const items = [
+    {key: 'find', title: 'Tìm huấn luyện viên', icon: SearchNormal1, onPress: () => navigation.navigate('SearchPtScreen')},
+    {key: 'bookings', title: 'Lịch tập của tôi', icon: Calendar, onPress: goToTab('ClientBookings')},
+    {key: 'progress', title: 'Tiến độ', icon: Chart, onPress: goToTab('Progress')},
+    {key: 'messages', title: 'Tin nhắn', icon: Message2, onPress: goToTab('Messages')},
+    {key: 'notifications', title: 'Thông báo', icon: Notification, onPress: () => navigation.navigate('Notifications')},
+    {key: 'profile', title: 'Tài khoản', icon: User, onPress: goToTab('ClientProfile')},
+    {key: 'password', title: 'Đổi mật khẩu', icon: Lock, onPress: () => navigation.navigate('ChangePasswordScreen')},
   ];
 
-  // Also clear persisted credentials; otherwise "Remember me" users were
-  // signed straight back in on the next app launch.
-  const handleSignOut = () => {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
-      {text: 'Cancel', style: 'cancel'},
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: async () => {
-          await AsyncStorage.removeItem('auth');
-          dispatch(removeAuth());
-        },
-      },
+  const handleSignOut = () =>
+    Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
+      {text: 'Hủy', style: 'cancel'},
+      {text: 'Đăng xuất', style: 'destructive', onPress: () => signOut(dispatch)},
     ]);
-  };
 
   return (
-    <View style={[localStyles.container]}>
-      <TouchableOpacity onPress={goToTab('ClientProfile')}>
-        <Image
-          source={user.photoUrl ? {uri: user.photoUrl} : defaultAvatar}
-          style={localStyles.avatar}
-        />
-        <TextComponent text={user.username} title size={18} />
-      </TouchableOpacity>
-      <FlatList
-        showsVerticalScrollIndicator={false}
-        style={localStyles.list}
-        data={profileMenu}
-        keyExtractor={item => item.key}
-        renderItem={({item}) => (
-          <RowComponent
-            styles={[localStyles.listItem]}
-            onPress={() => {
-              navigation.closeDrawer();
-              item.onPress();
-            }}>
-            {item.icon}
-            <TextComponent text={item.title} styles={localStyles.itemText} />
-          </RowComponent>
-        )}
-      />
+    <View style={styles.container}>
+      <GradientView style={[styles.header, {paddingTop: insets.top + spacing.lg}]}>
+        <TouchableOpacity onPress={goToTab('ClientProfile')} accessibilityRole="button">
+          <Avatar uri={user.photoUrl} name={user.username} size={64} style={styles.avatar} />
+          <TextComponent
+            text={user.username || 'Học viên'}
+            size={18}
+            font={fontFamilies.bold}
+            color={appColors.white}
+            numberOfLines={1}
+          />
+          <TextComponent text={user.email} size={13} color="rgba(255,255,255,0.85)" numberOfLines={1} />
+        </TouchableOpacity>
+      </GradientView>
 
-      <RowComponent
-        styles={[localStyles.listItem, localStyles.signOut]}
-        onPress={handleSignOut}>
-        <Logout size={size} color={appColors.danger} />
-        <TextComponent
-          text="Sign Out"
-          color={appColors.danger}
-          styles={localStyles.itemText}
-        />
-      </RowComponent>
+      <ScrollView contentContainerStyle={styles.list}>
+        {items.map(item => {
+          const Icon = item.icon;
+          return (
+            <TouchableOpacity
+              key={item.key}
+              style={styles.item}
+              onPress={() => {
+                navigation.closeDrawer();
+                item.onPress();
+              }}
+              accessibilityRole="button">
+              <View style={styles.itemIcon}>
+                <Icon size={20} color={appColors.primary} />
+              </View>
+              <TextComponent text={item.title} size={15} font={fontFamilies.medium} />
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      <TouchableOpacity
+        style={[styles.item, styles.signOut, {marginBottom: insets.bottom + spacing.md}]}
+        onPress={handleSignOut}
+        accessibilityRole="button">
+        <View style={[styles.itemIcon, styles.signOutIcon]}>
+          <LogoutCurve size={20} color={appColors.danger} />
+        </View>
+        <TextComponent text="Đăng xuất" size={15} font={fontFamilies.medium} color={appColors.danger} />
+      </TouchableOpacity>
     </View>
   );
 };
 
 export default DrawerCustom;
 
-const localStyles = StyleSheet.create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 40,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 70,
+    backgroundColor: appColors.surface,
   },
-
+  header: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xl,
+    borderBottomRightRadius: header.radius,
+  },
   avatar: {
-    height: 80,
-    width: 80,
-    borderRadius: 27,
-    marginBottom: 20,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.6)',
+    marginBottom: spacing.md,
   },
-
   list: {
-    flex: 1,
-    marginVertical: 24,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
-  listItem: {
-    paddingVertical: 16,
-    justifyContent: 'flex-start',
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
   },
-  itemText: {
-    marginLeft: 12,
+  itemIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: appColors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   signOut: {
+    marginHorizontal: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: appColors.gray4,
+    borderTopColor: appColors.border,
+    paddingTop: spacing.md,
+  },
+  signOutIcon: {
+    backgroundColor: appColors.dangerSoft,
   },
 });

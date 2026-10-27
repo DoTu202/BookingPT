@@ -1,712 +1,724 @@
-import React, {useState, useEffect} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
-  StyleSheet,
-  View,
-  ScrollView,
-  TouchableOpacity,
-  StatusBar,
+  ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
   Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import dayjs from 'dayjs';
+import {Add, CalendarAdd, Clock, Edit2, Flash, Lock1, Trash} from 'iconsax-react-native';
 import {
-  SectionComponent,
-  RowComponent,
-  TextComponent,
-  SpaceComponent,
-  CardComponent,
   ButtonComponent,
-  InputComponent,
+  ChipComponent,
+  DateStrip,
+  HeaderIconButton,
+  ScreenHeader,
+  StateView,
+  TextComponent,
 } from '../../components';
-import {
-  ArrowLeft,
-  Calendar,
-  Clock,
-  Add,
-  Edit,
-  Trash,
-  Calendar1,
-} from 'iconsax-react-native';
-import appColors from '../../constants/appColors';
+import {formatBookingDate} from '../../components/BookingCard';
+import {todayKey} from '../../components/DateStrip';
 import ptApi from '../../apis/ptApi';
-import {timeUtils} from '../../utils/timeUtils';
+import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
+import {radius, shadow, spacing} from '../../constants/theme';
+import dayjs from '../../utils/dayjs';
+import {formatHours} from '../../utils/format';
+import {timeUtils} from '../../utils/timeUtils';
 
-const PTAvailabilityScreen = ({navigation}) => {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [availabilitySlots, setAvailabilitySlots] = useState([]);
-  const [showAddModal, setShowAddModal] = useState(false);
+const SLOT_STATUS = {
+  available: {label: 'Còn trống', color: appColors.success, soft: appColors.successSoft},
+  booked: {label: 'Đã có người đặt', color: appColors.info, soft: appColors.infoSoft},
+  unavailable_by_pt: {label: 'Đã khóa', color: appColors.textMuted, soft: appColors.gray6},
+};
+
+// Days shown in the strip (and loaded at once).
+const DAYS = 14;
+const DURATIONS = [60, 90, 120];
+// One-tap 1-hour slots offered under the day's list.
+const PRESET_HOURS = [6, 7, 8, 9, 10, 16, 17, 18, 19, 20];
+
+// "HH:mm" helpers for the time pickers (values are Vietnam local time).
+const toMinutes = hhmm => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+const fromMinutes = total => {
+  const clamped = Math.min(Math.max(total, 0), 23 * 60 + 59);
+  return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
+};
+const toPickerDate = hhmm => {
+  const date = new Date();
+  const [h, m] = hhmm.split(':').map(Number);
+  date.setHours(h, m, 0, 0);
+  return date;
+};
+const fromPickerDate = date =>
+  `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+const dayOf = iso => dayjs(iso).utcOffset(7 * 60).format('YYYY-MM-DD');
+const hhmm = hour => `${String(hour).padStart(2, '0')}:00`;
+
+const EMPTY_FORM = {startTime: '07:00', endTime: '08:00'};
+
+const PTAvailabilityScreen = () => {
+  const insets = useSafeAreaInsets();
+  const [date, setDate] = useState(todayKey());
+  const [slots, setSlots] = useState([]); // all slots of the DAYS-day window
+  const [status, setStatus] = useState('loading');
+  const [error, setError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [addingPreset, setAddingPreset] = useState(null);
+
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
-  const [newSlot, setNewSlot] = useState({
-    startTime: '',
-    endTime: '',
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [picker, setPicker] = useState(null); // 'startTime' | 'endTime' | null
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  // Utility function to format date for display
-  const formatDate = date => {
-    if (!date) return '';
-    return dayjs(date).format('dddd, DD MMMM YYYY');
-  };
+  const load = useCallback(async () => {
+    try {
+      const from = todayKey();
+      const to = dayjs(from).add(DAYS - 1, 'day').format('YYYY-MM-DD');
+      const response = await ptApi.getAvailabilitySlots({from, to});
+      setSlots(response.data?.data || []);
+      setStatus('ready');
+    } catch (err) {
+      setError(err.message);
+      setStatus('error');
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    loadAvailabilitySlots();
-  }, [selectedDate]);
+    load();
+  }, [load]);
 
-  const loadAvailabilitySlots = async () => {
+  const daySlots = useMemo(() => slots.filter(slot => dayOf(slot.startTime) === date), [slots, date]);
+
+  // Strip dots: green = has free slots, blue = has bookings.
+  const marks = useMemo(() => {
+    const result = {};
+    slots.forEach(slot => {
+      const color = slot.status === 'available' ? appColors.success : slot.status === 'booked' ? appColors.info : null;
+      const key = dayOf(slot.startTime);
+      if (color && !(result[key] || []).includes(color)) {
+        result[key] = [...(result[key] || []), color];
+      }
+    });
+    return result;
+  }, [slots]);
+
+  const totals = useMemo(
+    () => ({
+      available: slots.filter(s => s.status === 'available' && new Date(s.startTime) > Date.now()).length,
+      booked: slots.filter(s => s.status === 'booked').length,
+      locked: slots.filter(s => s.status === 'unavailable_by_pt').length,
+    }),
+    [slots],
+  );
+
+  // Presets that start in the future and don't overlap the day's slots.
+  const presets = useMemo(
+    () =>
+      PRESET_HOURS.filter(hour => {
+        const start = new Date(timeUtils.createUtcIsoString(date, hhmm(hour)));
+        const end = new Date(start.getTime() + 3600 * 1000);
+        return (
+          start.getTime() > Date.now() &&
+          !daySlots.some(slot => new Date(slot.startTime) < end && new Date(slot.endTime) > start)
+        );
+      }),
+    [date, daySlots],
+  );
+
+  const addPreset = async hour => {
+    setAddingPreset(hour);
     try {
-      setLoading(true);
-      const dateString = dayjs(selectedDate).format('YYYY-MM-DD');
-      const response = await ptApi.getAvailabilitySlots({date: dateString});
-
-      // API returns an array of availability slots with startTime and endTime as UTC ISO strings
-      const slots = response.data?.data || response.data || [];
-      setAvailabilitySlots(slots);
-    } catch (error) {
-      console.error('Error loading availability slots:', error);
-      setAvailabilitySlots([]);
+      await ptApi.addAvailabilitySlot({
+        startTime: timeUtils.createUtcIsoString(date, hhmm(hour)),
+        endTime: timeUtils.createUtcIsoString(date, hhmm(hour + 1)),
+      });
+      await load();
+    } catch (err) {
+      Alert.alert('Không thêm được', err.message);
     } finally {
-      setLoading(false);
+      setAddingPreset(null);
     }
   };
 
-  const handleAddSlot = async () => {
+  const openAdd = () => {
+    // Start the new slot where the last one ends, which is the common case.
+    const last = daySlots[daySlots.length - 1];
+    const start = last ? timeUtils.formatTo24HourTime(last.endTime) : EMPTY_FORM.startTime;
+    setForm({startTime: start, endTime: fromMinutes(toMinutes(start) + 60)});
+    setEditingSlot(null);
+    setFormError('');
+    setSheetOpen(true);
+  };
+
+  const openEdit = slot => {
+    setForm({
+      startTime: timeUtils.formatTo24HourTime(slot.startTime),
+      endTime: timeUtils.formatTo24HourTime(slot.endTime),
+    });
+    setEditingSlot(slot);
+    setFormError('');
+    setSheetOpen(true);
+  };
+
+  const closeSheet = () => {
+    setSheetOpen(false);
+    setPicker(null);
+  };
+
+  const durationMinutes = toMinutes(form.endTime) - toMinutes(form.startTime);
+  const localError = durationMinutes <= 0 ? 'Giờ kết thúc phải sau giờ bắt đầu.' : '';
+
+  const save = async () => {
+    if (localError) {
+      return;
+    }
+    setFormError('');
+    setSaving(true);
+    const payload = {
+      startTime: timeUtils.createUtcIsoString(date, form.startTime),
+      endTime: timeUtils.createUtcIsoString(date, form.endTime),
+    };
     try {
-      if (!newSlot.startTime || !newSlot.endTime) {
-        Alert.alert('Error', 'Please fill in both start and end times.');
-        return;
-      }
-
-      // Use dayjs to format date
-      const dateString = dayjs(selectedDate).format('YYYY-MM-DD');
-
-      // Use new timeUtils to create UTC ISO strings
-      const startTimeIso = timeUtils.createUtcIsoString(
-        dateString,
-        newSlot.startTime,
-      );
-      const endTimeIso = timeUtils.createUtcIsoString(
-        dateString,
-        newSlot.endTime,
-      );
-
-      if (!startTimeIso || !endTimeIso) {
-        Alert.alert('Error', 'Invalid date or time.');
-        return;
-      }
-
-      // Data sent to API in new format
-      const slotData = {
-        startTime: startTimeIso,
-        endTime: endTimeIso,
-      };
-
       if (editingSlot) {
-        await ptApi.updateAvailabilitySlot(editingSlot._id, slotData);
-        Alert.alert('Success', 'Time slot updated successfully.');
+        await ptApi.updateAvailabilitySlot(editingSlot._id, payload);
       } else {
-        await ptApi.addAvailabilitySlot(slotData);
-        Alert.alert('Success', 'Time slot added successfully.');
+        await ptApi.addAvailabilitySlot(payload);
       }
-
-      handleModalClose();
-      await loadAvailabilitySlots();
-    } catch (error) {
-      const message = error.response?.data?.message || 'Operation failed.';
-      Alert.alert('Error', message);
-      console.error('Error in handleAddSlot:', error);
+      closeSheet();
+      load();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDeleteSlot = async slotId => {
+  const remove = slot =>
     Alert.alert(
-      'Delete Time Slot',
-      'Are you sure you want to delete this time slot?',
+      'Xóa khung giờ',
+      `Xóa khung ${timeUtils.formatTo24HourTime(slot.startTime)} – ${timeUtils.formatTo24HourTime(slot.endTime)}?`,
       [
-        {text: 'Cancel', style: 'cancel'},
+        {text: 'Hủy', style: 'cancel'},
         {
-          text: 'Delete',
+          text: 'Xóa',
           style: 'destructive',
           onPress: async () => {
             try {
-              await ptApi.deleteAvailabilitySlot(slotId);
-              Alert.alert('Success', 'Successfully deleted time slot.');
-              await loadAvailabilitySlots();
-            } catch (error) {
-              console.error('Error deleting slot:', error);
-              Alert.alert('Error', 'Failed to delete time slot.');
+              await ptApi.deleteAvailabilitySlot(slot._id);
+              load();
+            } catch (err) {
+              Alert.alert('Không xóa được', err.message);
             }
           },
         },
       ],
     );
-  };
 
-  const generateWeekDates = () => {
-    const today = dayjs();
-    const dates = [];
-    for (let i = 0; i < 7; i++) {
-      dates.push(today.add(i, 'day').toDate());
+  const onPickerChange = (event, value) => {
+    const field = picker;
+    if (Platform.OS === 'android') {
+      setPicker(null);
     }
-    return dates;
+    if (event.type !== 'set' || !value) {
+      return;
+    }
+    const time = fromPickerDate(value);
+    setForm(prev => {
+      if (field === 'startTime') {
+        // Keep the chosen duration when moving the start time.
+        const keep = Math.max(toMinutes(prev.endTime) - toMinutes(prev.startTime), 60);
+        return {startTime: time, endTime: fromMinutes(toMinutes(time) + keep)};
+      }
+      return {...prev, endTime: time};
+    });
   };
 
-  const AvailabilitySlot = ({slot}) => (
-    <CardComponent
-      styles={[styles.slotCard, slot.isBooked && styles.bookedSlotCard]}>
-      <RowComponent justify="space-between">
-        <View style={{flex: 1}}>
-          <RowComponent>
-            <Clock
-              size={16}
-              color={slot.isBooked ? appColors.white : appColors.primary}
-            />
-            <SpaceComponent width={8} />
-            <TextComponent
-              text={`${timeUtils.formatToVietnameseTime(
-                slot.startTime,
-              )} - ${timeUtils.formatToVietnameseTime(slot.endTime)}`}
-              size={16}
-              font="Poppins-SemiBold"
-              color={slot.isBooked ? appColors.white : appColors.black}
-            />
-          </RowComponent>
-          {slot.isBooked && slot.clientName && (
-            <>
-              <SpaceComponent height={4} />
-              <TextComponent
-                text={`Booked by: ${slot.clientName}`}
-                size={12}
-                color={appColors.white}
-              />
-            </>
-          )}
-          {slot.isBooked && slot.client && (
-            <>
-              <SpaceComponent height={4} />
-              <TextComponent
-                text={`Booked by: ${slot.client.username || 'Client'}`}
-                size={12}
-                color={appColors.white}
-              />
-            </>
-          )}
-        </View>
+  const freeCount = daySlots.filter(s => s.status === 'available').length;
 
-        {!slot.isBooked && (
-          <RowComponent>
-            <TouchableOpacity
-              style={styles.slotActionButton}
-              onPress={() => {
-                setEditingSlot(slot);
-
-                // Convert UTC ISO strings from API back to 24-hour format for editing
-                setNewSlot({
-                  startTime: timeUtils.formatTo24HourTime(slot.startTime),
-                  endTime: timeUtils.formatTo24HourTime(slot.endTime),
-                });
-                setShowAddModal(true);
-              }}>
-              <Edit size={16} color={appColors.primary} />
-            </TouchableOpacity>
-            <SpaceComponent width={8} />
-            <TouchableOpacity
-              style={styles.slotActionButton}
-              onPress={() => handleDeleteSlot(slot._id || slot.id)}>
-              <Trash size={16} color={appColors.danger} />
-            </TouchableOpacity>
-          </RowComponent>
-        )}
-      </RowComponent>
-    </CardComponent>
-  );
-
-  const DateSelector = () => (
-    <View style={styles.dateSelector}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {generateWeekDates().map((date, index) => {
-          const isSelected =
-            date.toDateString() === selectedDate.toDateString();
-          return (
-            <TouchableOpacity
-              key={date.toDateString()}
-              style={[
-                styles.dateButton,
-                isSelected && styles.selectedDateButton,
-              ]}
-              onPress={() => setSelectedDate(date)}>
-              <TextComponent
-                text={date.getDate().toString()}
-                size={16}
-                font="Poppins-SemiBold"
-                color={isSelected ? appColors.white : appColors.black}
-              />
-              <TextComponent
-                text={dayjs(date).format('ddd')}
-                size={12}
-                color={isSelected ? appColors.white : appColors.gray}
-              />
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-
-  const AddSlotModal = () => (
-    <Modal
-      visible={showAddModal}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={handleModalClose}>
-      <SafeAreaView style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={handleModalClose}>
-            <TextComponent text="Cancel" size={16} color={appColors.primary} />
-          </TouchableOpacity>
+  const renderSlot = (slot, index) => {
+    const info = SLOT_STATUS[slot.status] || SLOT_STATUS.available;
+    const past = new Date(slot.startTime).getTime() <= Date.now();
+    // The server only accepts future start times, and never touches booked slots.
+    const editable = slot.status !== 'booked' && !past;
+    const isLast = index === daySlots.length - 1;
+    return (
+      <View key={slot._id} style={[styles.timelineRow, past && styles.past]}>
+        <View style={styles.timeColumn}>
           <TextComponent
-            text={editingSlot ? 'Edit Slot' : 'Add Slot'}
-            size={18}
-            font="Poppins-SemiBold"
-            color={appColors.black}
+            text={timeUtils.formatTo24HourTime(slot.startTime)}
+            size={15}
+            font={fontFamilies.bold}
           />
-          <TouchableOpacity onPress={handleAddSlot}>
-            <TextComponent
-              text="Save"
-              size={16}
-              color={appColors.primary}
-              font="Poppins-SemiBold"
-            />
-          </TouchableOpacity>
+          <TextComponent
+            text={timeUtils.formatTo24HourTime(slot.endTime)}
+            size={12}
+            color={appColors.textMuted}
+          />
         </View>
-
-        <ScrollView
-          style={styles.modalContent}
-          keyboardShouldPersistTaps="handled">
-          <SectionComponent>
-            <TextComponent
-              text="Date"
-              size={16}
-              font="Poppins-SemiBold"
-              color={appColors.black}
-            />
-            <SpaceComponent height={8} />
-            <View style={styles.dateDisplay}>
-              <Calendar1 size={20} color={appColors.primary} />
-              <SpaceComponent width={8} />
+        <View style={styles.rail}>
+          <View style={[styles.railDot, {borderColor: info.color}]} />
+          {!isLast ? <View style={styles.railLine} /> : null}
+        </View>
+        <View style={[styles.slotCard, {borderLeftColor: info.color}]}>
+          <View style={styles.flex}>
+            <View style={[styles.slotBadge, {backgroundColor: info.soft}]}>
+              {slot.status === 'booked' ? <Lock1 size={12} color={info.color} variant="Bold" /> : null}
               <TextComponent
-                text={formatDate(selectedDate)}
-                size={14}
-                color={appColors.black}
+                text={past && slot.status !== 'booked' ? 'Đã qua' : info.label}
+                size={11}
+                font={fontFamilies.semiBold}
+                color={info.color}
               />
             </View>
-          </SectionComponent>
-
-          <SectionComponent>
             <TextComponent
-              text="Start Time"
-              size={16}
-              font="Poppins-SemiBold"
-              color={appColors.black}
-            />
-            <SpaceComponent height={8} />
-            <TouchableOpacity
-              style={styles.timeInput}
-              onPress={() => setShowStartTimePicker(true)}>
-              <TextComponent
-                text={newSlot.startTime || 'Select start time'}
-                size={16}
-                color={newSlot.startTime ? appColors.black : appColors.gray}
-              />
-              <Clock size={20} color={appColors.primary} />
-            </TouchableOpacity>
-          </SectionComponent>
-
-          <SectionComponent>
-            <TextComponent
-              text="End Time"
-              size={16}
-              font="Poppins-SemiBold"
-              color={appColors.black}
-            />
-            <SpaceComponent height={8} />
-            <TouchableOpacity
-              style={styles.timeInput}
-              onPress={() => setShowEndTimePicker(true)}>
-              <TextComponent
-                text={newSlot.endTime || 'Select end time'}
-                size={16}
-                color={newSlot.endTime ? appColors.black : appColors.gray}
-              />
-              <Clock size={20} color={appColors.primary} />
-            </TouchableOpacity>
-          </SectionComponent>
-        </ScrollView>
-
-        {/* Time Pickers */}
-        {showStartTimePicker && (
-          <View>
-            {Platform.OS === 'ios' && (
-              <View style={styles.pickerHeader}>
-                <TouchableOpacity onPress={() => setShowStartTimePicker(false)}>
-                  <TextComponent
-                    text="Cancel"
-                    size={16}
-                    color={appColors.primary}
-                  />
-                </TouchableOpacity>
-                <TextComponent
-                  text="Select Start Time"
-                  size={16}
-                  font="Poppins-SemiBold"
-                />
-                <TouchableOpacity onPress={() => setShowStartTimePicker(false)}>
-                  <TextComponent
-                    text="Done"
-                    size={16}
-                    color={appColors.primary}
-                    font="Poppins-SemiBold"
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
-            <DateTimePicker
-              value={createTimeFromString(newSlot.startTime)}
-              mode="time"
-              is24Hour={true}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleStartTimeChange}
+              text={formatHours((new Date(slot.endTime) - new Date(slot.startTime)) / 3600000)}
+              size={12}
+              color={appColors.textMuted}
+              styles={styles.duration}
             />
           </View>
-        )}
+          {editable ? (
+            <View style={styles.slotActions}>
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => openEdit(slot)}
+                accessibilityRole="button"
+                accessibilityLabel="Sửa khung giờ">
+                <Edit2 size={17} color={appColors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.iconButton, styles.iconButtonDanger]}
+                onPress={() => remove(slot)}
+                accessibilityRole="button"
+                accessibilityLabel="Xóa khung giờ">
+                <Trash size={17} color={appColors.danger} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    );
+  };
 
-        {showEndTimePicker && (
-          <View>
-            {Platform.OS === 'ios' && (
-              <View style={styles.pickerHeader}>
-                <TouchableOpacity onPress={() => setShowEndTimePicker(false)}>
-                  <TextComponent
-                    text="Cancel"
-                    size={16}
-                    color={appColors.primary}
-                  />
-                </TouchableOpacity>
-                <TextComponent
-                  text="Select End Time"
-                  size={16}
-                  font="Poppins-SemiBold"
-                />
-                <TouchableOpacity onPress={() => setShowEndTimePicker(false)}>
-                  <TextComponent
-                    text="Done"
-                    size={16}
-                    color={appColors.primary}
-                    font="Poppins-SemiBold"
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
-            <DateTimePicker
-              value={createTimeFromString(newSlot.endTime)}
-              mode="time"
-              is24Hour={true}
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleEndTimeChange}
+  const renderQuickAdd = () =>
+    presets.length > 0 ? (
+      <View style={styles.card}>
+        <View style={styles.quickHeader}>
+          <Flash size={18} color={appColors.primary} variant="Bold" />
+          <TextComponent text="Thêm nhanh khung 1 giờ" size={14} font={fontFamilies.semiBold} styles={styles.flex} />
+        </View>
+        <View style={styles.wrap}>
+          {presets.map(hour => (
+            <TouchableOpacity
+              key={hour}
+              style={styles.preset}
+              onPress={() => addPreset(hour)}
+              disabled={addingPreset !== null}
+              accessibilityRole="button"
+              accessibilityLabel={`Thêm khung ${hhmm(hour)} đến ${hhmm(hour + 1)}`}>
+              {addingPreset === hour ? (
+                <ActivityIndicator size="small" color={appColors.primary} />
+              ) : (
+                <>
+                  <Add size={14} color={appColors.primaryDark} />
+                  <TextComponent text={hhmm(hour)} size={13} font={fontFamilies.semiBold} color={appColors.primaryDark} />
+                </>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity onPress={openAdd} accessibilityRole="button">
+          <TextComponent text="Chọn giờ khác…" size={13} font={fontFamilies.semiBold} color={appColors.primary} />
+        </TouchableOpacity>
+      </View>
+    ) : null;
+
+  const renderDay = () => {
+    if (status === 'loading') {
+      return <StateView type="loading" compact />;
+    }
+    if (status === 'error') {
+      return <StateView type="error" message={error} onAction={load} compact />;
+    }
+    if (daySlots.length === 0) {
+      return (
+        <>
+          <View style={styles.card}>
+            <StateView
+              compact
+              icon={<CalendarAdd size={30} color={appColors.primary} />}
+              title="Ngày này chưa có khung giờ"
+              message="Thêm khung giờ rảnh để học viên có thể đặt lịch với bạn."
             />
           </View>
-        )}
-      </SafeAreaView>
-    </Modal>
-  );
-
-  const resetModal = () => {
-    setEditingSlot(null);
-    setNewSlot({
-      startTime: '',
-      endTime: '',
-    });
-    setShowStartTimePicker(false);
-    setShowEndTimePicker(false);
-  };
-
-  const handleModalClose = () => {
-    setShowAddModal(false);
-    resetModal();
-  };
-
-  const formatTimeForInput = time => {
-    if (!time) return '';
-
-    // If it's already in HH:MM format, return as is
-    if (typeof time === 'string' && time.match(/^\d{2}:\d{2}$/)) {
-      return time;
+          {presets.length > 0 ? (
+            renderQuickAdd()
+          ) : (
+            <ButtonComponent text="Thêm khung giờ" type="primary" onPress={openAdd} fullWidth />
+          )}
+        </>
+      );
     }
-
-    // Use timeUtils to format time in 24-hour format
-    return timeUtils.formatTo24HourTime(time);
-  };
-
-  const handleStartTimeChange = (event, selectedTime) => {
-    if (Platform.OS === 'android') {
-      setShowStartTimePicker(false);
-    }
-    if (selectedTime) {
-      // Get time directly from Date object (local time)
-      const hours = selectedTime.getHours().toString().padStart(2, '0');
-      const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
-      const timeString = `${hours}:${minutes}`;
-
-      setNewSlot({...newSlot, startTime: timeString});
-    }
-  };
-
-  const handleEndTimeChange = (event, selectedTime) => {
-    if (Platform.OS === 'android') {
-      setShowEndTimePicker(false);
-    }
-    if (selectedTime) {
-      // Get time directly from Date object
-      const hours = selectedTime.getHours().toString().padStart(2, '0');
-      const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
-      const timeString = `${hours}:${minutes}`;
-      setNewSlot({...newSlot, endTime: timeString});
-    }
-  };
-
-  const createTimeFromString = timeString => {
-    if (!timeString) {
-      // Return current time
-      return new Date();
-    }
-
-    const [hours, minutes] = timeString.split(':');
-
-    // Create Date object with today's date and specified time
-    // Use setHours to set local time
-    const date = new Date();
-    date.setHours(parseInt(hours) || 0, parseInt(minutes) || 0, 0, 0);
-
-    return date;
+    return (
+      <>
+        <View style={styles.card}>{daySlots.map(renderSlot)}</View>
+        {renderQuickAdd()}
+      </>
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <RowComponent justify="space-between">
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft
-              size={24}
-              color={appColors.white}
-              style={{marginTop: 40}}
-            />
-          </TouchableOpacity>
-          <TextComponent
-            text="My Availability"
-            size={18}
-            font={fontFamilies.semiBold}
-            color={appColors.white}
-            styles={{marginTop: 40}}
+    <View style={styles.container}>
+      <ScreenHeader
+        title="Lịch rảnh"
+        subtitle={`${DAYS} ngày tới`}
+        right={
+          <HeaderIconButton
+            icon={<Add size={24} color={appColors.white} />}
+            onPress={openAdd}
+            accessibilityLabel="Thêm khung giờ"
           />
-          <TouchableOpacity
-            onPress={() => {
-              resetModal();
-              setShowAddModal(true);
+        }
+      />
+
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
             }}
-            style={{marginTop: 40}}>
-            <Add size={24} color={appColors.white} />
-          </TouchableOpacity>
-        </RowComponent>
-      </View>
-
-      <ScrollView style={styles.content}>
-        {/* Date Selector */}
-        <DateSelector />
-
-        {/* Selected Date Info */}
-        <SectionComponent>
-          <TextComponent
-            text={formatDate(selectedDate)}
-            size={18}
-            font="Poppins-SemiBold"
-            color={appColors.black}
+            colors={[appColors.primary]}
+            tintColor={appColors.primary}
           />
-          <SpaceComponent height={4} />
-          <TextComponent
-            text={`${availabilitySlots.length} time slots available`}
-            size={14}
-            color={appColors.gray}
-          />
-        </SectionComponent>
-
-        {/* Availability Slots */}
-        <SectionComponent>
-          {availabilitySlots.length > 0 ? (
-            availabilitySlots.map((slot, index) => (
-              <View key={slot._id || slot.id || `slot-${index}`}>
-                <AvailabilitySlot slot={slot} />
-                {index < availabilitySlots.length - 1 && (
-                  <SpaceComponent height={12} />
-                )}
-              </View>
-            ))
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Calendar size={64} color={appColors.gray} />
-              <SpaceComponent height={16} />
-              <TextComponent
-                text="No availability slots"
-                size={18}
-                font="Poppins-SemiBold"
-                color={appColors.gray}
-                styles={{textAlign: 'center'}}
-              />
-              <SpaceComponent height={8} />
-              <TextComponent
-                text="Add time slots to let clients book sessions"
-                size={14}
-                color={appColors.gray}
-                styles={{textAlign: 'center'}}
-              />
-              <SpaceComponent height={20} />
-              <ButtonComponent
-                text="Add First Slot"
-                type="primary"
-                onPress={() => {
-                  resetModal();
-                  setShowAddModal(true);
-                }}
-              />
+        }>
+        <View style={styles.totals}>
+          {[
+            {label: 'Còn trống', value: totals.available, color: appColors.success, soft: appColors.successSoft},
+            {label: 'Đã đặt', value: totals.booked, color: appColors.info, soft: appColors.infoSoft},
+            {label: 'Đã khóa', value: totals.locked, color: appColors.textMuted, soft: appColors.gray6},
+          ].map(item => (
+            <View key={item.label} style={[styles.total, {backgroundColor: item.soft}]}>
+              <TextComponent text={String(item.value)} size={20} font={fontFamilies.bold} color={item.color} />
+              <TextComponent text={item.label} size={12} color={appColors.textMuted} />
             </View>
-          )}
-        </SectionComponent>
+          ))}
+        </View>
 
-        <SpaceComponent height={100} />
+        <DateStrip value={date} onChange={setDate} days={DAYS} marks={marks} style={styles.strip} />
+
+        <View style={styles.dayHeader}>
+          <View style={styles.flex}>
+            <TextComponent
+              text={formatBookingDate(timeUtils.createUtcIsoString(date, '12:00'))}
+              size={16}
+              font={fontFamilies.semiBold}
+            />
+            <TextComponent
+              text={
+                daySlots.length > 0
+                  ? `${daySlots.length} khung giờ • ${freeCount} còn trống`
+                  : 'Chưa có khung giờ'
+              }
+              size={13}
+              color={appColors.textMuted}
+            />
+          </View>
+          {daySlots.length > 0 ? (
+            <ButtonComponent
+              text="Thêm"
+              type="secondary"
+              size="sm"
+              icon={<Add size={16} color={appColors.primaryDark} />}
+              onPress={openAdd}
+            />
+          ) : null}
+        </View>
+
+        {renderDay()}
       </ScrollView>
 
-      <AddSlotModal />
-    </SafeAreaView>
+      <Modal visible={sheetOpen} transparent animationType="slide" onRequestClose={closeSheet}>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={closeSheet} accessibilityLabel="Đóng" />
+          <View style={[styles.sheet, {paddingBottom: insets.bottom + spacing.lg}]}>
+            <View style={styles.sheetHandle} />
+            <TextComponent
+              text={editingSlot ? 'Sửa khung giờ' : 'Thêm khung giờ'}
+              size={18}
+              font={fontFamilies.bold}
+            />
+            <TextComponent
+              text={formatBookingDate(timeUtils.createUtcIsoString(date, '12:00'))}
+              size={13}
+              color={appColors.textMuted}
+            />
+
+            <View style={styles.timeRow}>
+              {[
+                ['startTime', 'Bắt đầu'],
+                ['endTime', 'Kết thúc'],
+              ].map(([field, label]) => (
+                <TouchableOpacity
+                  key={field}
+                  style={[styles.timeField, picker === field && styles.timeFieldActive]}
+                  onPress={() => setPicker(picker === field ? null : field)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Chọn giờ ${label.toLowerCase()}`}>
+                  <TextComponent text={label} size={12} color={appColors.textMuted} />
+                  <View style={styles.timeValue}>
+                    <Clock size={18} color={appColors.primary} />
+                    <TextComponent text={form[field]} size={20} font={fontFamilies.semiBold} />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {picker ? (
+              <DateTimePicker
+                value={toPickerDate(form[picker])}
+                mode="time"
+                is24Hour
+                minuteInterval={Platform.OS === 'ios' ? 15 : undefined}
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onPickerChange}
+                locale="vi-VN"
+              />
+            ) : null}
+
+            <View>
+              <TextComponent text="Thời lượng nhanh" size={13} font={fontFamilies.medium} styles={styles.label} />
+              <View style={styles.wrap}>
+                {DURATIONS.map(minutes => (
+                  <ChipComponent
+                    key={minutes}
+                    label={formatHours(minutes / 60)}
+                    selected={durationMinutes === minutes}
+                    onPress={() =>
+                      setForm(prev => ({...prev, endTime: fromMinutes(toMinutes(prev.startTime) + minutes)}))
+                    }
+                  />
+                ))}
+              </View>
+            </View>
+
+            {localError || formError ? (
+              <View style={styles.errorBox}>
+                <TextComponent text={localError || formError} size={13} color={appColors.danger} />
+              </View>
+            ) : null}
+
+            <ButtonComponent
+              text={editingSlot ? 'Lưu thay đổi' : 'Thêm khung giờ'}
+              type="primary"
+              size="lg"
+              onPress={save}
+              isLoading={saving}
+              disable={Boolean(localError)}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 };
+
+export default PTAvailabilityScreen;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.white,
+    backgroundColor: appColors.background,
   },
-  header: {
-    backgroundColor: appColors.primary,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 20,
-    height: 140,
-    borderRadius: 20,
-  },
-  content: {
+  flex: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 60,
   },
-  dateSelector: {
-    marginBottom: 20,
+  scroll: {
+    padding: spacing.lg,
+    gap: spacing.md,
+    paddingBottom: spacing.xxl,
   },
-  dateButton: {
-    width: 60,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: appColors.white,
-    justifyContent: 'center',
+  totals: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  total: {
+    flex: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+  },
+  strip: {
+    paddingHorizontal: 0,
+  },
+  dayHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: spacing.md,
+    marginTop: spacing.xs,
   },
-  selectedDateButton: {
-    backgroundColor: appColors.primary,
+  card: {
+    backgroundColor: appColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadow.sm,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
+  past: {
+    opacity: 0.5,
+  },
+  timeColumn: {
+    width: 46,
+    paddingTop: spacing.sm,
+  },
+  rail: {
+    width: 14,
+    alignItems: 'center',
+    paddingTop: spacing.sm + 4,
+  },
+  railDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 3,
+    backgroundColor: appColors.surface,
+  },
+  railLine: {
+    flex: 1,
+    width: 2,
+    marginTop: 4,
+    marginBottom: -spacing.md - spacing.sm,
+    backgroundColor: appColors.border,
   },
   slotCard: {
-    padding: 16,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderLeftWidth: 4,
+    backgroundColor: appColors.background,
   },
-  bookedSlotCard: {
-    backgroundColor: appColors.primary,
+  slotBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
   },
-  slotActionButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: appColors.white,
+  duration: {
+    marginTop: 4,
+  },
+  slotActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: appColors.primarySoft,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
+  iconButtonDanger: {
+    backgroundColor: appColors.dangerSoft,
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: appColors.white,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: appColors.gray2,
-  },
-  modalContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  dateDisplay: {
+  quickHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: 8,
+    gap: spacing.sm,
+  },
+  preset: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    minWidth: 76,
+    height: 38,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.2)',
+    borderColor: appColors.primaryLight,
+    backgroundColor: appColors.primarySoft,
   },
-  timeInput: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.2)',
+  backdrop: {
+    flex: 1,
+    backgroundColor: appColors.overlay,
   },
-  pickerHeader: {
+  sheet: {
+    backgroundColor: appColors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingHorizontal: spacing.lg + 4,
+    gap: spacing.md,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: appColors.border,
+    marginTop: spacing.sm,
+  },
+  timeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  timeField: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: appColors.border,
+    gap: 4,
+  },
+  timeFieldActive: {
+    borderColor: appColors.primary,
+    backgroundColor: appColors.primarySoft,
+  },
+  timeValue: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: appColors.gray4,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+    gap: spacing.sm,
+  },
+  label: {
+    marginBottom: spacing.sm,
+  },
+  wrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  errorBox: {
+    backgroundColor: appColors.dangerSoft,
+    borderRadius: radius.sm,
+    padding: spacing.md,
   },
 });
-
-export default PTAvailabilityScreen;

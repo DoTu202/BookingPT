@@ -40,7 +40,7 @@ const DeleteAccountModal = ({visible, onClose}) => {
       close();
       await signOut(dispatch);
     } catch (err) {
-      setError(err.message || 'Failed to delete account');
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -55,27 +55,27 @@ const DeleteAccountModal = ({visible, onClose}) => {
       onRequestClose={close}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <TextComponent text="Delete account" styles={styles.title} />
+          <TextComponent text="Xóa tài khoản" styles={styles.title} />
           <TextComponent
-            text="This permanently deletes your profile, availability and notifications. Past bookings are kept anonymously. This cannot be undone."
+            text="Hồ sơ, lịch rảnh và thông báo của bạn sẽ bị xóa vĩnh viễn. Các lịch đặt cũ được giữ ở dạng ẩn danh. Không thể hoàn tác."
             styles={styles.body}
           />
           <InputComponent
             value={password}
             onChange={setPassword}
-            placeholder="Current password"
+            placeholder="Mật khẩu hiện tại"
             isPassword
           />
           <InputComponent
             value={confirmText}
             onChange={setConfirmText}
-            placeholder='Type "DELETE" to confirm'
+            placeholder='Gõ "DELETE" để xác nhận'
             allowClear
           />
           {error ? <TextComponent text={error} styles={styles.error} /> : null}
           <View style={styles.actions}>
             <TouchableOpacity style={styles.button} onPress={close}>
-              <TextComponent text="Cancel" styles={styles.cancelText} />
+              <TextComponent text="Hủy" styles={styles.cancelText} />
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -88,7 +88,7 @@ const DeleteAccountModal = ({visible, onClose}) => {
               {isLoading ? (
                 <ActivityIndicator color={appColors.white} />
               ) : (
-                <TextComponent text="Delete" styles={styles.deleteText} />
+                <TextComponent text="Xóa" styles={styles.deleteText} />
               )}
             </TouchableOpacity>
           </View>

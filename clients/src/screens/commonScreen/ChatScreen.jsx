@@ -1,485 +1,409 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
+  ActivityIndicator,
   FlatList,
-  TextInput,
-  TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSelector } from 'react-redux';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import {useFocusEffect} from '@react-navigation/native';
+import {useSelector} from 'react-redux';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import dayjs from '../../utils/dayjs';
+import {ArrowLeft, Messages2, Send2, Warning2} from 'iconsax-react-native';
+import {Avatar, GradientView, HeaderIconButton, StateView, TextComponent} from '../../components';
 import chatApi from '../../apis/chatApi';
-import { authSelector } from '../../redux/reducers/authReducer';
+import {emitSocket, useSocketEvent} from '../../apis/socketClient';
+import {authSelector} from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
-import { timeUtils } from '../../utils/timeUtils';
-import { fontFamilies } from '../../constants/fontFamilies';
-import profileApi from '../../apis/profileApi';
+import {fontFamilies} from '../../constants/fontFamilies';
+import {header, radius, spacing} from '../../constants/theme';
+import {timeUtils} from '../../utils/timeUtils';
 
-const ChatScreen = ({ navigation, route }) => {
-  const { chatRoomId, otherUser } = route.params;
+// How long a typing hint stays up without a new one, and how often we send ours.
+const TYPING_SHOW_MS = 3000;
+const TYPING_SEND_MS = 1500;
+
+// Adds messages not seen yet (by _id) and keeps the list in send order.
+const mergeMessages = (current, incoming) => {
+  const known = new Set(current.map(m => m._id));
+  const added = incoming.filter(m => !known.has(m._id));
+  if (added.length === 0) {
+    return current;
+  }
+  return [...current, ...added].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+};
+const MAX_LENGTH = 2000; // Same limit as the server's Message model.
+
+const dayLabel = iso => {
+  const day = dayjs(iso).utcOffset(7 * 60).startOf('day');
+  const today = dayjs().utcOffset(7 * 60).startOf('day');
+  const diff = today.diff(day, 'day');
+  if (diff === 0) {
+    return 'Hôm nay';
+  }
+  if (diff === 1) {
+    return 'Hôm qua';
+  }
+  return day.format('DD/MM/YYYY');
+};
+
+const ChatScreen = ({navigation, route}) => {
+  const {chatRoomId, otherUser} = route.params;
   const auth = useSelector(authSelector);
-  
+  const insets = useSafeAreaInsets();
+
   const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [pollingInterval, setPollingInterval] = useState(null);
-  
-  // Reference Flatlist to scroll to bottom
-  const flatListRef = useRef(null);
+  const [pending, setPending] = useState([]); // optimistic messages not yet confirmed
+  const [status, setStatus] = useState('loading');
+  const [error, setError] = useState('');
+  const [draft, setDraft] = useState('');
+  const [otherTyping, setOtherTyping] = useState(false);
+  const typingTimer = useRef(null);
+  const lastTypingSent = useRef(0);
 
-  // Get messages from API
-  const loadMessages = async () => {
-    try {
-      setLoading(true);
-      const response = await chatApi.getMessages(auth.accesstoken, chatRoomId);
+  const fetchMessages = useCallback(async () => {
+    const response = await chatApi.getMessages(null, chatRoomId);
+    setMessages(prev => mergeMessages(prev, response.data?.messages || []));
+  }, [chatRoomId]);
 
-      if (response.success) {
-        // Sort messages from oldest to newest
-        const sortedMessages = [...(response.data.messages || [])].sort(
-          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-        );
-        setMessages(sortedMessages);
-        // Scroll to the last message after loading
-        setTimeout(() => {
-          scrollToBottom(false);
-        }, 200);
-      }
-    } catch (error) {
-      console.error('Error loading messages:', error);
-      Alert.alert('Error', 'Cannot load messages');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Scroll to the last message
-  const scrollToBottom = (animated = true) => {
-    if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated });
-    }
-  };
-
-  // Poll for new messages
-  const startPolling = () => {
-    const interval = setInterval(async () => {
-      try {
-        const response = await chatApi.getMessages(auth.accesstoken, chatRoomId);
-        if (response.success) {
-          // Sort messages from oldest to newest
-          const sortedMessages = [...(response.data.messages || [])].sort(
-            (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-          );
-          
-          // Check if there are new messages
-          const shouldScroll = 
-            messages.length < sortedMessages.length ||
-            (sortedMessages.length > 0 && 
-            messages.length > 0 && 
-            sortedMessages[sortedMessages.length-1]._id !== messages[messages.length-1]._id);
-            
-          setMessages(sortedMessages);
-          
-          // Scroll to bottom if there are new messages
-          if (shouldScroll) {
-            setTimeout(() => {
-              scrollToBottom();
-            }, 100);
+  // Load when the chat is shown; new messages then arrive over the socket.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      fetchMessages()
+        .then(() => active && setStatus('ready'))
+        .catch(err => {
+          if (active) {
+            setError(err.message);
+            setStatus('error');
           }
-        }
-      } catch (error) {
-        console.error('Error polling messages:', error);
-      }
-    }, 3000); // Poll every 3 seconds
-    
-    setPollingInterval(interval);
-  };
+        });
+      return () => {
+        active = false;
+      };
+    }, [fetchMessages]),
+  );
 
-  const stopPolling = () => {
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      setPollingInterval(null);
+  // After a reconnect, pick up whatever was sent while we were offline.
+  useSocketEvent('connect', () => {
+    fetchMessages().catch(() => {});
+  });
+
+  useSocketEvent('chat:message', ({chatRoomId: roomId, message, clientId}) => {
+    if (roomId !== chatRoomId) {
+      return;
+    }
+    setMessages(prev => mergeMessages(prev, [message]));
+    if (clientId) {
+      setPending(prev => prev.filter(p => p.tempId !== clientId));
+    }
+    if (String(message.sender?._id) !== String(auth.id)) {
+      clearTimeout(typingTimer.current);
+      setOtherTyping(false);
+    }
+  });
+
+  useSocketEvent('chat:typing', ({chatRoomId: roomId}) => {
+    if (roomId !== chatRoomId) {
+      return;
+    }
+    setOtherTyping(true);
+    clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => setOtherTyping(false), TYPING_SHOW_MS);
+  });
+
+  useEffect(() => () => clearTimeout(typingTimer.current), []);
+
+  const changeDraft = text => {
+    setDraft(text);
+    const now = Date.now();
+    if (text.trim() && now - lastTypingSent.current > TYPING_SEND_MS) {
+      lastTypingSent.current = now;
+      emitSocket('chat:typing', {chatRoomId});
     }
   };
 
-  // Send a new message
-  const sendMessage = async () => {
-    if (!newMessage.trim()) return;
-
-    const messageText = newMessage.trim();
-    setNewMessage('');
-
+  const deliver = async item => {
+    setPending(prev => prev.map(p => (p.tempId === item.tempId ? {...p, failed: false} : p)));
     try {
-      setSending(true);
-      const response = await chatApi.sendMessage(auth.accesstoken, chatRoomId, messageText);
-      
-      if (response.success) {
-        // Add the new message to the list
-        setMessages(prev => [...prev, response.data]);
-        setTimeout(() => {
-          scrollToBottom();
-        }, 100);
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      Alert.alert('Error', 'Cannot send message');
-      setNewMessage(messageText); // Restore the message text if sending fails
-    } finally {
-      setSending(false);
+      const response = await chatApi.sendMessage(null, chatRoomId, item.content, item.tempId);
+      // The socket event may already have delivered it.
+      setMessages(prev => mergeMessages(prev, [response.data]));
+      setPending(prev => prev.filter(p => p.tempId !== item.tempId));
+    } catch {
+      setPending(prev => prev.map(p => (p.tempId === item.tempId ? {...p, failed: true} : p)));
     }
   };
 
-  // Format the message time
-  const formatMessageTime = (date) => {
-    if (!date) return '';
-    return timeUtils.formatMessageTime(date);
+  const send = () => {
+    const content = draft.trim();
+    if (!content) {
+      return;
+    }
+    const item = {
+      tempId: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      content,
+      createdAt: new Date().toISOString(),
+      sender: {_id: auth.id},
+    };
+    setDraft('');
+    setPending(prev => [...prev, item]);
+    deliver(item);
   };
 
-  const renderMessage = ({ item }) => {
-    const isMyMessage = item.sender._id === auth.id;
-    
-    return (
-      <View style={[
-        styles.messageContainer,
-        isMyMessage ? styles.myMessage : styles.otherMessage
-      ]}>
-        <View style={[
-          styles.messageBubble,
-          isMyMessage ? styles.myBubble : styles.otherBubble
-        ]}>
-          <Text style={[
-            styles.messageText,
-            isMyMessage ? styles.myMessageText : styles.otherMessageText
-          ]}>
-            {item.content}
-          </Text>
-          <Text style={[
-            styles.timeText,
-            isMyMessage ? styles.myTimeText : styles.otherTimeText
-          ]}>
-            {formatMessageTime(item.createdAt)}
-          </Text>
+  // Newest first for the inverted list, with a date separator before the
+  // first message of each day.
+  const rows = useMemo(() => {
+    const all = [...messages, ...pending];
+    const result = [];
+    for (let i = all.length - 1; i >= 0; i--) {
+      const message = all[i];
+      result.push({type: 'message', key: message._id || message.tempId, message});
+      const previous = all[i - 1];
+      if (!previous || dayLabel(previous.createdAt) !== dayLabel(message.createdAt)) {
+        result.push({type: 'day', key: `day-${message._id || message.tempId}`, label: dayLabel(message.createdAt)});
+      }
+    }
+    return result;
+  }, [messages, pending]);
+
+  const renderRow = ({item}) => {
+    if (item.type === 'day') {
+      return (
+        <View style={styles.dayRow}>
+          <TextComponent text={item.label} size={11} font={fontFamilies.medium} color={appColors.textMuted} />
         </View>
+      );
+    }
+    const {message} = item;
+    const mine = String(message.sender?._id || message.sender) === String(auth.id);
+    const isPending = Boolean(message.tempId);
+    return (
+      <View style={[styles.messageRow, mine ? styles.mineRow : styles.theirRow]}>
+        <TouchableOpacity
+          activeOpacity={message.failed ? 0.7 : 1}
+          disabled={!message.failed}
+          onPress={() => deliver(message)}
+          style={[styles.bubble, mine ? styles.mineBubble : styles.theirBubble, isPending && !message.failed && styles.pendingBubble]}
+          accessibilityLabel={message.failed ? 'Gửi thất bại, chạm để gửi lại' : undefined}>
+          <TextComponent
+            text={message.content}
+            size={15}
+            color={mine ? appColors.white : appColors.text}
+            styles={styles.messageText}
+          />
+          <TextComponent
+            text={
+              message.failed
+                ? 'Chưa gửi được • Chạm để thử lại'
+                : isPending
+                ? 'Đang gửi...'
+                : timeUtils.formatTo24HourTime(message.createdAt)
+            }
+            size={10}
+            color={mine ? 'rgba(255,255,255,0.8)' : appColors.textMuted}
+            styles={mine ? styles.timeRight : null}
+          />
+        </TouchableOpacity>
+        {message.failed ? <Warning2 size={16} color={appColors.danger} style={styles.failedIcon} /> : null}
       </View>
     );
   };
 
-  // Load messages and start polling when the component mounts
-  useEffect(() => {
-    loadMessages();
-    startPolling();
-    
-    return () => {
-      stopPolling();
-    };
-  }, [chatRoomId]);
+  const canSend = draft.trim().length > 0;
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-      <KeyboardAvoidingView 
-        style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <Icon name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
-          
-          <View style={styles.headerInfo}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {otherUser.username.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.headerTitle}>{otherUser.username}</Text>
-              <Text style={styles.headerSubtitle}>
-                {otherUser.role === 'pt' ? 'Personal Trainer' : 'Client'}
-              </Text>
-            </View>
-          </View>
-          
-          <TouchableOpacity style={styles.moreButton}>
-            <Icon name="more-vert" size={24} color="white" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Messages List */}
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item._id}
-          renderItem={renderMessage}
-          style={styles.messagesList}
-          contentContainerStyle={styles.messagesContainer}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            !loading && (
-              <View style={styles.emptyContainer}>
-                <Icon name="chat-bubble-outline" size={48} color={appColors.gray} />
-                <Text style={styles.emptyText}>No messages yet</Text>
-                <Text style={styles.emptySubtext}>Say hello to start the conversation!</Text>
-              </View>
-            )
-          }
-          onContentSizeChange={() => {
-            if (messages.length > 0 && !loading) {
-              scrollToBottom(false);
-            }
-          }}
+      <GradientView style={[styles.header, {paddingTop: insets.top + spacing.sm}]}>
+        <StatusBar barStyle="light-content" backgroundColor={appColors.gradientPrimary[1]} />
+        <HeaderIconButton
+          icon={<ArrowLeft size={header.iconSize} color={appColors.white} />}
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Quay lại"
         />
+        <Avatar uri={otherUser?.photoUrl} name={otherUser?.username} size={42} style={styles.headerAvatar} />
+        <View style={styles.flex}>
+          <TextComponent
+            text={otherUser?.username || 'Cuộc trò chuyện'}
+            size={16}
+            font={fontFamilies.semiBold}
+            color={appColors.white}
+            numberOfLines={1}
+          />
+          <TextComponent
+            text={otherTyping ? 'Đang nhập...' : otherUser?.role === 'pt' ? 'Huấn luyện viên' : 'Học viên'}
+            size={12}
+            color="rgba(255,255,255,0.85)"
+          />
+        </View>
+      </GradientView>
 
-        {/* Input */}
-        <View style={styles.inputContainer}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {status === 'loading' ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={appColors.primary} size="large" />
+          </View>
+        ) : status === 'error' ? (
+          <StateView type="error" message={error} onAction={() => fetchMessages().then(() => setStatus('ready'))} />
+        ) : rows.length === 0 ? (
+          <StateView
+            icon={<Messages2 size={30} color={appColors.primary} />}
+            title="Chưa có tin nhắn"
+            message={`Gửi lời chào tới ${otherUser?.username || 'người dùng'} để bắt đầu.`}
+          />
+        ) : (
+          <FlatList
+            inverted
+            data={rows}
+            keyExtractor={item => item.key}
+            renderItem={renderRow}
+            contentContainerStyle={styles.messages}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+          />
+        )}
+
+        <View style={[styles.inputBar, {paddingBottom: insets.bottom + spacing.sm}]}>
           <TextInput
-            style={styles.textInput}
-            placeholder="Type a message..."
-            placeholderTextColor={appColors.gray}
-            value={newMessage}
-            onChangeText={setNewMessage}
+            style={styles.input}
+            value={draft}
+            onChangeText={changeDraft}
+            placeholder="Nhập tin nhắn..."
+            placeholderTextColor={appColors.placeholder}
             multiline
-            maxLength={500}
+            maxLength={MAX_LENGTH}
+            accessibilityLabel="Nội dung tin nhắn"
           />
           <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!newMessage.trim() || sending) && styles.sendButtonDisabled
-            ]}
-            onPress={sendMessage}
-            disabled={!newMessage.trim() || sending}
-          >
-            <Icon 
-              name="send" 
-              size={20} 
-              color={(!newMessage.trim() || sending) ? appColors.gray : 'white'} 
-            />
+            onPress={send}
+            disabled={!canSend}
+            style={[styles.sendButton, !canSend && styles.sendDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel="Gửi">
+            <Send2 size={20} color={appColors.white} variant="Bold" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-      <SafeAreaView edges={['bottom']} />
     </View>
   );
 };
 
+export default ChatScreen;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: appColors.background,
   },
-  keyboardContainer: {
+  flex: {
     flex: 1,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
-    backgroundColor: appColors.primary,
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 60 : 45,
-    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md + 2,
+    borderBottomLeftRadius: header.radius,
+    borderBottomRightRadius: header.radius,
   },
-  backButton: {
-    padding: 8,
-    marginRight: 8,
-  },
-  headerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  headerAvatar: {
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(255,255,255,0.6)',
   },
-  avatarText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+  messages: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  userInfo: {
-    flex: 1,
+  dayRow: {
+    alignSelf: 'center',
+    backgroundColor: appColors.gray6,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    marginVertical: spacing.md,
   },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: fontFamilies.bold,
-    color: 'white',
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
-    fontFamily: fontFamilies.regular,
-  },
-  moreButton: {
-    padding: 8,
-  },
-  messagesList: {
-    flex: 1,
-  },
-  messagesContainer: {
-    padding: 16,
-    flexGrow: 1,
-    paddingBottom: 8,
-    justifyContent: 'flex-end', 
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  messageRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 200,
+    marginVertical: 3,
   },
-  emptyText: {
-    fontSize: 16,
-    fontFamily: fontFamilies.semiBold,
-    color: appColors.gray,
-    marginTop: 8,
+  mineRow: {
+    justifyContent: 'flex-end',
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: appColors.gray,
-    textAlign: 'center',
-    marginTop: 4,
-    fontFamily: fontFamilies.regular,
+  theirRow: {
+    justifyContent: 'flex-start',
   },
-  messageContainer: {
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  myMessage: {
-    alignItems: 'flex-end',
-  },
-  otherMessage: {
-    alignItems: 'flex-start',
-  },
-  messageBubble: {
+  bubble: {
     maxWidth: '80%',
-    padding: 16,
-    borderRadius: 18,
-    marginVertical: 2,
+    paddingHorizontal: spacing.md + 2,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: 20,
   },
-  myBubble: {
+  mineBubble: {
     backgroundColor: appColors.primary,
     borderBottomRightRadius: 6,
-    shadowColor: appColors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  otherBubble: {
-    backgroundColor: 'white',
+  theirBubble: {
+    backgroundColor: appColors.surface,
     borderBottomLeftRadius: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
+  },
+  pendingBubble: {
+    opacity: 0.7,
   },
   messageText: {
-    fontSize: 16,
-    lineHeight: 20,
-    marginBottom: 4,
-    fontFamily: fontFamilies.regular,
+    lineHeight: 21,
   },
-  myMessageText: {
-    color: 'white',
-  },
-  otherMessageText: {
-    color: appColors.text,
-  },
-  timeText: {
-    fontSize: 11,
-    opacity: 0.7,
-    fontFamily: fontFamilies.regular,
-  },
-  myTimeText: {
-    color: 'white',
+  timeRight: {
     textAlign: 'right',
   },
-  otherTimeText: {
-    color: appColors.gray,
+  failedIcon: {
+    marginLeft: spacing.xs,
   },
-  inputContainer: {
+  inputBar: {
     flexDirection: 'row',
-    padding: 16,
     alignItems: 'flex-end',
-    backgroundColor: 'white',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    backgroundColor: appColors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: appColors.border,
   },
-  textInput: {
+  input: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: appColors.lightGray,
-    borderRadius: 25,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    fontSize: 16,
-    maxHeight: 100,
-    marginRight: 12,
-    backgroundColor: '#f8f9fa',
+    minHeight: 44,
+    maxHeight: 120,
+    borderRadius: 22,
+    paddingHorizontal: spacing.lg,
+    paddingTop: 12,
+    paddingBottom: 12,
+    fontSize: 15,
     fontFamily: fontFamilies.regular,
+    color: appColors.text,
+    backgroundColor: appColors.background,
   },
   sendButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: appColors.primary,
-    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    shadowColor: appColors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
+    justifyContent: 'center',
+    backgroundColor: appColors.primary,
   },
-  sendButtonDisabled: {
-    backgroundColor: appColors.lightGray,
-    shadowOpacity: 0,
-    elevation: 0,
+  sendDisabled: {
+    backgroundColor: appColors.border,
   },
 });
-
-export default ChatScreen;

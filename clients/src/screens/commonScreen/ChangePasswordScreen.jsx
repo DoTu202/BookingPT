@@ -1,258 +1,171 @@
 import React, {useState} from 'react';
-import {
-  StyleSheet,
-  View,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  StatusBar,
-} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {ArrowLeft, LockCircle, Eye, EyeOff} from 'iconsax-react-native';
-import {
-  TextComponent,
-  InputComponent,
-  ButtonComponent,
-  SectionComponent,
-  RowComponent,
-  SpaceComponent,
-} from '../../components';
-import LoadingModal from '../../modals/LoadingModal';
-import appColors from '../../constants/appColors';
-import {fontFamilies} from '../../constants/fontFamilies';
+import {Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View} from 'react-native';
+import {useDispatch, useSelector} from 'react-redux';
+import {Lock, ShieldTick, TickCircle} from 'iconsax-react-native';
+import {ButtonComponent, InputComponent, ScreenHeader, TextComponent} from '../../components';
 import profileApi from '../../apis/profileApi';
-import {Validate, MIN_PASSWORD_LENGTH} from '../../utils/validate';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {useDispatch} from 'react-redux';
-import {addAuth} from '../../redux/reducers/authReducer';
+import {authSelector} from '../../redux/reducers/authReducer';
+import {updateSession} from '../../utils/session';
+import {MIN_PASSWORD_LENGTH} from '../../utils/validate';
+import appColors from '../../constants/appColors';
+import {radius, shadow, spacing} from '../../constants/theme';
 
-const ChangePasswordScreen = () => {
-  const navigation = useNavigation();
+const Rule = ({ok, text}) => (
+  <View style={styles.rule}>
+    <TickCircle size={16} color={ok ? appColors.success : appColors.border} variant={ok ? 'Bold' : 'Linear'} />
+    <TextComponent text={text} size={13} color={ok ? appColors.text : appColors.textMuted} />
+  </View>
+);
+
+const ChangePasswordScreen = ({navigation}) => {
   const dispatch = useDispatch();
-  const [loading, setLoading] = useState(false);
-  const [showPasswords, setShowPasswords] = useState({
-    current: false,
-    new: false,
-    confirm: false,
-  });
-  const [formData, setFormData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
+  const auth = useSelector(authSelector);
+  const [form, setForm] = useState({currentPassword: '', newPassword: '', confirmPassword: ''});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const togglePasswordVisibility = field => {
-    setShowPasswords(prev => ({
-      ...prev,
-      [field]: !prev[field],
-    }));
-  };
+  const setField = (key, value) => setForm(prev => ({...prev, [key]: value}));
 
-  const handleChangePassword = async () => {
-    // Validation
-    if (!formData.currentPassword) {
-      Alert.alert('Error', 'Current password is required');
-      return;
-    }
+  const longEnough = form.newPassword.length >= MIN_PASSWORD_LENGTH;
+  const differs = form.newPassword.length > 0 && form.newPassword !== form.currentPassword;
+  const matches = form.confirmPassword.length > 0 && form.confirmPassword === form.newPassword;
+  const canSubmit = form.currentPassword && longEnough && differs && matches;
 
-    if (!formData.newPassword) {
-      Alert.alert('Error', 'New password is required');
-      return;
-    }
-
-    if (!Validate.password(formData.newPassword)) {
-      Alert.alert(
-        'Error',
-        `New password must be at least ${MIN_PASSWORD_LENGTH} characters`,
-      );
-      return;
-    }
-
-    if (formData.newPassword !== formData.confirmPassword) {
-      Alert.alert('Error', 'New password and confirm password do not match');
-      return;
-    }
-
+  const submit = async () => {
+    setError('');
+    setSaving(true);
     try {
-      setLoading(true);
-
-      const response = await profileApi.changePassword({
-        currentPassword: formData.currentPassword,
-        newPassword: formData.newPassword,
-        confirmPassword: formData.confirmPassword,
-      });
-
-      if (response.data?.success) {
-        // Changing the password revokes all older tokens; keep this device
-        // signed in with the fresh token returned by the server.
-        const authData = response.data.data;
-        if (authData?.accesstoken) {
-          if (await AsyncStorage.getItem('auth')) {
-            await AsyncStorage.setItem('auth', JSON.stringify(authData));
-          }
-          dispatch(addAuth(authData));
-        }
-        Alert.alert('Success', 'Password changed successfully', [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]);
+      const response = await profileApi.changePassword(form);
+      // Changing the password revokes older tokens; keep this device signed
+      // in with the fresh token returned by the server.
+      if (response.data?.data?.accesstoken) {
+        await updateSession(dispatch, auth, response.data.data);
       }
-    } catch (error) {
-      console.error('Error changing password:', error);
-      const message = error.message || 'Failed to change password';
-      Alert.alert('Error', message);
+      Alert.alert('Đổi mật khẩu thành công', 'Các thiết bị khác sẽ phải đăng nhập lại.', [
+        {text: 'OK', onPress: () => navigation.goBack()},
+      ]);
+    } catch (err) {
+      setError(err.message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  };
-
-  const updateFormData = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-      <LoadingModal visible={loading} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <RowComponent justify="space-between">
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft size={24} color={appColors.white} style={{marginTop: 40}} />
-          </TouchableOpacity>
-          <TextComponent
-            text="Change Password"
-            size={20}
-            font={fontFamilies.bold}
-            color={appColors.white}
-            styles={{marginTop: 40}}
-          />
-          <View style={{width: 24}} />
-        </RowComponent>
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <SectionComponent>
-          <TextComponent
-            text="Security"
-            size={16}
-            font={fontFamilies.semiBold}
-            color={appColors.text}
-          />
-          <SpaceComponent height={8} />
-          <TextComponent
-            text="Enter your current password and choose a new one"
-            size={14}
-            color={appColors.gray}
-          />
-          <SpaceComponent height={20} />
-
-          {/* Current Password */}
-          <InputComponent
-            value={formData.currentPassword}
-            onChangeText={text => updateFormData('currentPassword', text)}
-            placeholder="Current password"
-            isPassword
-            allowClear
-            affix={<LockCircle size={20} color={appColors.gray} />}
-            secureTextEntry={!showPasswords.current}
-          />
-          <SpaceComponent height={16} />
-
-          {/* New Password */}
-          <InputComponent
-            value={formData.newPassword}
-            onChangeText={text => updateFormData('newPassword', text)}
-            placeholder="New password"
-            isPassword
-            allowClear
-            affix={<LockCircle size={20} color={appColors.gray} />}
-            secureTextEntry={!showPasswords.new}
-          />
-          <SpaceComponent height={16} />
-
-          {/* Confirm Password */}
-          <InputComponent
-            value={formData.confirmPassword}
-            onChangeText={text => updateFormData('confirmPassword', text)}
-            placeholder="Confirm new password"
-            isPassword
-            allowClear
-            affix={<LockCircle size={20} color={appColors.gray} />}
-            secureTextEntry={!showPasswords.confirm}
-          />
-
-          <SpaceComponent height={20} />
-
-          <View style={styles.requirementsContainer}>
+    <View style={styles.container}>
+      <ScreenHeader title="Đổi mật khẩu" onBack={() => navigation.goBack()} />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.intro}>
+            <View style={styles.introIcon}>
+              <ShieldTick size={26} color={appColors.primary} variant="Bold" />
+            </View>
             <TextComponent
-              text="Password requirements:"
+              text="Mật khẩu mạnh giúp bảo vệ tài khoản và lịch tập của bạn."
               size={14}
-              font={fontFamilies.medium}
-              color={appColors.text}
-            />
-            <SpaceComponent height={8} />
-            <TextComponent
-              text="• At least 6 characters long"
-              size={12}
-              color={appColors.gray}
-            />
-            <TextComponent
-              text="• Should contain letters and numbers"
-              size={12}
-              color={appColors.gray}
+              color={appColors.textMuted}
+              styles={styles.flex}
             />
           </View>
-        </SectionComponent>
 
-        <SectionComponent>
+          <View style={styles.card}>
+            <InputComponent
+              label="Mật khẩu hiện tại"
+              value={form.currentPassword}
+              onChange={val => setField('currentPassword', val)}
+              textContentType="password"
+              prefix={<Lock size={20} color={appColors.textMuted} />}
+              isPassword
+            />
+            <InputComponent
+              label="Mật khẩu mới"
+              value={form.newPassword}
+              onChange={val => setField('newPassword', val)}
+              textContentType="newPassword"
+              prefix={<Lock size={20} color={appColors.textMuted} />}
+              isPassword
+            />
+            <InputComponent
+              label="Nhập lại mật khẩu mới"
+              value={form.confirmPassword}
+              onChange={val => setField('confirmPassword', val)}
+              textContentType="newPassword"
+              error={form.confirmPassword && !matches ? 'Mật khẩu xác nhận không khớp' : ''}
+              prefix={<Lock size={20} color={appColors.textMuted} />}
+              isPassword
+            />
+            <View style={styles.rules}>
+              <Rule ok={longEnough} text={`Ít nhất ${MIN_PASSWORD_LENGTH} ký tự`} />
+              <Rule ok={differs} text="Khác mật khẩu hiện tại" />
+              <Rule ok={matches} text="Hai lần nhập trùng khớp" />
+            </View>
+          </View>
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <TextComponent text={error} size={13} color={appColors.danger} />
+            </View>
+          ) : null}
+
           <ButtonComponent
-            text="Change Password"
+            text="Đổi mật khẩu"
             type="primary"
-            onPress={handleChangePassword}
-            loading={loading}
-            icon={<LockCircle size={20} color={appColors.white} />}
+            size="lg"
+            onPress={submit}
+            disable={!canSubmit}
+            isLoading={saving}
           />
-        </SectionComponent>
-
-        <SpaceComponent height={100} />
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
+
+export default ChangePasswordScreen;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.white,
+    backgroundColor: appColors.background,
   },
-  header: {
-    backgroundColor: appColors.primary,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 20,
-    height: 140,
-    borderRadius: 20,
-  },
-  content: {
+  flex: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
   },
-  requirementsContainer: {
-    backgroundColor: appColors.gray6,
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: appColors.primary,
+  scroll: {
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  intro: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  introIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: appColors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  card: {
+    backgroundColor: appColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.lg,
+    ...shadow.sm,
+  },
+  rules: {
+    gap: spacing.sm,
+  },
+  rule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  errorBox: {
+    backgroundColor: appColors.dangerSoft,
+    borderRadius: radius.sm,
+    padding: spacing.md,
   },
 });
-
-export default ChangePasswordScreen;

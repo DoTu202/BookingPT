@@ -1,15 +1,12 @@
-import {
-  StyleSheet,
-  View,
-  Dimensions,
-  Image,
-  TouchableOpacity,
-} from 'react-native';
 import React from 'react';
-import {TextComponent, SpaceComponent, RowComponent} from '.';
-import appColors from '../constants/appColors';
+import {Image, StyleSheet, TouchableOpacity, View, useWindowDimensions} from 'react-native';
 import {Location, Star1} from 'iconsax-react-native';
-import {Heart} from 'lucide-react-native';
+import TextComponent from './TextComponent';
+import appColors from '../constants/appColors';
+import {fontFamilies} from '../constants/fontFamilies';
+import {getSpecializationLabel} from '../constants/labels';
+import {radius, shadow, spacing} from '../constants/theme';
+import {formatCurrency, formatLocation} from '../utils/format';
 
 interface PTData {
   _id: string;
@@ -18,6 +15,7 @@ interface PTData {
   location: string;
   imageURL?: string;
   rating?: number;
+  numReviews?: number;
   hourlyRate?: number;
   specializations?: string[];
   experienceYears?: number;
@@ -28,254 +26,205 @@ interface Props {
   item: PTData;
   type: 'card' | 'list';
   size?: 'small' | 'medium' | 'large';
-  onPress?: (item: PTData) => void;
+  onPress?: (item: any) => void;
 }
 
-const PtItem = (props: Props) => {
-  const {item, type, size = 'medium', onPress} = props;
+// Maps a PT profile from the API (`/api/client/pt`) to the props PtItem shows.
+export const toPtItem = (profile: any): PTData => ({
+  _id: profile._id,
+  title: profile.user?.username || 'Huấn luyện viên',
+  description: profile.bio || '',
+  location: formatLocation(profile.location),
+  imageURL: profile.user?.photoUrl || '',
+  rating: profile.rating || 0,
+  numReviews: profile.numReviews || 0,
+  hourlyRate: profile.hourlyRate || 0,
+  specializations: profile.specializations || [],
+  experienceYears: profile.experienceYears || 0,
+  ptData: profile,
+});
 
-  const formatPrice = (price: number) => {
-    if (!price || price === 0) return 'Contact';
-    return `${(price / 1000).toFixed(0)}K VND`;
-  };
+const CARD_WIDTH = {small: 0.45, medium: 0.55, large: 0.65};
+// Keeps cards from stretching on tablets / landscape.
+const CARD_MAX_WIDTH = 300;
 
-  const getCardWidth = () => {
-    if (type === 'list') return '100%';
-    const screenWidth = Dimensions.get('window').width;
-    switch (size) {
-      case 'small':
-        return screenWidth * 0.45;
-      case 'large':
-        return screenWidth * 0.65;
-      default:
-        return screenWidth * 0.55;
-    }
-  };
-
-  const renderSeparator = (key: string) => (
-    <TextComponent key={key} text=" • " size={12} color={appColors.gray} />
+const Avatar = ({uri, name, style}: {uri?: string; name: string; style: any}) =>
+  uri ? (
+    <Image source={{uri}} style={style} />
+  ) : (
+    <View style={[style, styles.avatarFallback]}>
+      <TextComponent
+        text={(name || 'P').charAt(0).toUpperCase()}
+        size={26}
+        font={fontFamilies.bold}
+        color={appColors.primary}
+      />
+    </View>
   );
 
-  const renderListDetails = () => {
-    const details = [];
+const Rating = ({rating, numReviews}: {rating?: number; numReviews?: number}) =>
+  rating && rating > 0 ? (
+    <View style={styles.inline}>
+      <Star1 size={13} color={appColors.yellow} variant="Bold" />
+      <TextComponent
+        text={` ${rating.toFixed(1)}${numReviews ? ` (${numReviews})` : ''}`}
+        size={12}
+        font={fontFamilies.medium}
+        color={appColors.text}
+      />
+    </View>
+  ) : (
+    <TextComponent text="Chưa có đánh giá" size={12} color={appColors.textMuted} />
+  );
 
-    // 1. Add Rating
-    if (item.rating && item.rating > 0) {
-      details.push(
-        <RowComponent key="rating" styles={{alignItems: 'center'}}>
-          <Star1 size={12} color={appColors.yellow} variant="Bold" />
-          <TextComponent
-            text={item.rating.toFixed(1)}
-            size={12}
-            color={appColors.gray2}
-            font="medium"
-            styles={{marginLeft: 2}}
-          />
-        </RowComponent>,
-      );
-    }
+const PtItem = ({item, type, size = 'medium', onPress}: Props) => {
+  const {width: windowWidth} = useWindowDimensions();
+  const handlePress = () => onPress && onPress(item.ptData || item);
+  const label = `${item.title}, ${formatCurrency(item.hourlyRate)} mỗi giờ`;
 
-    // 2. Add Experience
-    if (item.experienceYears && item.experienceYears > 0) {
-      details.push(
-        <TextComponent
-          key="exp"
-          text={`${item.experienceYears} năm`}
-          size={12}
-          color={appColors.gray}
-          font="medium"
-        />,
-      );
-    }
-
-    // 3. Add Main Specialization
-    if (item.specializations && item.specializations.length > 0) {
-      details.push(
-        <View key="spec" style={styles.inlineSpecTag}>
-          <TextComponent
-            text={item.specializations[0]
-              .replace(/_/g, ' ')
-              .replace(/\b\w/g, l => l.toUpperCase())}
-            size={11}
-            color={appColors.primary}
-            font="medium"
-          />
-        </View>,
-      );
-    }
-
-    // Render the details array with separators in between
-    return (
-      <RowComponent styles={{alignItems: 'center'}}>
-        {details.map((detail, index) => (
-          <React.Fragment key={index}>
-            {detail}
-            {index < details.length - 1 && renderSeparator(`sep-${index}`)}
-          </React.Fragment>
-        ))}
-      </RowComponent>
-    );
-  };
-
-  // Main Render Functions
-
-  const renderCardType = () => {
+  if (type === 'card') {
     return (
       <TouchableOpacity
-        onPress={() => onPress && onPress(item.ptData || item)}
-        style={[styles.cardContainer, {width: getCardWidth()}]}
-        activeOpacity={0.8}>
-        <Image
-          source={
-            item.imageURL
-              ? {uri: item.imageURL}
-              : require('../../assets/images/default.png')
-          }
-          style={styles.cardImage}
-        />
+        onPress={handlePress}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        style={[styles.card, {width: Math.min(windowWidth * CARD_WIDTH[size], CARD_MAX_WIDTH)}]}>
+        <Avatar uri={item.imageURL} name={item.title} style={styles.cardImage} />
         <View style={styles.cardContent}>
-          <TextComponent
-            text={item.title}
-            font="bold"
-            size={14}
-            numberOfLines={1}
-          />
-          <SpaceComponent height={4} />
-          <RowComponent styles={{alignItems: 'center'}}>
-            <Star1 size={12} color={appColors.yellow} variant="Bold" />
-            <TextComponent
-              text={` ${item.rating?.toFixed(1) || 'N/A'}`}
-              size={12}
-              color={appColors.gray2}
-              styles={{marginLeft: 2}}
-            />
-          </RowComponent>
-          <SpaceComponent height={4} />
-          <RowComponent styles={{alignItems: 'center'}}>
-            <Location size={12} color={appColors.gray} />
+          <TextComponent text={item.title} font={fontFamilies.semiBold} size={15} numberOfLines={1} />
+          <Rating rating={item.rating} numReviews={item.numReviews} />
+          <View style={styles.inline}>
+            <Location size={12} color={appColors.textMuted} />
             <TextComponent
               text={` ${item.location}`}
               size={12}
-              color={appColors.gray}
-              styles={{marginLeft: 4, flex: 1}}
+              color={appColors.textMuted}
               numberOfLines={1}
+              styles={styles.flex}
             />
-          </RowComponent>
+          </View>
+          <TextComponent
+            text={`${formatCurrency(item.hourlyRate)}/giờ`}
+            size={14}
+            font={fontFamilies.semiBold}
+            color={appColors.primary}
+          />
         </View>
       </TouchableOpacity>
     );
-  };
+  }
 
-  const renderListType = () => (
+  const specs = (item.specializations || []).slice(0, 2);
+
+  return (
     <TouchableOpacity
-      onPress={() => onPress && onPress(item.ptData || item)}
-      style={styles.listContainer}
-      activeOpacity={0.8}>
-      <Image
-        source={
-          item.imageURL
-            ? {uri: item.imageURL}
-            : require('../../assets/images/default.png')
-        }
-        style={styles.avatar}
-      />
-      <View style={styles.listContentContainer}>
-        <RowComponent justify="space-between">
+      onPress={handlePress}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={styles.listItem}>
+      <Avatar uri={item.imageURL} name={item.title} style={styles.avatar} />
+      <View style={styles.listContent}>
+        <View style={styles.rowBetween}>
           <TextComponent
             text={item.title}
             size={16}
-            font="bold"
-            styles={{flex: 1}}
+            font={fontFamilies.semiBold}
             numberOfLines={1}
+            styles={styles.flex}
           />
-          <TouchableOpacity style={styles.listFavoriteButton}>
-            <Heart size={16} color={appColors.gray} />
-          </TouchableOpacity>
-        </RowComponent>
-
-        <TextComponent
-          text={item.description}
-          size={13}
-          numberOfLines={1}
-          color={appColors.gray}
-        />
-
-        {/* USE THE NEW, SAFE RENDER FUNCTION HERE */}
-        {renderListDetails()}
-
-        <RowComponent styles={{alignItems: 'center'}}>
-          <Location size={12} color={appColors.gray} />
-          <SpaceComponent width={4} />
+          <Rating rating={item.rating} numReviews={item.numReviews} />
+        </View>
+        <View style={styles.inline}>
+          <Location size={12} color={appColors.textMuted} />
           <TextComponent
-            text={item.location}
+            text={` ${item.location}${item.experienceYears ? ` • ${item.experienceYears} năm KN` : ''}`}
             size={12}
-            color={appColors.gray}
+            color={appColors.textMuted}
             numberOfLines={1}
-          />
-        </RowComponent>
-
-        <View style={styles.listPriceContainer}>
-          <TextComponent
-            text={formatPrice(item.hourlyRate || 0)}
-            size={15}
-            color={appColors.primary}
-            font="bold"
+            styles={styles.flex}
           />
         </View>
+        {specs.length > 0 ? (
+          <View style={styles.tags}>
+            {specs.map(spec => (
+              <View key={spec} style={styles.tag}>
+                <TextComponent
+                  text={getSpecializationLabel(spec)}
+                  size={11}
+                  font={fontFamilies.medium}
+                  color={appColors.primaryDark}
+                />
+              </View>
+            ))}
+          </View>
+        ) : null}
+        <TextComponent
+          text={`${formatCurrency(item.hourlyRate)}/giờ`}
+          size={15}
+          font={fontFamilies.semiBold}
+          color={appColors.primary}
+        />
       </View>
     </TouchableOpacity>
   );
-
-  return type === 'list' ? renderListType() : renderCardType();
 };
 
 export default PtItem;
 
 const styles = StyleSheet.create({
-  // --- List Styles ---
-  listContainer: {
-    backgroundColor: appColors.white,
-    padding: 12,
+  flex: {
+    flex: 1,
+  },
+  inline: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: appColors.gray5,
+    alignItems: 'center',
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  avatarFallback: {
+    backgroundColor: appColors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listItem: {
+    flexDirection: 'row',
+    backgroundColor: appColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...shadow.sm,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 12,
-    marginRight: 12,
+    width: 76,
+    height: 76,
+    borderRadius: radius.md,
+    marginRight: spacing.md,
   },
-  listContentContainer: {
+  listContent: {
     flex: 1,
-    justifyContent: 'space-between',
+    gap: 4,
   },
-  listFavoriteButton: {
-    paddingLeft: 8,
+  tags: {
+    flexDirection: 'row',
+    gap: 6,
   },
-  inlineSpecTag: {
-    backgroundColor: `${appColors.primary}1A`,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+  tag: {
+    backgroundColor: appColors.primarySoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
   },
-  listPriceContainer: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-
-   cardContainer: {
-    borderRadius: 16,
-    backgroundColor: appColors.white,
+  card: {
+    borderRadius: radius.lg,
+    backgroundColor: appColors.surface,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...shadow.sm,
   },
   cardImage: {
     width: '100%',
@@ -283,8 +232,7 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   cardContent: {
-    padding: 12,
-  },
-  cardTitle: {
+    padding: spacing.md,
+    gap: 4,
   },
 });

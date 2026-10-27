@@ -1,816 +1,529 @@
-import React, {useState, useEffect} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   StyleSheet,
   View,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  Image,
-  Dimensions,
-  StatusBar,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
-import {ArrowLeft} from 'iconsax-react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import dayjs from '../../utils/dayjs';
+import {Calendar, Location, MessageText1, Star1, Warning2} from 'iconsax-react-native';
 import {
-  ContainerComponent,
-  SectionComponent,
-  RowComponent,
-  TextComponent,
   ButtonComponent,
-  CardComponent,
-  SpaceComponent,
+  ChipComponent,
+  DateStrip,
+  InputComponent,
+  ScreenHeader,
+  StateView,
+  TextComponent,
 } from '../../components';
-import {Star1, Location} from 'iconsax-react-native';
-import appColors from '../../constants/appColors';
 import clientApi from '../../apis/clientApi';
-import {timeUtils} from '../../utils/timeUtils';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import chatApi from '../../apis/chatApi';
+import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
-import dayjs from 'dayjs';
-import timezone from 'dayjs/plugin/timezone';
-import utc from 'dayjs/plugin/utc';
+import {getSpecializationLabel} from '../../constants/labels';
+import {radius, shadow, spacing} from '../../constants/theme';
+import {formatCurrency, formatHours, formatLocation} from '../../utils/format';
+import {timeUtils} from '../../utils/timeUtils';
+import {todayKey} from '../../components/DateStrip';
 
-dayjs.extend(utc);
-dayjs.extend(timezone);
 
-const {width} = Dimensions.get('window');
+const TZ = 'Asia/Ho_Chi_Minh';
+const DAYS_AHEAD = 14;
+const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const NOTES_MAX = 500;
+
+const slotLabel = slot =>
+  `${timeUtils.formatTo24HourTime(slot.startTime)} – ${timeUtils.formatTo24HourTime(slot.endTime)}`;
+
+const slotHours = slot => dayjs(slot.endTime).diff(dayjs(slot.startTime), 'hour', true);
 
 const PTDetailScreen = ({navigation, route}) => {
-  // Get PT data from navigation params
-  const {item} = route.params;
+  const initial = route.params?.item?.ptData || route.params?.item || {};
+  const ptUserId = initial.user?._id;
+  const insets = useSafeAreaInsets();
 
-  // Component states
-  const [ptProfile, setPtProfile] = useState(null);
-  const [availability, setAvailability] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [profile, setProfile] = useState(initial);
+  const [reviews, setReviews] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(todayKey());
+  const [slots, setSlots] = useState([]);
+  const [slotsStatus, setSlotsStatus] = useState('loading'); // loading | ready | error
+  const [slotsError, setSlotsError] = useState('');
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [bookingLoading, setBookingLoading] = useState(false);
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [imageError, setImageError] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [booking, setBooking] = useState(false);
+  const [startingChat, setStartingChat] = useState(false);
 
-  // Initialize component
+  // Fresh profile + latest reviews; the list item passed in is shown meanwhile.
   useEffect(() => {
-    initializePTData();
-  }, []);
-
-  // Load availability when date or PT changes
-  useEffect(() => {
-    if (selectedDate && ptProfile?.user?._id) {
-      loadAvailability();
-    }
-  }, [selectedDate, ptProfile]);
-
-  const initializePTData = async () => {
-    try {
-      if (!item || typeof item !== 'object') {
-        console.error('Invalid PT data received');
-        Alert.alert('Error', 'Invalid trainer data');
-        navigation.goBack();
-        return;
-      }
-      const ptData = item.ptData || item;
-
-      if (!ptData.user?._id) {
-        console.error('Missing user information in PT data');
-        Alert.alert('Error', 'Trainer information incomplete');
-        navigation.goBack();
-        return;
-      }
-
-      setLoadingProfile(true);
-
-      // Fetch complete PT profile to get all details
-      try {
-        const response = await clientApi.getPTProfile(ptData.user._id);
-        if (response.data) {
-          setPtProfile(response.data);
-        } else {
-          // If detailed profile fetch fails, use the data we already have
-          setPtProfile(ptData);
-        }
-      } catch (profileError) {
-        console.error('Error fetching detailed profile:', profileError);
-        // If detailed profile fetch fails, use the data we already have
-        setPtProfile(ptData);
-      }
-
-      // Set default date to today or first reasonable date
-      const today = dayjs().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
-      setSelectedDate(today);
-    } catch (error) {
-      console.error('Error initializing PT data:', error);
-      // If detailed profile fetch fails, use the data we already have
-      const ptData = item.ptData || item;
-      setPtProfile(ptData);
-
-      const today = dayjs().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD');
-      setSelectedDate(today);
-    } finally {
-      setLoading(false);
-      setLoadingProfile(false);
-    }
-  };
-
-  const loadAvailability = async () => {
-    try {
-      // Format selectedDate to YYYY-MM-DD string if it's a Date object
-      let dateString = selectedDate;
-      if (selectedDate instanceof Date) {
-        // Local calendar day; toISOString() would give the UTC day, which is
-        // the previous day in Vietnam between 00:00 and 07:00.
-        dateString = dayjs(selectedDate).format('YYYY-MM-DD');
-      } else if (
-        typeof selectedDate === 'string' &&
-        selectedDate.includes('T')
-      ) {
-        dateString = selectedDate.split('T')[0];
-      }
-
-      const response = await clientApi.getPTAvailability(ptProfile.user._id, {
-        startDate: dateString,
-        endDate: dateString,
-      });
-
-      // Handle response format
-      if (response.data?.data && Array.isArray(response.data.data)) {
-        setAvailability(response.data.data);
-      } else if (Array.isArray(response.data)) {
-        setAvailability(response.data);
-      } else {
-        setAvailability([]);
-      }
-    } catch (error) {
-      console.error('Error loading availability:', error);
-
-      // Handle token expiration
-      if (error.message === 'Token expired') {
-        Alert.alert(
-          'Session Expired',
-          'Your session has expired. Please login again to continue',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                navigation.reset({
-                  index: 0,
-                  routes: [{name: 'Login'}],
-                });
-              },
-            },
-          ],
-        );
-      } else {
-        Alert.alert('Error', 'Failed to load availability. Please try again.');
-      }
-
-      setAvailability([]);
-    }
-  };
-
-  const handleBooking = async () => {
-    if (!selectedSlot) {
-      Alert.alert('Error', 'Please select a time slot');
+    if (!ptUserId) {
       return;
     }
+    clientApi
+      .getPTProfile(ptUserId)
+      .then(res => res.data?.user && setProfile(prev => ({...prev, ...res.data})))
+      .catch(() => {});
+    clientApi
+      .getPTReviews(ptUserId, {limit: 3})
+      .then(res => setReviews(res.data?.data || []))
+      .catch(() => {});
+  }, [ptUserId]);
 
-    setBookingLoading(true);
-
+  const loadSlots = useCallback(async () => {
+    if (!ptUserId) {
+      return;
+    }
+    setSlotsStatus('loading');
+    setSelectedSlot(null);
     try {
-      const sessionDetails = calculateSessionDetails(selectedSlot);
+      const res = await clientApi.getPTAvailability(ptUserId, {
+        startDate: selectedDate,
+        endDate: selectedDate,
+      });
+      const list = Array.isArray(res.data?.data) ? res.data.data : [];
+      setSlots(list.filter(slot => slot.status === 'available'));
+      setSlotsStatus('ready');
+    } catch (error) {
+      setSlotsError(error.message);
+      setSlotsStatus('error');
+    }
+  }, [ptUserId, selectedDate]);
 
-      const bookingData = {
-        ptId: ptProfile.user._id,
+  useEffect(() => {
+    loadSlots();
+  }, [loadSlots]);
+
+  const acceptingClients = profile.isAcceptingClients !== false;
+  const hasPricing = Number(profile.hourlyRate) > 0;
+  const canBook = acceptingClients && hasPricing;
+  const total = selectedSlot ? Math.round(slotHours(selectedSlot) * profile.hourlyRate) : 0;
+
+  const submitBooking = async () => {
+    setBooking(true);
+    try {
+      await clientApi.createBooking({
+        ptId: ptUserId,
         availabilitySlotId: selectedSlot._id,
-        notesFromClient: `Mobile app booking - Duration: ${
-          sessionDetails.duration
-        }h, Total: ${sessionDetails.totalPrice.toLocaleString()} VND`,
-      };
-
-      const response = await clientApi.createBooking(bookingData);
-
-      if (response.data.success || response.data.message) {
-        Alert.alert(
-          'Booking Success! ',
-          `Your booking request has been sent successfully!\n\nTrainer: ${
-            ptProfile.user.username
-          }\nTime: ${timeUtils.formatToVietnameseTime(
-            selectedSlot.startTime,
-          )} - ${timeUtils.formatToVietnameseTime(
-            selectedSlot.endTime,
-          )}\nDate: ${timeUtils.formatToEnglishDate(
-            selectedDate,
-          )}\nTotal: ${sessionDetails.totalPrice.toLocaleString()} VND\n\nThe trainer will confirm your booking soon.`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Refresh availability after booking
-                loadAvailability();
-                setSelectedSlot(null);
-              },
-            },
-          ],
-        );
-      }
+        notesFromClient: notes.trim(),
+      });
+      setNotes('');
+      Alert.alert(
+        'Đã gửi yêu cầu đặt lịch',
+        `${profile.user?.username} sẽ xác nhận sớm. Bạn sẽ nhận được thông báo khi có phản hồi.`,
+        [
+          {text: 'Đóng', style: 'cancel'},
+          {text: 'Xem lịch của tôi', onPress: () => navigation.navigate('ClientBookings')},
+        ],
+      );
     } catch (error) {
-      console.error('Error creating booking:', error);
-
-      let errorTitle = 'Booking Failed ';
-      let errorMessage = 'Failed to create booking. Please try again.';
-
-      if (error.response?.data) {
-        const responseData = error.response.data;
-
-        if (responseData.message) {
-          errorMessage = responseData.message;
-
-          if (errorMessage.includes('Conflict ') || errorMessage.includes('')) {
-            errorTitle = 'Schedule Conflict ';
-            errorMessage =
-              'You already have a booking that conflicts with this time slot. Please choose a different time.';
-          } else if (errorMessage.includes('status')) {
-            errorTitle = 'Time Slot Unavailable ';
-            errorMessage =
-              'This time slot is no longer available. Please select another time.';
-          } else if (errorMessage.includes('past')) {
-            errorTitle = 'Invalid Time ';
-            errorMessage =
-              'Cannot book a time slot in the past. Please select a future time.';
-          } else if (
-            errorMessage.includes('authorization') ||
-            errorMessage.includes('token')
-          ) {
-            errorTitle = 'Authentication Error ';
-            errorMessage = 'Please log in again to continue.';
-          } else {
-            errorMessage = responseData.message;
-          }
-        } else if (responseData.error) {
-          errorMessage = responseData.error;
-        }
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
-      Alert.alert(errorTitle, errorMessage, [
-        {
-          text: 'OK',
-          onPress: () => {
-            loadAvailability();
-            setSelectedSlot(null);
-          },
-        },
-      ]);
+      Alert.alert('Chưa đặt được lịch', error.message);
     } finally {
-      setBookingLoading(false);
+      setBooking(false);
+      loadSlots();
     }
   };
 
-  const handleStartChat = async () => {
+  const confirmBooking = () => {
+    const date = dayjs(selectedSlot.startTime).tz(TZ);
+    Alert.alert(
+      'Xác nhận đặt lịch',
+      `${profile.user?.username}\n${WEEKDAYS[date.day()]}, ${date.format('DD/MM/YYYY')} • ${slotLabel(
+        selectedSlot,
+      )}\nTổng: ${formatCurrency(total)}`,
+      [
+        {text: 'Hủy', style: 'cancel'},
+        {text: 'Đặt lịch', onPress: submitBooking},
+      ],
+    );
+  };
+
+  const startChat = async () => {
+    setStartingChat(true);
     try {
-      if (!ptProfile?.user?._id) {
-        Alert.alert('Error', 'Cannot start chat with this trainer');
-        return;
-      }
-      const chatResponse = await clientApi.startChatWithPT(ptProfile.user._id);
-      if (chatResponse?.data?.chatRoomId) {
-        navigation.navigate('ChatScreen', {
-          chatRoomId: chatResponse.data.chatRoomId,
-          otherUser: ptProfile.user,
-        });
-      } else {
-        navigation.navigate('ChatListScreen');
-      }
+      const res = await chatApi.startChat(null, ptUserId);
+      navigation.navigate('ChatScreen', {chatRoomId: res.data._id, otherUser: res.data.ptUser});
     } catch (error) {
-      console.error('Error starting chat:', error);
-      navigation.navigate('ChatListScreen');
+      Alert.alert('Không mở được cuộc trò chuyện', error.message);
+    } finally {
+      setStartingChat(false);
     }
   };
 
-  // Calculate session duration and total price
-  const calculateSessionDetails = slot => {
-    if (!slot || !ptProfile?.hourlyRate) return {duration: 0, totalPrice: 0};
-
-    // Parse ISO time strings from backend to dayjs objects in Vietnam timezone
-    const startTime = dayjs(slot.startTime).tz('Asia/Ho_Chi_Minh');
-    const endTime = dayjs(slot.endTime).tz('Asia/Ho_Chi_Minh');
-    const durationHours = endTime.diff(startTime, 'hour', true);
-    const totalPrice = durationHours * ptProfile.hourlyRate;
-
-    return {
-      duration: durationHours,
-      totalPrice: Math.round(totalPrice),
-    };
-  };
-
-  // Render loading state
-  if (loading) {
+  if (!ptUserId) {
     return (
-      <ContainerComponent>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={appColors.primary} />
-          <SpaceComponent height={16} />
-          <TextComponent
-            text="Loading trainer information..."
-            color={appColors.gray}
-          />
-        </View>
-      </ContainerComponent>
+      <View style={styles.container}>
+        <ScreenHeader title="Huấn luyện viên" onBack={() => navigation.goBack()} />
+        <StateView
+          type="error"
+          message="Không tìm thấy thông tin huấn luyện viên."
+          actionText="Quay lại"
+          onAction={() => navigation.goBack()}
+        />
+      </View>
     );
   }
 
-  const photoUrl = ptProfile.user?.photoUrl || '';
+  const name = profile.user?.username || 'Huấn luyện viên';
+  const photoUrl = profile.user?.photoUrl;
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-
-      <View style={styles.header}>
-        <RowComponent justify="space-between">
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft
-              size={24}
-              color={appColors.white}
-              style={{marginTop: 40}}
-            />
-          </TouchableOpacity>
-          <TextComponent
-            text="Personal Trainer Details"
-            size={20}
-            font={fontFamilies.bold}
-            color={appColors.white}
-            styles={{marginTop: 40}}
-          />
-          <View style={{width: 24}} />
-        </RowComponent>
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}>
-        {/* PT Profile Card */}
-        <CardComponent styles={styles.profileCard}>
-          <RowComponent>
-            {/* PT Avatar - Show image if available, fallback to text avatar */}
-            {loadingProfile ? (
-              <View style={styles.avatarContainer}>
-                <ActivityIndicator size="small" color={appColors.white} />
+    <View style={styles.container}>
+      <ScreenHeader title="Huấn luyện viên" onBack={() => navigation.goBack()} />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          {/* Profile */}
+          <View style={styles.card}>
+            <View style={styles.profileRow}>
+              {photoUrl ? (
+                <Image source={{uri: photoUrl}} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <TextComponent
+                    text={name.charAt(0).toUpperCase()}
+                    size={30}
+                    font={fontFamilies.bold}
+                    color={appColors.primary}
+                  />
+                </View>
+              )}
+              <View style={styles.flex}>
+                <TextComponent text={name} size={20} font={fontFamilies.bold} numberOfLines={2} />
+                <View style={styles.inline}>
+                  <Star1 size={15} color={appColors.yellow} variant="Bold" />
+                  <TextComponent
+                    text={
+                      profile.numReviews > 0
+                        ? ` ${Number(profile.rating).toFixed(1)} • ${profile.numReviews} đánh giá`
+                        : ' Chưa có đánh giá'
+                    }
+                    size={13}
+                    color={appColors.textMuted}
+                  />
+                </View>
+                <View style={styles.inline}>
+                  <Location size={15} color={appColors.textMuted} />
+                  <TextComponent
+                    text={` ${formatLocation(profile.location)}`}
+                    size={13}
+                    color={appColors.textMuted}
+                    numberOfLines={1}
+                    styles={styles.flex}
+                  />
+                </View>
               </View>
-            ) : photoUrl && !imageError ? (
-              <View style={styles.avatarContainer}>
-                <Image
-                  source={{uri: photoUrl}}
-                  style={styles.avatarImage}
-                  onError={() => setImageError(true)}
-                  resizeMode="cover"
-                />
-              </View>
-            ) : (
-              <View style={styles.avatarContainer}>
-                <TextComponent
-                  text={(ptProfile.user?.username || 'PT')
-                    .charAt(0)
-                    .toUpperCase()}
-                  size={28}
-                  color={appColors.white}
-                  font="Poppins-Bold"
-                />
-              </View>
-            )}
+            </View>
 
-            <View style={styles.profileInfo}>
-              <TextComponent
-                text={ptProfile.user?.username || 'Personal Trainer'}
-                size={20}
-                font="Poppins-Bold"
-                color={appColors.black}
+            <View style={styles.stats}>
+              <Stat value={`${profile.experienceYears || 0} năm`} label="Kinh nghiệm" />
+              <View style={styles.statDivider} />
+              <Stat value={String(profile.totalSessions || 0)} label="Buổi đã dạy" />
+              <View style={styles.statDivider} />
+              <Stat
+                value={hasPricing ? formatCurrency(profile.hourlyRate) : '—'}
+                label="Mỗi giờ"
+                highlight
               />
-              <RowComponent>
-                <Star1 size={16} color="#FFD700" variant="Bold" />
-                <SpaceComponent width={4} />
-                <TextComponent
-                  text={`${(
-                    ptProfile.rating ||
-                    ptProfile.averageRating ||
-                    4.5
-                  ).toFixed(1)} (${
-                    ptProfile.totalSessions || ptProfile.numReviews || 0
-                  } sessions)`}
-                  size={14}
-                  color={appColors.gray}
-                />
-              </RowComponent>
-              <RowComponent>
-                <Location size={16} color={appColors.gray} />
-                <SpaceComponent width={4} />
+            </View>
+
+            {!acceptingClients || !hasPricing ? (
+              <View style={styles.notice}>
+                <Warning2 size={18} color={appColors.warning} />
                 <TextComponent
                   text={
-                    ptProfile.location && typeof ptProfile.location === 'object'
-                      ? `${ptProfile.location.district || ''}, ${
-                          ptProfile.location.city || ''
-                        }`
-                      : ptProfile.location || 'Ha Noi'
+                    !acceptingClients
+                      ? 'Huấn luyện viên này hiện không nhận học viên mới.'
+                      : 'Huấn luyện viên chưa cập nhật giá nên chưa thể đặt lịch.'
                   }
-                  size={14}
-                  color={appColors.gray}
+                  size={13}
+                  styles={styles.noticeText}
                 />
-              </RowComponent>
-            </View>
-          </RowComponent>
+              </View>
+            ) : null}
 
-          <SpaceComponent height={12} />
-
-          {/* Bio */}
-          {ptProfile.bio && (
-            <>
-              <TextComponent
-                text="About"
-                size={16}
-                font="Poppins-SemiBold"
-                color={appColors.black}
-              />
-              <SpaceComponent height={8} />
-              <TextComponent
-                text={ptProfile.bio}
-                size={14}
-                color={appColors.gray}
-                styles={{lineHeight: 20}}
-              />
-              <SpaceComponent height={12} />
-            </>
-          )}
-
-          {/* Specializations */}
-          {ptProfile.specializations &&
-            ptProfile.specializations.length > 0 && (
-              <>
+            {profile.bio ? (
+              <View style={styles.block}>
+                <TextComponent text="Giới thiệu" font={fontFamilies.semiBold} size={15} />
                 <TextComponent
-                  text="Specializations"
-                  size={16}
-                  font="Poppins-SemiBold"
-                  color={appColors.black}
+                  text={profile.bio}
+                  size={14}
+                  color={appColors.textMuted}
+                  styles={styles.bio}
                 />
-                <SpaceComponent height={8} />
-                <View style={styles.specializationsContainer}>
-                  {ptProfile.specializations.map((spec, index) => (
-                    <View key={index} style={styles.specializationTag}>
+              </View>
+            ) : null}
+
+            {profile.specializations?.length ? (
+              <View style={styles.block}>
+                <TextComponent text="Chuyên môn" font={fontFamilies.semiBold} size={15} />
+                <View style={styles.wrap}>
+                  {profile.specializations.map(spec => (
+                    <View key={spec} style={styles.tag}>
                       <TextComponent
-                        text={
-                          typeof spec === 'string'
-                            ? spec.replace('_', ' ')
-                            : 'Specialization'
-                        }
+                        text={getSpecializationLabel(spec)}
                         size={12}
-                        color={appColors.primary}
+                        font={fontFamilies.medium}
+                        color={appColors.primaryDark}
                       />
                     </View>
                   ))}
                 </View>
-                <SpaceComponent height={12} />
-              </>
-            )}
+              </View>
+            ) : null}
+          </View>
 
-          {/* Price and Experience */}
-          <RowComponent justify="space-between">
-            <View>
-              <TextComponent
-                text="Experience"
-                size={14}
-                color={appColors.gray}
-              />
-              <TextComponent
-                text={`${ptProfile.experienceYears || 3} years`}
-                size={16}
-                font="Poppins-SemiBold"
-                color={appColors.black}
-              />
-            </View>
-            <View style={{alignItems: 'flex-end'}}>
-              <TextComponent
-                text="Price per hour"
-                size={14}
-                color={appColors.gray}
-              />
-              <TextComponent
-                text={`${ptProfile.hourlyRate.toLocaleString()} VND`}
-                size={16}
-                font="Poppins-Bold"
-                color={appColors.primary}
-              />
-            </View>
-          </RowComponent>
-        </CardComponent>
+          {/* Booking */}
+          {canBook ? (
+            <View style={styles.card}>
+              <TextComponent text="Chọn ngày" font={fontFamilies.semiBold} size={16} />
+              <DateStrip value={selectedDate} onChange={setSelectedDate} days={DAYS_AHEAD} />
 
-        {/* Date Selection */}
-        <SectionComponent>
-          <TextComponent
-            text="Select Date"
-            size={16}
-            font="Poppins-SemiBold"
-            color={appColors.black}
-          />
-          <SpaceComponent height={12} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.dateContainer}>
-              {/* Show dates from today for next 30 days */}
-              {Array.from({length: 30}, (_, index) => {
-                const date = dayjs().tz('Asia/Ho_Chi_Minh').add(index, 'day');
-                const dateStr = date.format('YYYY-MM-DD');
-                const isSelected = selectedDate === dateStr;
-
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.dateItem,
-                      isSelected && styles.selectedDateItem,
-                    ]}
-                    onPress={() => setSelectedDate(dateStr)}>
-                    <TextComponent
-                      text={date.format('ddd')}
-                      size={12}
-                      color={isSelected ? appColors.white : appColors.gray}
+              <TextComponent text="Khung giờ trống" font={fontFamilies.semiBold} size={16} />
+              {slotsStatus === 'loading' ? (
+                <ActivityIndicator color={appColors.primary} style={styles.slotsLoading} />
+              ) : slotsStatus === 'error' ? (
+                <StateView type="error" message={slotsError} onAction={loadSlots} compact />
+              ) : slots.length === 0 ? (
+                <StateView
+                  compact
+                  icon={<Calendar size={28} color={appColors.primary} />}
+                  title="Không có khung giờ trống"
+                  message="Hãy chọn một ngày khác."
+                />
+              ) : (
+                <View style={styles.wrap}>
+                  {slots.map(slot => (
+                    <ChipComponent
+                      key={slot._id}
+                      label={slotLabel(slot)}
+                      selected={selectedSlot?._id === slot._id}
+                      onPress={() =>
+                        setSelectedSlot(selectedSlot?._id === slot._id ? null : slot)
+                      }
+                      styles={styles.slotChip}
                     />
-                    <TextComponent
-                      text={date.format('DD')}
-                      size={16}
-                      font="Poppins-SemiBold"
-                      color={isSelected ? appColors.white : appColors.black}
-                    />
-                    <TextComponent
-                      text={date.format('MMM')}
-                      size={10}
-                      color={isSelected ? appColors.white : appColors.gray}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
-        </SectionComponent>
-
-        {/* Time Slots */}
-        <SectionComponent>
-          <TextComponent
-            text="Available Time Slots"
-            size={16}
-            font="Poppins-SemiBold"
-            color={appColors.black}
-          />
-          <SpaceComponent height={12} />
-          {availability.length > 0 ? (
-            <View style={styles.slotsContainer}>
-              {availability
-                .filter(
-                  slot =>
-                    !slot.isBooked &&
-                    (!slot.status || slot.status === 'available'),
-                )
-                .map((slot, index) => {
-                  const isSelected = selectedSlot?._id === slot._id;
-
-                  return (
-                    <TouchableOpacity
-                      key={slot._id || index}
-                      style={[
-                        styles.timeSlot,
-                        isSelected && styles.selectedTimeSlot,
-                      ]}
-                      onPress={() => setSelectedSlot(slot)}>
-                      <TextComponent
-                        text={`${timeUtils.formatToVietnameseTime(
-                          slot.startTime,
-                        )} - ${timeUtils.formatToVietnameseTime(slot.endTime)}`}
-                        size={14}
-                        color={isSelected ? appColors.white : appColors.black}
-                        font={
-                          isSelected ? 'Poppins-SemiBold' : 'Poppins-Regular'
-                        }
-                      />
-                    </TouchableOpacity>
-                  );
-                })}
-            </View>
-          ) : (
-            <View style={styles.noSlotsContainer}>
-              <TextComponent
-                text="No available slots for this date"
-                size={14}
-                color={appColors.gray}
-                styles={{textAlign: 'center'}}
-              />
-            </View>
-          )}
-        </SectionComponent>
-
-        {/* Booking Button */}
-        <SectionComponent>
-          {selectedSlot ? (
-            <View style={styles.bookingInfo}>
-              <RowComponent justify="space-between">
-                <View>
-                  <TextComponent
-                    text="Selected Time"
-                    size={14}
-                    color={appColors.gray}
-                  />
-                  <TextComponent
-                    text={`${timeUtils.formatToVietnameseTime(
-                      selectedSlot.startTime,
-                    )} - ${timeUtils.formatToVietnameseTime(
-                      selectedSlot.endTime,
-                    )}`}
-                    size={16}
-                    font="Poppins-SemiBold"
-                    color={appColors.black}
-                  />
-                  <TextComponent
-                    text={timeUtils.formatToEnglishDate(selectedDate)}
-                    size={14}
-                    color={appColors.gray}
-                  />
+                  ))}
                 </View>
-                <View style={{alignItems: 'flex-end'}}>
-                  <TextComponent
-                    text="Duration"
-                    size={14}
-                    color={appColors.gray}
-                  />
-                  <TextComponent
-                    text={`${
-                      calculateSessionDetails(selectedSlot).duration
-                    } hours`}
-                    size={16}
-                    font="Poppins-SemiBold"
-                    color={appColors.black}
-                  />
-                  <TextComponent
-                    text="Total"
-                    size={14}
-                    color={appColors.gray}
-                  />
-                  <TextComponent
-                    text={`${calculateSessionDetails(
-                      selectedSlot,
-                    ).totalPrice.toLocaleString()} VND`}
-                    size={16}
-                    font="Poppins-Bold"
-                    color={appColors.primary}
-                  />
-                </View>
-              </RowComponent>
-              <SpaceComponent height={16} />
-              <ButtonComponent
-                text={bookingLoading ? 'Booking...' : 'Book This Session'}
-                type="primary"
-                onPress={handleBooking}
-                disable={bookingLoading}
-              />
+              )}
+
+              {selectedSlot ? (
+                <InputComponent
+                  label="Ghi chú cho huấn luyện viên (không bắt buộc)"
+                  value={notes}
+                  onChange={setNotes}
+                  placeholder="VD: Mình muốn tập trung vào phần thân trên"
+                  maxLength={NOTES_MAX}
+                  multiline
+                  autoCapitalize="sentences"
+                />
+              ) : null}
             </View>
-          ) : (
-            <ButtonComponent
-              text="Select a time slot to book"
-              type="outline"
-              disable={true}
-            />
-          )}
+          ) : null}
 
-          <SpaceComponent height={12} />
+          {/* Reviews */}
+          {reviews.length > 0 ? (
+            <View style={styles.card}>
+              <TextComponent text="Đánh giá gần đây" font={fontFamilies.semiBold} size={16} />
+              {reviews.map(review => (
+                <View key={review._id} style={styles.review}>
+                  <View style={styles.reviewHeader}>
+                    <TextComponent
+                      text={review.client?.username || 'Học viên'}
+                      font={fontFamilies.medium}
+                      size={14}
+                    />
+                    <View style={styles.inline}>
+                      {Array.from({length: 5}, (_, i) => (
+                        <Star1
+                          key={i}
+                          size={12}
+                          color={i < review.rating ? appColors.yellow : appColors.border}
+                          variant="Bold"
+                        />
+                      ))}
+                    </View>
+                  </View>
+                  {review.comment ? (
+                    <TextComponent text={review.comment} size={13} color={appColors.textMuted} />
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </ScrollView>
 
-          {/* Chat Button */}
+        {/* Sticky action bar */}
+        <View style={[styles.bottomBar, {paddingBottom: insets.bottom + spacing.md}]}>
           <ButtonComponent
-            text="Chat with this PT"
             type="outline"
-            onPress={handleStartChat}
-            textColor={appColors.primary}
+            icon={<MessageText1 size={20} color={appColors.primary} />}
+            onPress={startChat}
+            isLoading={startingChat}
+            accessibilityLabel="Nhắn tin với huấn luyện viên"
+            styles={styles.chatButton}
           />
-        </SectionComponent>
-
-        <SpaceComponent height={30} />
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.flex}>
+            {selectedSlot ? (
+              <TextComponent
+                text={`${slotLabel(selectedSlot)} • ${formatHours(slotHours(selectedSlot))}`}
+                size={12}
+                color={appColors.textMuted}
+              />
+            ) : null}
+            <ButtonComponent
+              text={
+                selectedSlot
+                  ? `Đặt lịch • ${formatCurrency(total)}`
+                  : canBook
+                  ? 'Chọn khung giờ để đặt'
+                  : 'Chưa thể đặt lịch'
+              }
+              type="primary"
+              onPress={confirmBooking}
+              disable={!selectedSlot || !canBook}
+              isLoading={booking}
+            />
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
+
+const Stat = ({value, label, highlight}) => (
+  <View style={styles.stat}>
+    <TextComponent
+      text={value}
+      size={15}
+      font={fontFamilies.semiBold}
+      color={highlight ? appColors.primary : appColors.text}
+      numberOfLines={1}
+    />
+    <TextComponent text={label} size={12} color={appColors.textMuted} />
+  </View>
+);
 
 export default PTDetailScreen;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.white,
+    backgroundColor: appColors.background,
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileCard: {
-    padding: 16,
-    marginTop: 10,
-    marginBottom: 16,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: appColors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  profileInfo: {
+  flex: {
     flex: 1,
   },
-  specializationsContainer: {
+  scroll: {
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  card: {
+    backgroundColor: appColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadow.sm,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+    alignItems: 'center',
+  },
+  avatar: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+  },
+  avatarFallback: {
+    backgroundColor: appColors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  stats: {
+    flexDirection: 'row',
+    backgroundColor: appColors.background,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+  },
+  stat: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: appColors.border,
+  },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: appColors.warningSoft,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+  },
+  noticeText: {
+    flex: 1,
+  },
+  block: {
+    gap: spacing.sm,
+  },
+  bio: {
+    lineHeight: 21,
+  },
+  wrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: spacing.sm,
   },
-  specializationTag: {
-    backgroundColor: `${appColors.primary}15`,
-    paddingHorizontal: 12,
+  tag: {
+    backgroundColor: appColors.primarySoft,
+    paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: 16,
-    marginRight: 8,
-    marginBottom: 8,
+    borderRadius: radius.pill,
   },
-  dateContainer: {
+  slotsLoading: {
+    paddingVertical: spacing.xl,
+  },
+  slotChip: {
+    minWidth: 130,
+  },
+  review: {
+    gap: 4,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: appColors.border,
+  },
+  reviewHeader: {
     flexDirection: 'row',
-    paddingVertical: 8,
-  },
-  dateItem: {
-    width: 60,
-    height: 70,
-    backgroundColor: appColors.white,
-    borderRadius: 12,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginRight: 12,
-    borderWidth: 1,
-    borderColor: appColors.lightGray,
   },
-  selectedDateItem: {
-    backgroundColor: appColors.primary,
-    borderColor: appColors.primary,
-  },
-  slotsContainer: {
+  bottomBar: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    alignItems: 'flex-end',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    backgroundColor: appColors.surface,
+    borderTopWidth: 1,
+    borderTopColor: appColors.border,
   },
-  timeSlot: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: appColors.white,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: appColors.lightGray,
-    minWidth: 120,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  selectedTimeSlot: {
-    backgroundColor: appColors.primary,
-    borderColor: appColors.primary,
-  },
-  noSlotsContainer: {
-    padding: 20,
-    backgroundColor: appColors.lightGray,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  bookingInfo: {
-    padding: 16,
-    backgroundColor: appColors.lightGray,
-    borderRadius: 8,
-  },
-  header: {
-    backgroundColor: appColors.primary,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 20,
-    height: 140,
-    borderRadius: 20,
+  chatButton: {
+    width: 52,
+    paddingHorizontal: 0,
   },
 });

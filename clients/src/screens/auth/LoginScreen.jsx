@@ -1,75 +1,43 @@
-import {
-  StyleSheet,
-  Text,
-  View,
-  Button,
-  ImageBackground,
-  TouchableOpacity,
-  ScrollView,
-  Switch,
-  Alert,
-} from 'react-native';
-import React from 'react';
-import {useEffect} from 'react';
-import {ButtonComponent} from '../../components';
-import {globalStyles} from '../../styles/globalStyles';
-import {InputComponent} from '../../components';
-import {useState} from 'react';
-import {fontFamilies} from '../../constants/fontFamilies';
-import appColors from '../../constants/appColors';
-import {LockCircle, Sms} from 'iconsax-react-native';
-import TextComponent from '../../components/TextComponent';
-import {SectionComponent} from '../../components';
-import {RowComponent} from '../../components';
-import SocialLogin from './components/SocialLogin';
-import authApi from '../../apis/authApi';
+import React, {useRef, useState} from 'react';
+import {StyleSheet, Switch} from 'react-native';
 import {useDispatch} from 'react-redux';
-import {addAuth} from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {Lock, Sms} from 'iconsax-react-native';
+import {ButtonComponent, InputComponent, RowComponent, TextComponent} from '../../components';
+import AuthLayout, {FormError} from './components/AuthLayout';
+import authApi from '../../apis/authApi';
+import {addAuth} from '../../redux/reducers/authReducer';
 import {Validate} from '../../utils/validate';
-import {useFocusEffect} from '@react-navigation/native';
+import appColors from '../../constants/appColors';
+import {fontFamilies} from '../../constants/fontFamilies';
 
 const LoginScreen = ({navigation}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isRemember, setIsRemember] = useState(false);
-  const [isDisable, setIsDisable] = useState(false);
-  const [isForgotPressed, setIsForgotPressed] = useState(false);
+  const [isRemember, setIsRemember] = useState(true);
+  const [emailTouched, setEmailTouched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const passwordRef = useRef(null);
   const dispatch = useDispatch();
 
-  useEffect(() => {
-    const emailValidation = Validate.email(email);
-
-    if (!email || !password || !emailValidation) {
-      setIsDisable(true);
-    } else {
-      setIsDisable(false);
-    }
-  }, [email, password]);
-
-  useFocusEffect(
-    React.useCallback(() => {
-      setIsForgotPressed(false);
-    }, []),
-  );
+  const emailError =
+    emailTouched && email && !Validate.email(email.trim()) ? 'Email không hợp lệ' : '';
+  const canSubmit = Validate.email(email.trim()) && password.length > 0;
 
   const handleLogin = async () => {
-    if (!Validate.email(email)) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+    if (!canSubmit || isLoading) {
+      setEmailTouched(true);
       return;
     }
-
     setError('');
     setIsLoading(true);
     try {
       const res = await authApi.HandleAuthentication(
         '/login',
-        {email, password},
+        {email: email.trim(), password},
         'post',
       );
-
       const authData = res.data.data || res.data;
       if (isRemember) {
         await AsyncStorage.setItem('auth', JSON.stringify(authData));
@@ -78,154 +46,92 @@ const LoginScreen = ({navigation}) => {
       }
       dispatch(addAuth(authData));
     } catch (err) {
-      setError(err.message || 'Unable to sign in. Please try again.');
-    } finally {
+      setError(err.message);
       setIsLoading(false);
     }
   };
 
   return (
-    <ImageBackground
-      source={require('../../../assets/images/Main.png')}
-      style={[
-        {justifyContent: 'center', alignItems: 'center', padding: 30},
-        globalStyles.container,
-      ]}>
-      <TextComponent text="Sign In" title styles={styles.textLogin} />
-      <View style={styles.wrap}>
-        <TextComponent
-          text="Email"
-          styles={{
-            color: appColors.white,
-            alignSelf: 'flex-start',
-            marginBottom: 5,
-            padding: 5,
-          }}
-        />
-        <InputComponent
-          value={email}
-          onChange={val => setEmail(val)}
-          placeholder="Email"
-          allowClear
-        />
-        <TextComponent
-          text="Password"
-          styles={{
-            color: appColors.white,
-            alignSelf: 'flex-start',
-            marginBottom: 5,
-            padding: 5,
-            marginTop: 10,
-          }}
-        />
-        <InputComponent
-          value={password}
-          onChange={val => setPassword(val)}
-          placeholder="Password"
-          secureTextEntry
-          allowClear
-          isPassword
-          affix={<LockCircle size={22} color={appColors.gray} />}
-        />
-
-        <SectionComponent>
-          <RowComponent align justify="space-between">
-            <RowComponent>
-              <Switch
-                value={isRemember}
-                onChange={() => setIsRemember(!isRemember)}
-                trackColor={{
-                  true: appColors.primary,
-                  false: 'rgba(120, 120, 128, 0.16)',
-                }}
-                thumbColor={'white'}
-                style={{transform: [{scaleX: 0.8}, {scaleY: 0.8}]}}
-              />
-              <TextComponent text="Remember me" styles={styles.rememberMe} />
-            </RowComponent>
-
-            <ButtonComponent
-              text="Forgot Password?"
-              onPress={() => {
-                setIsForgotPressed(true);
-                navigation.navigate('ForgotPasswordScreen');
-                setTimeout(() => setIsForgotPressed(false), 500);
-              }}
-              type="text"
-              textStyles={{
-                textDecorationLine: 'underline',
-                fontSize: 12,
-                color: isForgotPressed ? appColors.primary : appColors.white,
-              }}
-            />
-          </RowComponent>
-        </SectionComponent>
-        {error ? (
-          <TextComponent
-            text={error}
-            styles={{
-              color: appColors.primary,
-              marginBottom: 10,
-              alignSelf: 'center',
-            }}
+    <AuthLayout
+      title="Chào mừng trở lại"
+      subtitle="Đăng nhập để đặt lịch và theo dõi buổi tập của bạn."
+      footer={
+        <RowComponent>
+          <TextComponent text="Chưa có tài khoản? " color={appColors.white} />
+          <ButtonComponent
+            type="link"
+            text="Đăng ký ngay"
+            textColor={appColors.primaryLight}
+            onPress={() => navigation.navigate('SignUpScreen')}
           />
-        ) : null}
-        <ButtonComponent
-          text={isLoading ? 'Signing in...' : 'Sign In'}
-          onPress={handleLogin}
-          styles={styles.button}
-          type="primary"
-          textFont={fontFamilies.semiBold}
-          disable={isDisable || isLoading}
-        />
-      </View>
+        </RowComponent>
+      }>
+      <InputComponent
+        label="Email"
+        value={email}
+        onChange={setEmail}
+        placeholder="ban@email.com"
+        type="email-address"
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType="next"
+        onSubmitEditing={() => passwordRef.current?.focus()}
+        onBlur={() => setEmailTouched(true)}
+        error={emailError}
+        prefix={<Sms size={20} color={appColors.textMuted} />}
+        allowClear
+      />
+      <InputComponent
+        ref={passwordRef}
+        label="Mật khẩu"
+        value={password}
+        onChange={setPassword}
+        placeholder="Nhập mật khẩu"
+        autoComplete="password"
+        textContentType="password"
+        returnKeyType="done"
+        onSubmitEditing={handleLogin}
+        prefix={<Lock size={20} color={appColors.textMuted} />}
+        isPassword
+      />
 
-      <RowComponent>
-        <TextComponent text="Don't have an account?" color={appColors.white} />
+      <RowComponent justify="space-between">
+        <RowComponent>
+          <Switch
+            value={isRemember}
+            onValueChange={setIsRemember}
+            trackColor={{true: appColors.primary, false: appColors.border}}
+            thumbColor={appColors.white}
+            accessibilityLabel="Ghi nhớ đăng nhập"
+          />
+          <TextComponent text="Ghi nhớ" size={13} styles={styles.rememberText} />
+        </RowComponent>
         <ButtonComponent
-          text="Sign Up"
-          onPress={() => navigation.navigate('SignUpScreen')}
           type="link"
-          textStyles={{textDecorationLine: 'underline', fontSize: 14}}
-          styles={{paddingHorizontal: 0}}
+          text="Quên mật khẩu?"
+          textFont={fontFamilies.medium}
+          onPress={() => navigation.navigate('ForgotPasswordScreen')}
         />
       </RowComponent>
 
-      <SocialLogin />
-    </ImageBackground>
+      <FormError message={error} />
+
+      <ButtonComponent
+        text="Đăng nhập"
+        type="primary"
+        size="lg"
+        onPress={handleLogin}
+        disable={!canSubmit}
+        isLoading={isLoading}
+      />
+    </AuthLayout>
   );
 };
 
 export default LoginScreen;
 
 const styles = StyleSheet.create({
-  textLogin: {
-    marginBottom: 20,
-    fontSize: 28,
-    color: appColors.white,
-    alignSelf: 'center',
-    fontFamily: fontFamilies.extraBold,
-  },
-  wrap: {
-    width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 0.2,
-    borderColor: '#FFF',
-  },
-  button: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    width: '100%',
-    height: 40,
-  },
-  rememberMe: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontFamily: fontFamilies.regular,
-    fontSize: 12,
-    padding: 8,
+  rememberText: {
+    marginLeft: 6,
   },
 });

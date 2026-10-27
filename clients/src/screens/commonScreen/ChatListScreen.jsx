@@ -1,308 +1,187 @@
-import React, {useState, useEffect} from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-  Platform,
-  StatusBar,
-  RefreshControl,
-} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import React, {useCallback, useState} from 'react';
+import {FlatList, RefreshControl, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 import {useSelector} from 'react-redux';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import {Messages2} from 'iconsax-react-native';
+import {Avatar, ScreenHeader, StateView, TextComponent} from '../../components';
 import chatApi from '../../apis/chatApi';
+import {useSocketEvent} from '../../apis/socketClient';
 import {authSelector} from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
+import {radius, shadow, spacing} from '../../constants/theme';
+import {formatRelativeTime} from '../../utils/format';
 
 const ChatListScreen = ({navigation}) => {
   const auth = useSelector(authSelector);
-  const [chatRooms, setChatRooms] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [rooms, setRooms] = useState([]);
+  const [status, setStatus] = useState('loading');
+  const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const isTab = navigation.getState?.()?.type === 'tab';
 
-  // Get chat list from API
-  const loadChatRooms = async () => {
+  const load = useCallback(async () => {
     try {
-      setLoading(true);
-      const response = await chatApi.getChatRooms(auth.accesstoken);
-
-      if (response.success) {
-        setChatRooms(response.data || []);
-      }
-    } catch (error) {
-      console.error('Error loading chat rooms:', error);
-      Alert.alert('Error', 'Cannot load chat list');
+      const response = await chatApi.getChatRooms();
+      setRooms(response.data || []);
+      setStatus('ready');
+    } catch (err) {
+      setError(err.message);
+      setStatus('error');
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadChatRooms();
-    setRefreshing(false);
-  };
+  // New messages arrive while away, so reload whenever the list is shown.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
-  // Get information about the other user (PT or Client)
-  const getOtherUser = chatRoom => {
-    if (auth.role === 'pt') {
-      return chatRoom.clientUser; // PT, show Client chat
-    } else {
-      return chatRoom.ptUser; // Client, show PT chat
+  // Live preview: move the room to the top with its new last message. A room
+  // we don't have yet (first message from someone new) needs a reload.
+  useSocketEvent('chat:message', ({chatRoomId, message}) => {
+    if (!rooms.some(r => r._id === chatRoomId)) {
+      load();
+      return;
     }
-  };
+    setRooms(prev => {
+      const room = prev.find(r => r._id === chatRoomId);
+      if (!room) {
+        return prev;
+      }
+      const updated = {
+        ...room,
+        lastMessage: {content: message.content, sender: message.sender, timestamp: message.createdAt},
+      };
+      return [updated, ...prev.filter(r => r._id !== chatRoomId)];
+    });
+  });
 
-  // Format the last message time
-  const formatLastMessageTime = date => {
-    if (!date) return '';
+  const otherUserOf = room => (auth.role === 'pt' ? room.clientUser : room.ptUser);
 
-    const now = new Date();
-    const messageDate = new Date(date);
-    const diffInMinutes = Math.floor((now - messageDate) / (1000 * 60));
-
-    if (diffInMinutes < 1) return 'Now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m`;
-
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}h`;
-
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `${diffInDays}d`;
-  };
-
-  // Render each chat item
-  const renderChatItem = ({item}) => {
-    const otherUser = getOtherUser(item);
-
-    if (!otherUser) return null;
-
+  const renderRoom = ({item}) => {
+    const other = otherUserOf(item);
+    if (!other) {
+      return null;
+    }
+    const fromMe = item.lastMessage?.sender?._id === auth.id || item.lastMessage?.sender === auth.id;
+    const preview = item.lastMessage?.content
+      ? `${fromMe ? 'Bạn: ' : ''}${item.lastMessage.content}`
+      : 'Bắt đầu cuộc trò chuyện';
     return (
       <TouchableOpacity
-        style={styles.chatItem}
-        onPress={() =>
-          navigation.navigate('ChatScreen', {
-            chatRoomId: item._id,
-            otherUser: otherUser,
-          })
-        }>
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {otherUser.username.charAt(0).toUpperCase()}
-            </Text>
+        style={styles.room}
+        onPress={() => navigation.navigate('ChatScreen', {chatRoomId: item._id, otherUser: other})}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={`Trò chuyện với ${other.username}`}>
+        <Avatar uri={other.photoUrl} name={other.username} size={52} />
+        <View style={styles.flex}>
+          <View style={styles.roomTop}>
+            <TextComponent
+              text={other.username}
+              size={15}
+              font={fontFamilies.semiBold}
+              numberOfLines={1}
+              styles={styles.flex}
+            />
+            <TextComponent
+              text={item.lastMessage?.content ? formatRelativeTime(item.lastMessage.timestamp) : ''}
+              size={12}
+              color={appColors.textMuted}
+            />
           </View>
+          <TextComponent
+            text={other.role === 'pt' ? 'Huấn luyện viên' : 'Học viên'}
+            size={11}
+            font={fontFamilies.medium}
+            color={appColors.primary}
+          />
+          <TextComponent text={preview} size={13} color={appColors.textMuted} numberOfLines={1} />
         </View>
-
-        <View style={styles.chatContent}>
-          <View style={styles.headerRow}>
-            <Text style={styles.userName}>{otherUser.username}</Text>
-            <Text style={styles.timeText}>
-              {formatLastMessageTime(item.lastMessage?.timestamp)}
-            </Text>
-          </View>
-
-          <Text style={styles.lastMessage} numberOfLines={1}>
-            {item.lastMessage?.content || 'Start a conversation...'}
-          </Text>
-        </View>
-
-        <Icon name="chevron-right" size={20} color={appColors.gray} />
       </TouchableOpacity>
     );
   };
 
-  useEffect(() => {
-    loadChatRooms();
-  }, []);
-
-  if (loading && !refreshing) {
+  const renderContent = () => {
+    if (status === 'loading') {
+      return <StateView type="loading" title="Đang tải tin nhắn..." />;
+    }
+    if (status === 'error') {
+      return <StateView type="error" message={error} onAction={load} />;
+    }
     return (
-      <View style={styles.container}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor={appColors.primary}
-        />
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}>
-            <Icon name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Messages</Text>
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={appColors.primary} />
-          <Text style={styles.loadingText}>Loading chats...</Text>
-        </View>
-        <SafeAreaView edges={['bottom']} />
-      </View>
+      <FlatList
+        data={rooms}
+        keyExtractor={item => item._id}
+        renderItem={renderRoom}
+        contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+            colors={[appColors.primary]}
+            tintColor={appColors.primary}
+          />
+        }
+        ListEmptyComponent={
+          <StateView
+            icon={<Messages2 size={30} color={appColors.primary} />}
+            title="Chưa có tin nhắn"
+            message={
+              auth.role === 'pt'
+                ? 'Học viên có thể nhắn tin cho bạn từ trang hồ sơ hoặc lịch đặt.'
+                : 'Mở hồ sơ một huấn luyện viên và bấm "Nhắn tin" để bắt đầu.'
+            }
+            actionText={auth.role === 'pt' ? undefined : 'Tìm huấn luyện viên'}
+            onAction={auth.role === 'pt' ? undefined : () => navigation.navigate('SearchPtScreen')}
+          />
+        }
+      />
     );
-  }
+  };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}>
-          <Icon name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Messages</Text>
-      </View>
-
-      {chatRooms.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Icon name="chat-bubble-outline" size={64} color={appColors.gray} />
-          <Text style={styles.emptyTitle}>No Messages</Text>
-          <Text style={styles.emptyMessage}>
-            Start a conversation with a trainer or client
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={chatRooms}
-          keyExtractor={item => item._id}
-          renderItem={renderChatItem}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[appColors.primary]}
-            />
-          }
-        />
-      )}
-      <SafeAreaView edges={['bottom']} />
+      <ScreenHeader title="Tin nhắn" onBack={isTab ? undefined : () => navigation.goBack()} />
+      <View style={styles.flex}>{renderContent()}</View>
     </View>
   );
 };
 
+export default ChatListScreen;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: appColors.background,
   },
-  header: {
-    backgroundColor: appColors.primary,
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 60 : 45,
-    paddingBottom: 16,
+  flex: {
+    flex: 1,
+  },
+  list: {
+    padding: spacing.lg,
+    gap: spacing.sm,
+    flexGrow: 1,
+  },
+  room: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    height: Platform.OS === 'ios' ? 140 : 120,
+    gap: spacing.md,
+    padding: spacing.md,
+    backgroundColor: appColors.surface,
+    borderRadius: radius.lg,
+    ...shadow.sm,
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: fontFamilies.bold,
-    color: 'white',
-    flex: 1,
-    textAlign: 'center',
-    marginRight: 40,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: appColors.gray,
-    fontFamily: fontFamilies.regular,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    backgroundColor: '#f5f5f5',
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontFamily: fontFamilies.bold,
-    color: appColors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyMessage: {
-    fontSize: 14,
-    color: appColors.gray,
-    textAlign: 'center',
-    lineHeight: 20,
-    fontFamily: fontFamilies.regular,
-  },
-  listContainer: {
-    padding: 16,
-  },
-  chatItem: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    marginBottom: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  roomTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  avatarContainer: {
-    marginRight: 12,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: appColors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: 'white',
-    fontSize: 18,
-    fontFamily: fontFamilies.bold,
-  },
-  chatContent: {
-    flex: 1,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  userName: {
-    fontSize: 16,
-    fontFamily: fontFamilies.semiBold,
-    color: appColors.text,
-  },
-  timeText: {
-    fontSize: 12,
-    color: appColors.gray,
-    fontFamily: fontFamilies.regular,
-  },
-  lastMessage: {
-    fontSize: 14,
-    color: appColors.gray,
-    lineHeight: 18,
-    fontFamily: fontFamilies.regular,
+    gap: spacing.sm,
   },
 });
-
-export default ChatListScreen;

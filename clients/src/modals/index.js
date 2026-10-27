@@ -1,3 +1,4 @@
-import LoadingModal from './LoadingModal';
+import ReasonModal from './ReasonModal';
+import ReviewModal from './ReviewModal';
 
-export {LoadingModal};
+export {ReasonModal, ReviewModal};

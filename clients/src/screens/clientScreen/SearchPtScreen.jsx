@@ -1,585 +1,390 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
-  StyleSheet,
-  View,
-  FlatList,
-  TouchableOpacity,
   ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
   Modal,
-  TextInput,
-  ScrollView,
-  StatusBar,
+  Platform,
   RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {CloseCircle, Profile2User, SearchNormal1, Setting4} from 'iconsax-react-native';
 import {
-  SectionComponent,
-  RowComponent,
-  TextComponent,
   ButtonComponent,
-  SpaceComponent,
+  ChipComponent,
+  HeaderIconButton,
+  InputComponent,
   PtItem,
+  ScreenHeader,
+  StateView,
+  TextComponent,
 } from '../../components';
-import {
-  ArrowLeft,
-  SearchNormal1,
-  Filter,
-  CloseCircle,
-  Setting2,
-  ArrowSwapVertical,
-} from 'iconsax-react-native';
-import appColors from '../../constants/appColors';
+import {toPtItem} from '../../components/PtItem';
 import clientApi from '../../apis/clientApi';
+import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
+import {SPECIALIZATIONS} from '../../constants/labels';
+import {radius, spacing} from '../../constants/theme';
+
+const PAGE_SIZE = 10;
+
+// One choice instead of separate "sort by" + "order" controls.
+const SORT_OPTIONS = [
+  {id: 'rating', label: 'Đánh giá cao', sortBy: 'rating', order: 'desc'},
+  {id: 'price_asc', label: 'Giá thấp → cao', sortBy: 'hourlyRate', order: 'asc'},
+  {id: 'price_desc', label: 'Giá cao → thấp', sortBy: 'hourlyRate', order: 'desc'},
+  {id: 'experience', label: 'Nhiều kinh nghiệm', sortBy: 'experienceYears', order: 'desc'},
+];
+
+const EMPTY_FILTERS = {location: '', minRate: '', maxRate: '', sort: 'rating'};
+
+const countActiveFilters = filters =>
+  [filters.location, filters.minRate || filters.maxRate, filters.sort !== 'rating'].filter(
+    Boolean,
+  ).length;
 
 const SearchPtScreen = ({navigation, route}) => {
-  const {isFilter: initialFilterState} = route.params || {isFilter: false};
+  const insets = useSafeAreaInsets();
+  const [query, setQuery] = useState('');
+  const [specialization, setSpecialization] = useState(route.params?.specialization || '');
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [draftFilters, setDraftFilters] = useState(EMPTY_FILTERS);
+  const [showFilters, setShowFilters] = useState(Boolean(route.params?.isFilter));
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [showFilters, setShowFilters] = useState(initialFilterState);
-  const [filters, setFilters] = useState({
-    specialization: '',
-    location: '',
-    minRate: '',
-    maxRate: '',
-    sortBy: 'rating',
-    order: 'desc',
-  });
+  const [results, setResults] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+  const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // Ignores responses from searches that were superseded while in flight.
+  const requestId = useRef(0);
 
-  // Search PTs when the screen loads or when searchQuery or filters change
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      searchPTs();
-    }, 500);
-
-    return () => clearTimeout(handler);
-  }, [searchQuery, filters]);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    searchPTs().finally(() => {
-      setRefreshing(false);
-    });
-  }, [searchQuery, filters]);
-
-  const toggleSortOrder = () => {
-    setFilters(prev => ({
-      ...prev,
-      order: prev.order === 'asc' ? 'desc' : 'asc',
-    }));
-  };
-
-  const searchPTs = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const params = {};
-
-      if (searchQuery.trim()) {
-        params.name = searchQuery.trim();
+  const fetchPage = useCallback(
+    async pageNumber => {
+      const sort = SORT_OPTIONS.find(option => option.id === filters.sort) || SORT_OPTIONS[0];
+      const params = {
+        pageNumber,
+        pageSize: PAGE_SIZE,
+        sortBy: sort.sortBy,
+        order: sort.order,
+      };
+      if (query.trim()) {
+        params.name = query.trim();
       }
-
-      // Handle filters
-      if (filters.specialization && filters.specialization.trim() !== '') {
-        params.specialization = filters.specialization.trim();
+      if (specialization) {
+        params.specialization = specialization;
       }
-
-      if (filters.location && filters.location.trim() !== '') {
+      if (filters.location.trim()) {
         params.location = filters.location.trim();
       }
-
-      if (filters.minRate && !isNaN(parseFloat(filters.minRate))) {
-        params.minRate = parseFloat(filters.minRate);
+      if (filters.minRate) {
+        params.minRate = Number(filters.minRate);
       }
-
-      if (filters.maxRate && !isNaN(parseFloat(filters.maxRate))) {
-        params.maxRate = parseFloat(filters.maxRate);
+      if (filters.maxRate) {
+        params.maxRate = Number(filters.maxRate);
       }
-
-      // Add sorting parameters
-      if (filters.sortBy) {
-        params.sortBy = filters.sortBy;
-        params.order = filters.order;
-      }
-
-      params.pageSize = 8;
-
-      console.log(
-        'SearchPtScreen: Search params:',
-        JSON.stringify(params, null, 2),
-      );
-
       const response = await clientApi.searchPTs(params);
-      console.log('SearchPtScreen: API response received');
+      return response.data;
+    },
+    [query, specialization, filters],
+  );
 
-      if (response.data && Array.isArray(response.data.data)) {
-        console.log(
-          `SearchPtScreen: Found ${response.data.data.length} results`,
-        );
-        setSearchResults(response.data.data);
+  const load = useCallback(
+    async ({refresh = false} = {}) => {
+      const id = ++requestId.current;
+      if (refresh) {
+        setRefreshing(true);
       } else {
-        console.log('SearchPtScreen: No results or unexpected format');
-        setSearchResults([]);
-        if (response.data && response.data.message) {
-          setError(response.data.message);
+        setStatus('loading');
+      }
+      try {
+        const data = await fetchPage(1);
+        if (id !== requestId.current) {
+          return;
+        }
+        setResults(Array.isArray(data?.data) ? data.data : []);
+        setTotal(data?.count || 0);
+        setPage(1);
+        setPages(data?.pages || 1);
+        setStatus('ready');
+      } catch (err) {
+        if (id === requestId.current) {
+          setError(err.message);
+          setStatus('error');
+        }
+      } finally {
+        if (id === requestId.current) {
+          setRefreshing(false);
         }
       }
-    } catch (error) {
-      console.error('SearchPtScreen: Error searching PTs:', error);
-      setError('Failed to search trainers. ' + (error.message || ''));
+    },
+    [fetchPage],
+  );
+
+  // Debounce typing; filters and chips also go through here.
+  useEffect(() => {
+    const timer = setTimeout(load, query ? 400 : 0);
+    return () => clearTimeout(timer);
+  }, [load, query]);
+
+  const loadMore = async () => {
+    if (loadingMore || status !== 'ready' || page >= pages) {
+      return;
+    }
+    const id = requestId.current;
+    setLoadingMore(true);
+    try {
+      const data = await fetchPage(page + 1);
+      if (id === requestId.current) {
+        setResults(prev => [...prev, ...(data?.data || [])]);
+        setPage(page + 1);
+      }
+    } catch {
+      // Keep what is already shown; scrolling again retries.
     } finally {
-      setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const renderPTItem = ({item, index}) => {
-    let locationString = 'Location not set';
-    if (item.location) {
-      if (typeof item.location === 'string') {
-        locationString = item.location;
-      } else if (typeof item.location === 'object') {
-        if (item.location.district && item.location.city) {
-          locationString = `${item.location.district}, ${item.location.city}`;
-        } else if (item.location.city) {
-          locationString = item.location.city;
-        } else if (item.location.district) {
-          locationString = item.location.district;
-        }
-      }
+  const openFilters = () => {
+    setDraftFilters(filters);
+    setShowFilters(true);
+  };
+
+  const applyFilters = () => {
+    setFilters(draftFilters);
+    setShowFilters(false);
+  };
+
+  const resetAll = () => {
+    setFilters(EMPTY_FILTERS);
+    setDraftFilters(EMPTY_FILTERS);
+    setSpecialization('');
+    setQuery('');
+  };
+
+  const activeCount = countActiveFilters(filters);
+  const hasAnyFilter = activeCount > 0 || specialization || query.trim();
+
+  const renderContent = () => {
+    if (status === 'loading' && !refreshing) {
+      return <StateView type="loading" title="Đang tìm huấn luyện viên..." />;
     }
-
-    const ptItemData = {
-      _id: item._id,
-      title: item.user?.username || 'Personal Trainer',
-      description: item.bio || 'Professional Personal Trainer',
-      location: locationString,
-      imageURL: item.user?.photoUrl || '',
-      rating: item.averageRating || item.rating || 0,
-      hourlyRate: item.hourlyRate || 0,
-      specializations: item.specializations || [],
-      experienceYears: item.experienceYears || 0,
-      ptData: item,
-    };
-
+    if (status === 'error') {
+      return <StateView type="error" message={error} onAction={() => load()} />;
+    }
     return (
-      <PtItem
-        type="list"
-        item={ptItemData}
-        onPress={() => {
-          navigation.navigate('PTDetailScreen', {item});
-        }}
+      <FlatList
+        data={results}
+        keyExtractor={item => item._id}
+        renderItem={({item}) => (
+          <PtItem
+            type="list"
+            item={toPtItem(item)}
+            onPress={() => navigation.navigate('PTDetailScreen', {item})}
+          />
+        )}
+        contentContainerStyle={[styles.list, {paddingBottom: insets.bottom + spacing.xl}]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load({refresh: true})}
+            colors={[appColors.primary]}
+            tintColor={appColors.primary}
+          />
+        }
+        ListHeaderComponent={
+          results.length > 0 ? (
+            <TextComponent
+              text={`${total} huấn luyện viên`}
+              size={13}
+              color={appColors.textMuted}
+              styles={styles.count}
+            />
+          ) : null
+        }
+        ListFooterComponent={
+          loadingMore ? <ActivityIndicator color={appColors.primary} style={styles.footer} /> : null
+        }
+        ListEmptyComponent={
+          <StateView
+            icon={<Profile2User size={30} color={appColors.primary} />}
+            title="Không tìm thấy huấn luyện viên"
+            message={
+              hasAnyFilter
+                ? 'Thử bỏ bớt bộ lọc hoặc tìm với từ khóa khác.'
+                : 'Hiện chưa có huấn luyện viên nào nhận học viên.'
+            }
+            actionText={hasAnyFilter ? 'Xóa bộ lọc' : undefined}
+            onAction={hasAnyFilter ? resetAll : undefined}
+          />
+        }
       />
     );
   };
 
-  const FilterModal = () => (
-    <Modal
-      visible={showFilters}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowFilters(false)}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <TextComponent
-              text="Filters"
-              size={18}
-              font={fontFamilies.bold}
-              color={appColors.gray2}
+  return (
+    <View style={styles.container}>
+      <ScreenHeader
+        title="Tìm huấn luyện viên"
+        onBack={() => navigation.goBack()}
+        right={
+          <View>
+            <HeaderIconButton
+              icon={<Setting4 size={20} color={appColors.white} />}
+              onPress={openFilters}
+              accessibilityLabel="Bộ lọc"
             />
-            <TouchableOpacity onPress={() => setShowFilters(false)}>
-              <CloseCircle size={24} color={appColors.gray} />
-            </TouchableOpacity>
+            {activeCount > 0 ? (
+              <View style={styles.filterBadge}>
+                <TextComponent
+                  text={String(activeCount)}
+                  size={10}
+                  font={fontFamilies.bold}
+                  color={appColors.primary}
+                />
+              </View>
+            ) : null}
           </View>
+        }>
+        <View style={styles.searchBox}>
+          <SearchNormal1 size={18} color={appColors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Tìm theo tên huấn luyện viên"
+            placeholderTextColor={appColors.placeholder}
+            returnKeyType="search"
+            autoCorrect={false}
+            accessibilityLabel="Tìm theo tên"
+          />
+          {query ? (
+            <TouchableOpacity
+              onPress={() => setQuery('')}
+              hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+              accessibilityLabel="Xóa từ khóa">
+              <CloseCircle size={18} color={appColors.placeholder} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </ScreenHeader>
 
-          <ScrollView style={styles.filterContent}>
-            <View style={styles.filterSection}>
-              <TextComponent
-                text="Specialization"
-                size={14}
-                font={fontFamilies.semiBold}
-                color={appColors.gray2}
-              />
-              <TextInput
-                style={styles.filterInput}
-                value={filters.specialization}
-                onChangeText={text =>
-                  setFilters({...filters, specialization: text})
-                }
-                placeholder="e.g., yoga, weight_loss, cardio"
-                placeholderTextColor={appColors.gray}
-              />
-              <TextComponent
-                text="Enter specialization exactly (e.g., yoga, weight_loss)"
-                size={12}
-                color={appColors.gray}
-                styles={{marginTop: 4}}
+      <View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}>
+          <ChipComponent
+            label="Tất cả"
+            selected={!specialization}
+            onPress={() => setSpecialization('')}
+          />
+          {Object.entries(SPECIALIZATIONS).map(([key, label]) => (
+            <ChipComponent
+              key={key}
+              label={label}
+              selected={specialization === key}
+              onPress={() => setSpecialization(specialization === key ? '' : key)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.flex}>{renderContent()}</View>
+
+      <Modal
+        visible={showFilters}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowFilters(false)}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <TouchableOpacity
+            style={styles.backdrop}
+            activeOpacity={1}
+            onPress={() => setShowFilters(false)}
+            accessibilityLabel="Đóng bộ lọc"
+          />
+          <View style={[styles.sheet, {paddingBottom: insets.bottom + spacing.lg}]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <TextComponent text="Bộ lọc" size={18} font={fontFamilies.semiBold} />
+              <ButtonComponent
+                type="link"
+                text="Đặt lại"
+                onPress={() => setDraftFilters(EMPTY_FILTERS)}
               />
             </View>
-
-            <View style={styles.filterSection}>
-              <TextComponent
-                text="Location"
-                size={14}
-                font={fontFamilies.semiBold}
-                color={appColors.gray2}
-              />
-              <TextInput
-                style={styles.filterInput}
-                value={filters.location}
-                onChangeText={text => setFilters({...filters, location: text})}
-                placeholder="e.g., District 1, Ho Chi Minh City"
-                placeholderTextColor={appColors.gray}
-              />
-              <TextComponent
-                text="Enter district name or city name"
-                size={12}
-                color={appColors.gray}
-                styles={{marginTop: 4}}
-              />
-            </View>
-
-            <View style={styles.filterSection}>
-              <TextComponent
-                text="Price Range (VND)"
-                size={14}
-                font={fontFamilies.semiBold}
-                color={appColors.gray2}
-              />
-              <RowComponent>
-                <TextInput
-                  style={[styles.filterInput, {flex: 1, marginRight: 8}]}
-                  value={filters.minRate}
-                  onChangeText={text => setFilters({...filters, minRate: text})}
-                  placeholder="Min"
-                  placeholderTextColor={appColors.gray}
-                  keyboardType="numeric"
-                />
-                <TextInput
-                  style={[styles.filterInput, {flex: 1, marginLeft: 8}]}
-                  value={filters.maxRate}
-                  onChangeText={text => setFilters({...filters, maxRate: text})}
-                  placeholder="Max"
-                  placeholderTextColor={appColors.gray}
-                  keyboardType="numeric"
-                />
-              </RowComponent>
-            </View>
-
-            <View style={styles.filterSection}>
-              <TextComponent
-                text="Sort By"
-                size={14}
-                font={fontFamilies.semiBold}
-                color={appColors.gray2}
-              />
-              <View style={styles.sortOptions}>
-                {[
-                  {id: 'rating', label: 'Rating'},
-                  {id: 'hourlyRate', label: 'Price'},
-                  {id: 'experienceYears', label: 'Experience'},
-                ].map(option => (
-                  <TouchableOpacity
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetBody}>
+              <TextComponent text="Sắp xếp" font={fontFamilies.semiBold} />
+              <View style={styles.wrap}>
+                {SORT_OPTIONS.map(option => (
+                  <ChipComponent
                     key={option.id}
-                    style={[
-                      styles.sortOption,
-                      filters.sortBy === option.id && styles.sortOptionActive,
-                    ]}
-                    onPress={() => setFilters({...filters, sortBy: option.id})}>
-                    <TextComponent
-                      text={option.label}
-                      size={13}
-                      color={
-                        filters.sortBy === option.id
-                          ? appColors.white
-                          : appColors.gray
-                      }
-                      font={
-                        filters.sortBy === option.id
-                          ? fontFamilies.medium
-                          : fontFamilies.regular
-                      }
-                    />
-                  </TouchableOpacity>
+                    label={option.label}
+                    selected={draftFilters.sort === option.id}
+                    onPress={() => setDraftFilters(prev => ({...prev, sort: option.id}))}
+                  />
                 ))}
               </View>
 
-              <RowComponent justify="space-between" styles={{marginTop: 16}}>
+              <InputComponent
+                label="Khu vực"
+                value={draftFilters.location}
+                onChange={val => setDraftFilters(prev => ({...prev, location: val}))}
+                placeholder="VD: Cầu Giấy, Quận 1, Hà Nội"
+                autoCapitalize="words"
+                allowClear
+              />
+
+              <View>
                 <TextComponent
-                  text="Sort Order"
-                  size={14}
-                  font={fontFamilies.semiBold}
-                  color={appColors.gray2}
+                  text="Giá mỗi giờ (₫)"
+                  size={13}
+                  font={fontFamilies.medium}
+                  styles={styles.label}
                 />
-                <TouchableOpacity
-                  style={styles.orderToggle}
-                  onPress={() =>
-                    setFilters(prev => ({
-                      ...prev,
-                      order: prev.order === 'asc' ? 'desc' : 'asc',
-                    }))
-                  }>
-                  <RowComponent>
-                    <ArrowSwapVertical size={16} color={appColors.primary} />
-                    <SpaceComponent width={4} />
-                    <TextComponent
-                      text={
-                        filters.order === 'asc' ? 'Ascending' : 'Descending'
-                      }
-                      size={13}
-                      color={appColors.primary}
-                      font={fontFamilies.medium}
-                    />
-                  </RowComponent>
-                </TouchableOpacity>
-              </RowComponent>
-            </View>
-          </ScrollView>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.clearFiltersButton}
-              onPress={() =>
-                setFilters({
-                  specialization: '',
-                  location: '',
-                  minRate: '',
-                  maxRate: '',
-                  sortBy: 'rating',
-                  order: 'desc',
-                })
-              }>
-              <TextComponent
-                text="Clear All"
-                size={14}
-                color={appColors.gray}
-                font={fontFamilies.medium}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.applyFiltersButton}
-              onPress={() => {
-                setShowFilters(false);
-                searchPTs();
-              }}>
-              <TextComponent
-                text="Apply Filters"
-                size={14}
-                color={appColors.white}
-                font={fontFamilies.semiBold}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <RowComponent justify="space-between" styles={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.headerButton}>
-            <ArrowLeft size={24} color={appColors.white} />
-          </TouchableOpacity>
-          <TextComponent
-            text="Find Trainers"
-            size={20}
-            font={fontFamilies.bold}
-            color={appColors.white}
-          />
-          <TouchableOpacity
-            onPress={() => setShowFilters(true)}
-            style={styles.headerButton}>
-            <Filter size={24} color={appColors.white} />
-          </TouchableOpacity>
-        </RowComponent>
-        <SpaceComponent height={16} />
-        <View style={styles.searchContainer}>
-          <SearchNormal1 size={18} color={appColors.gray} />
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search trainers by name..."
-            placeholderTextColor={appColors.gray}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              style={styles.clearButton}>
-              <CloseCircle size={18} color={appColors.gray} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Content */}
-      <View style={styles.content}>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={appColors.primary} />
-            <SpaceComponent height={12} />
-            <TextComponent text="Searching trainers..." />
-          </View>
-        ) : error ? (
-          <View style={styles.emptyContainer}>
-            <TextComponent text={error} color={appColors.danger} />
-            <SpaceComponent height={12} />
-            <TouchableOpacity
-              onPress={() => searchPTs()}
-              style={styles.retryButton}>
-              <TextComponent
-                text="Retry"
-                color={appColors.primary}
-                font={fontFamilies.medium}
-              />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <SectionComponent>
-              <RowComponent justify="space-between">
-                <TextComponent
-                  text={`${searchResults.length} trainers found`}
-                  font={fontFamilies.semiBold}
-                />
-                <RowComponent>
-                  <TouchableOpacity
-                    onPress={toggleSortOrder}
-                    style={styles.sortOrderButton}>
-                    <ArrowSwapVertical
-                      size={16}
-                      color={appColors.primary}
-                      style={{
-                        transform: [
-                          {rotate: filters.order === 'asc' ? '0deg' : '180deg'},
-                        ],
-                      }}
-                    />
-                  </TouchableOpacity>
-                  <SpaceComponent width={8} />
-                  <TouchableOpacity onPress={() => setShowFilters(true)}>
-                    <RowComponent>
-                      <Filter size={16} color={appColors.primary} />
-                      <SpaceComponent width={4} />
-                      <TextComponent
-                        text="Filters"
-                        color={appColors.primary}
-                        font={fontFamilies.medium}
-                      />
-                    </RowComponent>
-                  </TouchableOpacity>
-                </RowComponent>
-              </RowComponent>
-
-              {(filters.specialization ||
-                filters.location ||
-                filters.minRate ||
-                filters.maxRate) && (
-                <View style={styles.activeFiltersContainer}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <RowComponent>
-                      {filters.specialization && (
-                        <View style={styles.activeFilterTag}>
-                          <TextComponent
-                            text={`Specialization: ${filters.specialization}`}
-                            size={12}
-                            color={appColors.primary}
-                          />
-                        </View>
-                      )}
-                      {filters.location && (
-                        <View style={styles.activeFilterTag}>
-                          <TextComponent
-                            text={`Location: ${filters.location}`}
-                            size={12}
-                            color={appColors.primary}
-                          />
-                        </View>
-                      )}
-                      {(filters.minRate || filters.maxRate) && (
-                        <View style={styles.activeFilterTag}>
-                          <TextComponent
-                            text={`Price: ${filters.minRate || '0'} - ${
-                              filters.maxRate || 'max'
-                            }`}
-                            size={12}
-                            color={appColors.primary}
-                          />
-                        </View>
-                      )}
-                      <TouchableOpacity
-                        style={styles.clearFiltersTag}
-                        onPress={() =>
-                          setFilters({
-                            specialization: '',
-                            location: '',
-                            minRate: '',
-                            maxRate: '',
-                            sortBy: 'rating',
-                            order: 'desc',
-                          })
-                        }>
-                        <TextComponent
-                          text="Clear All"
-                          size={12}
-                          color={appColors.danger}
-                        />
-                      </TouchableOpacity>
-                    </RowComponent>
-                  </ScrollView>
+                <View style={styles.priceRow}>
+                  <InputComponent
+                    value={draftFilters.minRate}
+                    onChange={val =>
+                      setDraftFilters(prev => ({...prev, minRate: val.replace(/[^0-9]/g, '')}))
+                    }
+                    placeholder="Từ"
+                    type="number-pad"
+                    containerStyles={styles.flex}
+                  />
+                  <TextComponent text="–" color={appColors.textMuted} />
+                  <InputComponent
+                    value={draftFilters.maxRate}
+                    onChange={val =>
+                      setDraftFilters(prev => ({...prev, maxRate: val.replace(/[^0-9]/g, '')}))
+                    }
+                    placeholder="Đến"
+                    type="number-pad"
+                    containerStyles={styles.flex}
+                  />
                 </View>
-              )}
-            </SectionComponent>
-
-            <FlatList
-              data={searchResults}
-              keyExtractor={(item, index) =>
-                item._id?.toString() || index.toString()
-              }
-              renderItem={renderPTItem}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.resultsList}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  colors={[appColors.primary]}
-                />
-              }
-              ListEmptyComponent={() =>
-                !loading && (
-                  <View style={styles.emptyContainer}>
-                    <TextComponent
-                      text="No trainers match your criteria."
-                      font={fontFamilies.medium}
-                    />
-                    <SpaceComponent height={8} />
-                    <TextComponent
-                      text="Try adjusting your search terms or filters."
-                      size={12}
-                      color={appColors.gray}
-                    />
-                  </View>
-                )
-              }
-            />
-          </>
-        )}
-      </View>
-
-      <FilterModal />
+              </View>
+            </ScrollView>
+            <ButtonComponent text="Áp dụng" type="primary" size="lg" onPress={applyFilters} />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -589,168 +394,94 @@ export default SearchPtScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.white,
+    backgroundColor: appColors.background,
   },
-  header: {
-    backgroundColor: appColors.primary,
-    paddingTop: 60,
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+  flex: {
+    flex: 1,
   },
-  headerRow: {
-    alignItems: 'center',
-  },
-  headerButton: {
-    padding: 4,
-  },
-  searchContainer: {
+  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: appColors.white,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    backgroundColor: appColors.surface,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    minHeight: 48,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: appColors.black,
-    marginLeft: 8,
-    height: 48,
+    marginLeft: spacing.sm,
+    fontSize: 15,
     fontFamily: fontFamilies.regular,
+    color: appColors.text,
+    paddingVertical: spacing.sm,
   },
-  clearButton: {
-    padding: 4,
-  },
-  content: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  resultsList: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    minHeight: 300,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  retryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: appColors.primary,
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
+  filterBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: appColors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  modalHeader: {
+  chips: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  list: {
+    paddingHorizontal: spacing.lg,
+    flexGrow: 1,
+  },
+  count: {
+    marginBottom: spacing.sm,
+  },
+  footer: {
+    paddingVertical: spacing.lg,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: appColors.overlay,
+  },
+  sheet: {
+    backgroundColor: appColors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingHorizontal: spacing.lg + 4,
+    maxHeight: '85%',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: appColors.border,
+    marginTop: spacing.sm,
+  },
+  sheetHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: appColors.gray5,
+    paddingVertical: spacing.md,
   },
-  filterContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+  sheetBody: {
+    gap: spacing.lg,
+    paddingBottom: spacing.xl,
   },
-  filterSection: {
-    marginVertical: 12,
-  },
-  filterInput: {
-    borderWidth: 1,
-    borderColor: appColors.gray5,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 8,
-    fontSize: 14,
-    color: appColors.gray2,
-    fontFamily: fontFamilies.regular,
-  },
-  sortOptions: {
+  wrap: {
     flexDirection: 'row',
-    marginTop: 8,
     flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: -spacing.sm,
   },
-  sortOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: appColors.gray5,
-    marginRight: 8,
-    marginBottom: 8,
+  label: {
+    marginBottom: 6,
   },
-  sortOptionActive: {
-    backgroundColor: appColors.primary,
-  },
-  orderToggle: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: `${appColors.primary}15`,
-  },
-  modalFooter: {
+  priceRow: {
     flexDirection: 'row',
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: appColors.gray5,
-  },
-  clearFiltersButton: {
-    flex: 1,
-    paddingVertical: 12,
     alignItems: 'center',
-    marginRight: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: appColors.gray5,
-  },
-  applyFiltersButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginLeft: 8,
-    borderRadius: 8,
-    backgroundColor: appColors.primary,
-  },
-  activeFiltersContainer: {
-    marginTop: 12,
-  },
-  activeFilterTag: {
-    backgroundColor: `${appColors.primary}15`,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginRight: 8,
-  },
-  clearFiltersTag: {
-    backgroundColor: `${appColors.danger}15`,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  sortOrderButton: {
-    padding: 8,
-    backgroundColor: `${appColors.primary}15`,
-    borderRadius: 8,
+    gap: spacing.sm,
   },
 });

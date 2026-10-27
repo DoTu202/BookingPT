@@ -1,303 +1,264 @@
-import React, {useState, useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
-  StyleSheet,
-  View,
-  ScrollView,
-  TouchableOpacity,
   Alert,
-  StatusBar,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {useDispatch, useSelector} from 'react-redux';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import dayjs from '../../utils/dayjs';
+import {Calendar, Call, Camera, Profile, Sms} from 'iconsax-react-native';
 import {
-  ArrowLeft,
-  TickSquare,
-  User,
-  Sms,
-  Call,
-  Calendar,
-  DocumentUpload,
-} from 'iconsax-react-native';
-import {
-  TextComponent,
-  InputComponent,
+  Avatar,
   ButtonComponent,
-  SectionComponent,
-  RowComponent,
-  SpaceComponent,
+  InputComponent,
+  ScreenHeader,
+  StateView,
+  TextComponent,
 } from '../../components';
-import LoadingModal from '../../modals/LoadingModal';
+import profileApi from '../../apis/profileApi';
+import {authSelector} from '../../redux/reducers/authReducer';
+import {updateSession} from '../../utils/session';
+import {pickAndUploadProfilePhoto} from '../../utils/photoUpload';
+import {Validate} from '../../utils/validate';
 import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
-import profileApi from '../../apis/profileApi';
-import {useSelector, useDispatch} from 'react-redux';
-import {authSelector, addAuth} from '../../redux/reducers/authReducer';
+import {radius, shadow, spacing} from '../../constants/theme';
 
-const EditProfileScreen = () => {
-  const navigation = useNavigation();
+const EditProfileScreen = ({navigation}) => {
   const auth = useSelector(authSelector);
   const dispatch = useDispatch();
 
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState('loading');
+  const [loadError, setLoadError] = useState('');
+  const [form, setForm] = useState({username: '', email: '', phoneNumber: '', dob: null, photoUrl: ''});
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    phoneNumber: '',
-    dob: '',
-  });
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    setStatus('loading');
+    try {
+      const response = await profileApi.getProfile();
+      const user = response.data.data;
+      setForm({
+        username: user.username || '',
+        email: user.email || '',
+        phoneNumber: user.phoneNumber || '',
+        dob: user.dob ? new Date(user.dob) : null,
+        photoUrl: user.photoUrl || '',
+      });
+      setStatus('ready');
+    } catch (err) {
+      setLoadError(err.message);
+      setStatus('error');
+    }
+  };
 
   useEffect(() => {
-    loadProfile();
+    load();
   }, []);
 
-  const loadProfile = async () => {
-    try {
-      setLoading(true);
-      const response = await profileApi.getProfile();
+  const setField = (key, value) => setForm(prev => ({...prev, [key]: value}));
 
-      if (response.data?.success) {
-        const userData = response.data.data || response.data;
-        console.log('Profile data loaded:', userData);
-        setFormData({
-          username: userData.username || '',
-          email: userData.email || '',
-          phoneNumber: userData.phoneNumber || '',
-          dob: userData.dob
-            ? new Date(userData.dob).toISOString().split('T')[0]
-            : '',
-        });
+  const usernameError = form.username.trim().length < 2 ? 'Tên cần ít nhất 2 ký tự' : '';
+  const phoneError = form.phoneNumber && !Validate.phone(form.phoneNumber) ? 'Số điện thoại gồm 9–12 chữ số' : '';
+
+  const changePhoto = async () => {
+    setUploading(true);
+    try {
+      const photoUrl = await pickAndUploadProfilePhoto();
+      if (photoUrl) {
+        setField('photoUrl', photoUrl);
+        await updateSession(dispatch, auth, {photoUrl});
       }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      Alert.alert('Error', 'Failed to load profile data');
+    } catch (err) {
+      Alert.alert('Không đổi được ảnh', err.message);
     } finally {
-      setLoading(false);
+      setUploading(false);
     }
   };
 
-  const validateEmail = email => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
-  const handleSave = async () => {
-    // Enhanced validation
-    if (!formData.username.trim()) {
-      Alert.alert('Error', 'Username is required');
+  const save = async () => {
+    if (usernameError || phoneError) {
       return;
     }
-
-    if (!formData.email.trim()) {
-      Alert.alert('Error', 'Email is required');
-      return;
-    }
-
-    if (!validateEmail(formData.email.trim())) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
-    if (
-      formData.phoneNumber &&
-      !/^\d{9,12}$/.test(formData.phoneNumber.trim())
-    ) {
-      Alert.alert('Error', 'Please enter a valid phone number');
-      return;
-    }
-
-    if (formData.dob && !/^\d{4}-\d{2}-\d{2}$/.test(formData.dob)) {
-      Alert.alert('Error', 'Date of birth should be in YYYY-MM-DD format');
-      return;
-    }
+    setError('');
+    setSaving(true);
     try {
-      setSaving(true);
-      console.log('Saving profile data...');
-
-      const updateData = {
-        username: formData.username.trim(),
-        email: formData.email.trim(),
-        phoneNumber: formData.phoneNumber.trim() || undefined,
-        dob: formData.dob || undefined,
-      };
-
-      const response = await profileApi.updateProfile(updateData);
-
-      if (response.data?.success) {
-        console.log('Profile updated successfully:', response.data.data);
-
-        dispatch(
-          addAuth({
-            ...auth,
-            username: response.data.data.username,
-            email: response.data.data.email,
-          }),
-        );
-
-        Alert.alert('Success', 'Profile updated successfully', [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
-        ]);
-      }
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      const message =
-        error.response?.data?.message || 'Failed to update profile';
-      Alert.alert('Error', message);
+      const response = await profileApi.updateProfile({
+        username: form.username.trim(),
+        phoneNumber: form.phoneNumber || undefined,
+        // Calendar day picked by the user, not the UTC day of the Date.
+        dob: form.dob ? dayjs(form.dob).format('YYYY-MM-DD') : undefined,
+      });
+      await updateSession(dispatch, auth, {username: response.data.data.username});
+      Alert.alert('Đã lưu', 'Hồ sơ của bạn đã được cập nhật.', [
+        {text: 'OK', onPress: () => navigation.goBack()},
+      ]);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setSaving(false);
     }
   };
 
-  const updateFormData = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const formatDate = text => {
-    let formatted = text.replace(/\D/g, '');
-    if (formatted.length > 4) {
-      formatted = formatted.slice(0, 4) + '-' + formatted.slice(4);
+  const onDateChange = (event, date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
     }
-    if (formatted.length > 7) {
-      formatted = formatted.slice(0, 7) + '-' + formatted.slice(7, 9);
+    if (event.type === 'set' && date) {
+      setField('dob', date);
     }
-    if (formatted.length > 10) {
-      formatted = formatted.slice(0, 10);
-    }
-    return formatted;
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-      <LoadingModal visible={loading || saving} />
+    <View style={styles.container}>
+      <ScreenHeader title="Chỉnh sửa hồ sơ" onBack={() => navigation.goBack()} />
+      {status === 'loading' ? (
+        <StateView type="loading" />
+      ) : status === 'error' ? (
+        <StateView type="error" message={loadError} onAction={load} />
+      ) : (
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            <View style={styles.avatarBlock}>
+              <Avatar uri={form.photoUrl} name={form.username} size={92} />
+              <ButtonComponent
+                text={uploading ? 'Đang tải ảnh...' : 'Đổi ảnh đại diện'}
+                type="secondary"
+                size="sm"
+                icon={<Camera size={16} color={appColors.primaryDark} />}
+                onPress={changePhoto}
+                disable={uploading}
+              />
+            </View>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <RowComponent justify="space-between">
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <ArrowLeft
-              size={24}
-              color={appColors.white}
-              style={{marginTop: 40}}
-            />
-          </TouchableOpacity>
-          <TextComponent
-            text="Edit Profile"
-            size={20}
-            font={fontFamilies.bold}
-            color={appColors.white}
-            styles={{marginTop: 40}}
-          />
-          <TouchableOpacity onPress={handleSave} disabled={saving}>
-            <DocumentUpload
-              size={24}
-              color={appColors.white}
-              style={{marginTop: 40}}
-            />
-          </TouchableOpacity>
-        </RowComponent>
-      </View>
+            <View style={styles.card}>
+              <InputComponent
+                label="Họ và tên"
+                value={form.username}
+                onChange={val => setField('username', val)}
+                autoCapitalize="words"
+                error={usernameError}
+                prefix={<Profile size={20} color={appColors.textMuted} />}
+              />
+              <InputComponent
+                label="Email"
+                value={form.email}
+                editable={false}
+                helperText="Liên hệ hỗ trợ nếu bạn cần đổi email đăng nhập."
+                prefix={<Sms size={20} color={appColors.textMuted} />}
+              />
+              <InputComponent
+                label="Số điện thoại"
+                value={form.phoneNumber}
+                onChange={val => setField('phoneNumber', val.replace(/[^0-9]/g, ''))}
+                type="phone-pad"
+                maxLength={12}
+                error={phoneError}
+                prefix={<Call size={20} color={appColors.textMuted} />}
+              />
+              <View>
+                <TextComponent text="Ngày sinh" size={13} font={fontFamilies.medium} styles={styles.label} />
+                <TouchableOpacity
+                  style={styles.dateField}
+                  onPress={() => setShowDatePicker(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Chọn ngày sinh">
+                  <Calendar size={20} color={appColors.textMuted} />
+                  <TextComponent
+                    text={form.dob ? dayjs(form.dob).format('DD/MM/YYYY') : 'Chọn ngày sinh'}
+                    size={15}
+                    color={form.dob ? appColors.text : appColors.placeholder}
+                  />
+                </TouchableOpacity>
+                {showDatePicker ? (
+                  <View>
+                    <DateTimePicker
+                      value={form.dob || new Date(2000, 0, 1)}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      maximumDate={new Date()}
+                      minimumDate={new Date(1940, 0, 1)}
+                      onChange={onDateChange}
+                      locale="vi-VN"
+                    />
+                    {Platform.OS === 'ios' ? (
+                      <ButtonComponent text="Xong" type="secondary" size="sm" onPress={() => setShowDatePicker(false)} />
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{flex: 1}}>
-        <ScrollView
-          style={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled">
-          <SectionComponent>
-            <TextComponent
-              text="Basic Information"
-              size={16}
-              font={fontFamilies.semiBold}
-              color={appColors.text}
-            />
-            <SpaceComponent height={16} />
+            {error ? (
+              <View style={styles.errorBox}>
+                <TextComponent text={error} size={13} color={appColors.danger} />
+              </View>
+            ) : null}
 
-            <InputComponent
-              value={formData.username}
-              onChangeText={text => updateFormData('username', text)}
-              placeholder="Username"
-              prefix={<User size={20} color={appColors.gray} />}
-              allowClear
-            />
-            <SpaceComponent height={16} />
-
-            <InputComponent
-              value={formData.email}
-              onChangeText={text => updateFormData('email', text)}
-              placeholder="Email address"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              prefix={<Sms size={20} color={appColors.gray} />}
-              allowClear
-            />
-            <SpaceComponent height={16} />
-
-            <InputComponent
-              value={formData.phoneNumber}
-              onChangeText={text =>
-                updateFormData('phoneNumber', text.replace(/[^0-9]/g, ''))
-              }
-              placeholder="Phone number (optional)"
-              keyboardType="phone-pad"
-              prefix={<Call size={20} color={appColors.gray} />}
-              allowClear
-            />
-            <SpaceComponent height={16} />
-
-            <InputComponent
-              value={formData.dob}
-              onChangeText={text => updateFormData('dob', formatDate(text))}
-              placeholder="Date of birth (YYYY-MM-DD)"
-              prefix={<Calendar size={20} color={appColors.gray} />}
-              allowClear
-            />
-          </SectionComponent>
-
-          <SectionComponent>
             <ButtonComponent
-              text="Save Changes"
+              text="Lưu thay đổi"
               type="primary"
-              onPress={handleSave}
-              loading={saving}
-              icon={<TickSquare size={20} color={appColors.white} />}
+              size="lg"
+              onPress={save}
+              isLoading={saving}
+              disable={Boolean(usernameError || phoneError)}
             />
-          </SectionComponent>
-
-          <SpaceComponent height={100} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      )}
+    </View>
   );
 };
+
+export default EditProfileScreen;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.white,
+    backgroundColor: appColors.background,
   },
-  header: {
-    backgroundColor: appColors.primary,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    paddingTop: 20,
-    height: 140,
-    borderRadius: 20,
-  },
-  content: {
+  flex: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+  },
+  scroll: {
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  avatarBlock: {
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  card: {
+    backgroundColor: appColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.lg,
+    ...shadow.sm,
+  },
+  label: {
+    marginBottom: 6,
+  },
+  dateField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 48,
+    borderWidth: 1.5,
+    borderColor: appColors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+  },
+  errorBox: {
+    backgroundColor: appColors.dangerSoft,
+    borderRadius: radius.sm,
+    padding: spacing.md,
   },
 });
-
-export default EditProfileScreen;

@@ -1,138 +1,108 @@
-import {
-  StyleSheet,
-  View,
-  StatusBar,
-  TouchableOpacity,
-  Platform,
-  ScrollView,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useMemo, useState} from 'react';
+import {RefreshControl, ScrollView, StyleSheet, View} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
-import dayjs from 'dayjs';
-import appColors from '../../constants/appColors';
+import dayjs from '../../utils/dayjs';
 import {
-  RowComponent,
-  TextComponent,
-  CircleComponent,
-  SpaceComponent,
-  TagBarComponent,
-  CardComponent,
-} from '../../components';
-import {
+  Chart,
   HambergerMenu,
-  Weight,
-  Clock,
   Profile2User,
+  TickCircle,
+  Timer1,
   Wallet,
-  SearchNormal1,
+  Weight,
 } from 'iconsax-react-native';
-import {fontFamilies} from '../../constants/fontFamilies';
+import {
+  Avatar,
+  GradientView,
+  HeaderIconButton,
+  ScreenHeader,
+  StatCard,
+  StateView,
+  TextComponent,
+} from '../../components';
+import {formatBookingDate} from '../../components/BookingCard';
 import clientApi from '../../apis/clientApi';
+import appColors from '../../constants/appColors';
+import {fontFamilies} from '../../constants/fontFamilies';
+import {header, radius, shadow, spacing} from '../../constants/theme';
+import {formatCompactCurrency, formatHours} from '../../utils/format';
+import {timeUtils} from '../../utils/timeUtils';
 
-const durationMinutes = booking =>
-  (new Date(booking.bookingTime.endTime) - new Date(booking.bookingTime.startTime)) /
-  60000;
+const MONTHS_SHOWN = 6;
 
-// Summary built from the client's real completed sessions (this screen used
-// to show hardcoded weight/body-fat numbers).
+const hoursOf = booking =>
+  (new Date(booking.bookingTime.endTime) - new Date(booking.bookingTime.startTime)) / 3600000;
+
+// Everything on this screen is derived from the client's completed sessions.
 const buildSummary = completed => {
-  const minutes = completed.reduce((total, b) => total + durationMinutes(b), 0);
-  const trainers = new Set(completed.map(b => b.pt?._id).filter(Boolean));
-  const spent = completed.reduce((total, b) => total + (b.priceAtBooking || 0), 0);
-  const thisMonth = completed.filter(b =>
-    dayjs(b.bookingTime.startTime).isSame(dayjs(), 'month'),
-  ).length;
+  const now = dayjs();
+  const months = Array.from({length: MONTHS_SHOWN}, (_, i) =>
+    now.subtract(MONTHS_SHOWN - 1 - i, 'month'),
+  ).map(month => ({
+    label: `T${month.month() + 1}`,
+    count: completed.filter(b => dayjs(b.bookingTime.startTime).isSame(month, 'month')).length,
+  }));
   return {
     sessions: completed.length,
-    hours: (minutes / 60).toFixed(minutes % 60 ? 1 : 0),
-    trainers: trainers.size,
-    spent,
-    thisMonth,
+    hours: completed.reduce((sum, b) => sum + hoursOf(b), 0),
+    trainers: new Set(completed.map(b => b.pt?._id).filter(Boolean)).size,
+    spent: completed.reduce((sum, b) => sum + (b.priceAtBooking || 0), 0),
+    thisMonth: months[months.length - 1].count,
+    months,
   };
 };
 
-const formatVnd = value =>
-  value >= 1000000
-    ? `${(value / 1000000).toFixed(1)}M`
-    : `${Math.round(value / 1000)}K`;
-
-const StatCard = ({icon, value, unit, name}) => (
-  <CardComponent styles={styles.statCard}>
-    <RowComponent>
-      <CircleComponent size={40} color={appColors.lightGray}>
-        {icon}
-      </CircleComponent>
-      <SpaceComponent width={12} />
-      <View style={styles.flex}>
-        <RowComponent justify="flex-start">
-          <TextComponent
-            text={String(value)}
-            font={fontFamilies.bold}
-            size={18}
-            color={appColors.black}
-            flex={0}
-          />
-          {unit ? (
+const MonthlyChart = ({months}) => {
+  const max = Math.max(...months.map(m => m.count), 1);
+  return (
+    <View style={styles.chart} accessibilityLabel="Số buổi tập theo tháng">
+      {months.map((month, index) => {
+        const isCurrent = index === months.length - 1;
+        return (
+          <View key={month.label} style={styles.barColumn}>
             <TextComponent
-              text={` ${unit}`}
-              size={14}
-              color={appColors.gray}
-              flex={0}
+              text={month.count ? String(month.count) : ''}
+              size={11}
+              font={fontFamilies.semiBold}
+              color={appColors.textMuted}
             />
-          ) : null}
-        </RowComponent>
-        <TextComponent text={name} size={12} color={appColors.gray} />
-      </View>
-    </RowComponent>
-  </CardComponent>
-);
-
-const ActivityItem = ({item}) => (
-  <RowComponent styles={styles.activityItem}>
-    <CircleComponent size={50} color={`${appColors.primary}20`}>
-      <Weight size="22" color={appColors.primary} />
-    </CircleComponent>
-    <SpaceComponent width={16} />
-    <View style={styles.flex}>
-      <TextComponent
-        text={`Session with ${item.pt?.username || 'your trainer'}`}
-        font={fontFamilies.bold}
-      />
-      <TextComponent
-        text={dayjs(item.bookingTime.startTime).format('ddd, DD MMM YYYY · HH:mm')}
-        size={12}
-        color={appColors.gray}
-      />
+            <View style={styles.barTrack}>
+              <View
+                style={[
+                  styles.bar,
+                  {height: `${Math.max((month.count / max) * 100, month.count ? 8 : 0)}%`},
+                  isCurrent && styles.barCurrent,
+                ]}
+              />
+            </View>
+            <TextComponent
+              text={month.label}
+              size={11}
+              font={isCurrent ? fontFamilies.semiBold : fontFamilies.regular}
+              color={isCurrent ? appColors.primary : appColors.textMuted}
+            />
+          </View>
+        );
+      })}
     </View>
-    <TextComponent
-      text={`${Math.round(durationMinutes(item))} mins`}
-      size={12}
-      color={appColors.gray}
-      flex={0}
-    />
-  </RowComponent>
-);
+  );
+};
 
 const ProgressScreen = ({navigation}) => {
   const [completed, setCompleted] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      setError('');
-      const response = await clientApi.getMyBookings({
-        status: 'completed',
-        pageSize: 50,
-      });
+      const response = await clientApi.getMyBookings({status: 'completed', pageSize: 50});
       setCompleted(response.data?.data || []);
+      setStatus('ready');
     } catch (err) {
-      setError(err.message || 'Could not load your progress');
+      setError(err.message);
+      setStatus('error');
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   }, []);
@@ -143,106 +113,112 @@ const ProgressScreen = ({navigation}) => {
     }, [load]),
   );
 
-  const summary = buildSummary(completed);
+  const summary = useMemo(() => buildSummary(completed), [completed]);
 
   const renderContent = () => {
-    if (loading) {
-      return (
-        <ActivityIndicator
-          color={appColors.primary}
-          style={styles.loader}
-          size="large"
-        />
-      );
+    if (status === 'loading') {
+      return <StateView type="loading" title="Đang tải tiến độ..." />;
     }
-    if (error) {
-      return (
-        <View style={styles.emptyContainer}>
-          <TextComponent text={error} color={appColors.danger} />
-          <SpaceComponent height={16} />
-          <TouchableOpacity style={styles.addButton} onPress={load}>
-            <TextComponent
-              text="Try again"
-              color={appColors.white}
-              font={fontFamilies.bold}
-            />
-          </TouchableOpacity>
-        </View>
-      );
+    if (status === 'error') {
+      return <StateView type="error" message={error} onAction={load} />;
     }
     if (completed.length === 0) {
       return (
-        <View style={styles.emptyContainer}>
-          <CircleComponent size={100} color={appColors.lightGray}>
-            <Weight size={40} color={appColors.gray} />
-          </CircleComponent>
-          <SpaceComponent height={20} />
-          <TextComponent
-            text="No completed sessions yet"
-            font={fontFamilies.bold}
-            size={20}
-          />
-          <TextComponent
-            text="Your training history and stats will appear here after your first session."
-            color={appColors.gray}
-            styles={styles.emptyText}
-          />
-          <SpaceComponent height={20} />
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => navigation.navigate('SearchPtScreen')}>
-            <RowComponent>
-              <SearchNormal1 size={18} color={appColors.white} />
-              <SpaceComponent width={8} />
-              <TextComponent
-                text="Find a trainer"
-                color={appColors.white}
-                font={fontFamilies.bold}
-                flex={0}
-              />
-            </RowComponent>
-          </TouchableOpacity>
-        </View>
+        <StateView
+          icon={<Weight size={30} color={appColors.primary} />}
+          title="Chưa có buổi tập hoàn thành"
+          message="Thống kê và lịch sử tập luyện sẽ xuất hiện sau buổi tập đầu tiên của bạn."
+          actionText="Tìm huấn luyện viên"
+          onAction={() => navigation.navigate('SearchPtScreen')}
+        />
       );
     }
     return (
-      <View>
-        <TagBarComponent title="Overall Stats" />
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.statsRow}>
-          <StatCard
-            icon={<Weight size="20" color={appColors.primary} />}
-            value={summary.sessions}
-            name={`Sessions · ${summary.thisMonth} this month`}
+      <View style={styles.content}>
+        <GradientView colors={appColors.gradientDark} direction="diagonal" style={styles.summary}>
+          <TextComponent text="Tháng này" size={13} color="rgba(255,255,255,0.7)" />
+          <TextComponent
+            text={`${summary.thisMonth} buổi tập`}
+            size={28}
+            font={fontFamilies.bold}
+            color={appColors.white}
           />
-          <SpaceComponent width={16} />
-          <StatCard
-            icon={<Clock size="20" color={appColors.primary} />}
-            value={summary.hours}
-            unit="h"
-            name="Training time"
+          <TextComponent
+            text={
+              summary.thisMonth > 0
+                ? 'Giữ vững phong độ nhé! 💪'
+                : 'Đặt một buổi tập để giữ nhịp luyện tập.'
+            }
+            size={13}
+            color="rgba(255,255,255,0.8)"
           />
-          <SpaceComponent width={16} />
-          <StatCard
-            icon={<Profile2User size="20" color={appColors.primary} />}
-            value={summary.trainers}
-            name="Trainers"
-          />
-          <SpaceComponent width={16} />
-          <StatCard
-            icon={<Wallet size="20" color={appColors.primary} />}
-            value={formatVnd(summary.spent)}
-            unit="VND"
-            name="Invested in yourself"
-          />
-        </ScrollView>
+        </GradientView>
 
-        <TagBarComponent title="Training History" />
-        <View style={styles.history}>
-          {completed.map(item => (
-            <ActivityItem item={item} key={item._id} />
+        <View style={styles.grid}>
+          <StatCard
+            icon={<TickCircle size={18} color={appColors.success} variant="Bold" />}
+            value={summary.sessions}
+            label="Tổng số buổi"
+            tint={appColors.success}
+            soft={appColors.successSoft}
+          />
+          <StatCard
+            icon={<Timer1 size={18} color={appColors.info} variant="Bold" />}
+            value={formatHours(summary.hours)}
+            label="Thời gian tập"
+            tint={appColors.info}
+            soft={appColors.infoSoft}
+          />
+        </View>
+        <View style={styles.grid}>
+          <StatCard
+            icon={<Profile2User size={18} color={appColors.primary2} variant="Bold" />}
+            value={summary.trainers}
+            label="Huấn luyện viên"
+            tint={appColors.primary2}
+            soft="#EEF0FE"
+          />
+          <StatCard
+            icon={<Wallet size={18} color={appColors.primary} variant="Bold" />}
+            value={formatCompactCurrency(summary.spent)}
+            label="Đầu tư cho bản thân"
+          />
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Chart size={18} color={appColors.primary} />
+            <TextComponent text="Số buổi theo tháng" size={15} font={fontFamilies.semiBold} />
+          </View>
+          <MonthlyChart months={summary.months} />
+        </View>
+
+        <View style={styles.card}>
+          <TextComponent text="Lịch sử buổi tập" size={15} font={fontFamilies.semiBold} />
+          {completed.map((item, index) => (
+            <View key={item._id} style={[styles.historyRow, index > 0 && styles.divider]}>
+              <Avatar uri={item.pt?.photoUrl} name={item.pt?.username} size={42} />
+              <View style={styles.flex}>
+                <TextComponent
+                  text={item.pt?.username || 'Huấn luyện viên'}
+                  font={fontFamilies.medium}
+                  numberOfLines={1}
+                />
+                <TextComponent
+                  text={`${formatBookingDate(item.bookingTime.startTime)} • ${timeUtils.formatTo24HourTime(
+                    item.bookingTime.startTime,
+                  )}`}
+                  size={12}
+                  color={appColors.textMuted}
+                />
+              </View>
+              <TextComponent
+                text={formatHours(hoursOf(item))}
+                size={12}
+                font={fontFamilies.medium}
+                color={appColors.textMuted}
+              />
+            </View>
           ))}
         </View>
       </View>
@@ -251,40 +227,31 @@ const ProgressScreen = ({navigation}) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle={'light-content'} />
-
-      <View style={styles.header}>
-        <RowComponent>
-          <TouchableOpacity onPress={() => navigation.openDrawer()}>
-            <HambergerMenu color={appColors.white} size={24} />
-          </TouchableOpacity>
-          <View style={styles.headerTitle}>
-            <TextComponent
-              text="My Progress"
-              font={fontFamilies.bold}
-              color={appColors.white}
-              size={18}
-            />
-          </View>
-          <View style={styles.headerSpacer} />
-        </RowComponent>
-      </View>
-
+      <ScreenHeader
+        title="Tiến độ của tôi"
+        left={
+          <HeaderIconButton
+            icon={<HambergerMenu size={header.iconSize} color={appColors.white} />}
+            onPress={() => navigation.openDrawer()}
+            accessibilityLabel="Mở menu"
+          />
+        }
+      />
       <ScrollView
+        contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        style={styles.flex}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            tintColor={appColors.primary}
             onRefresh={() => {
               setRefreshing(true);
               load();
             }}
+            colors={[appColors.primary]}
+            tintColor={appColors.primary}
           />
         }>
         {renderContent()}
-        <SpaceComponent height={100} />
       </ScrollView>
     </View>
   );
@@ -295,60 +262,73 @@ export default ProgressScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.white,
+    backgroundColor: appColors.background,
+  },
+  scroll: {
+    flexGrow: 1,
   },
   flex: {
     flex: 1,
   },
-  header: {
-    backgroundColor: appColors.primary,
-    height: 140,
-    borderRadius: 20,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 50,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
+  content: {
+    padding: spacing.lg,
+    gap: spacing.md,
   },
-  headerTitle: {
+  summary: {
+    borderRadius: radius.xl,
+    padding: spacing.xl - 4,
+    gap: 2,
+  },
+  grid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  card: {
+    backgroundColor: appColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadow.sm,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  chart: {
+    flexDirection: 'row',
+    height: 150,
+    gap: spacing.sm,
+  },
+  barColumn: {
     flex: 1,
     alignItems: 'center',
+    gap: 4,
   },
-  headerSpacer: {
-    width: 24,
+  barTrack: {
+    flex: 1,
+    width: '70%',
+    justifyContent: 'flex-end',
+    backgroundColor: appColors.background,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
   },
-  statsRow: {
-    paddingHorizontal: 20,
-    paddingVertical: 4,
+  bar: {
+    width: '100%',
+    backgroundColor: appColors.primaryLight,
+    borderRadius: radius.sm,
   },
-  statCard: {
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: appColors.white,
-    width: 180,
-  },
-  history: {
-    paddingHorizontal: 20,
-  },
-  activityItem: {
-    marginBottom: 16,
-    alignItems: 'center',
-  },
-  loader: {
-    marginTop: 80,
-  },
-  emptyContainer: {
-    paddingTop: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  emptyText: {
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  addButton: {
+  barCurrent: {
     backgroundColor: appColors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 100,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingTop: spacing.md,
+  },
+  divider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: appColors.border,
   },
 });

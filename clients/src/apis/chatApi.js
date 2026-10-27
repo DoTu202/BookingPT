@@ -18,8 +18,10 @@ class ChatApi {
     return response.data;
   }
 
-  async sendMessage(_accessToken, chatRoomId, content) {
-    const response = await axiosClient.post(`/api/chat/send/${chatRoomId}`, {content});
+  // `clientId` (optional) identifies the optimistic bubble; the server echoes
+  // it in the 'chat:message' socket event.
+  async sendMessage(_accessToken, chatRoomId, content, clientId) {
+    const response = await axiosClient.post(`/api/chat/send/${chatRoomId}`, {content, clientId});
     return response.data;
   }
 }

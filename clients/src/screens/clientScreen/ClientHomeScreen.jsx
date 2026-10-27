@@ -1,385 +1,345 @@
+import React, {useCallback, useEffect, useState} from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  StatusBar,
-  TouchableOpacity,
-  Platform,
-  ScrollView,
-  FlatList,
   ActivityIndicator,
-  Dimensions,
-  Image,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import React, {useState, useEffect, useCallback} from 'react';
 import {useFocusEffect} from '@react-navigation/native';
-import {useDispatch} from 'react-redux';
-import {authSelector} from '../../redux/reducers/authReducer';
-import {globalStyles} from '../../styles/globalStyles';
-import appColors from '../../constants/appColors';
 import {useSelector} from 'react-redux';
-import clientApi from '../../apis/clientApi';
 import {
-  RowComponent,
-  TextComponent,
-  CircleComponent,
-  SpaceComponent,
-  TagComponent,
-  CategoriesList,
-  TagBarComponent,
-  PtItem,
-  SectionComponent,
-} from '../../components';
-import HeaderNotificationButton from '../../components/HeaderNotificationButton';
-import NotificationBadge from '../../components/NotificationBadge';
-
-import {
-  ArrowDown,
+  ArrowRight2,
+  Calendar,
+  Clock,
   HambergerMenu,
-  Notification,
   SearchNormal1,
-  Sort,
+  Setting4,
+  TickCircle,
+  Timer1,
 } from 'iconsax-react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import {
+  Avatar,
+  ButtonComponent,
+  GradientView,
+  HeaderIconButton,
+  CategoriesList,
+  HeroScrollView,
+  PtItem,
+  StatCard,
+  StateView,
+  StatusBadge,
+  TextComponent,
+} from '../../components';
+import {toPtItem} from '../../components/PtItem';
+import {formatBookingDate} from '../../components/BookingCard';
+import HeaderNotificationButton from '../../components/HeaderNotificationButton';
+import clientApi from '../../apis/clientApi';
+import {authSelector} from '../../redux/reducers/authReducer';
+import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
+import {header, radius, shadow, spacing} from '../../constants/theme';
+import {timeUtils} from '../../utils/timeUtils';
 
-const {width} = Dimensions.get('window');
+const greeting = () => {
+  const hour = timeUtils.getCurrentVietnamHour();
+  if (hour < 11) {
+    return 'Chào buổi sáng';
+  }
+  if (hour < 14) {
+    return 'Chào buổi trưa';
+  }
+  if (hour < 18) {
+    return 'Chào buổi chiều';
+  }
+  return 'Chào buổi tối';
+};
+
+const hoursOf = booking =>
+  (new Date(booking.bookingTime.endTime) - new Date(booking.bookingTime.startTime)) / 3600000;
+
+const SectionTitle = ({title, action, onAction}) => (
+  <View style={styles.sectionHeader}>
+    <TextComponent text={title} size={18} font={fontFamilies.bold} />
+    {action ? (
+      <TouchableOpacity onPress={onAction} style={styles.sectionAction} accessibilityRole="button">
+        <TextComponent text={action} size={13} font={fontFamilies.semiBold} color={appColors.primary} />
+        <ArrowRight2 size={14} color={appColors.primary} />
+      </TouchableOpacity>
+    ) : null}
+  </View>
+);
 
 const ClientHomeScreen = ({navigation}) => {
-  const dispatch = useDispatch();
   const auth = useSelector(authSelector);
 
-  const [ptList, setPtList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [trainers, setTrainers] = useState([]);
+  const [trainersStatus, setTrainersStatus] = useState('loading');
+  const [trainersError, setTrainersError] = useState('');
+  const [nextBooking, setNextBooking] = useState(null);
   const [stats, setStats] = useState({completed: 0, upcoming: 0, hours: 0});
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchFeaturedPTs();
+  const loadTrainers = useCallback(async () => {
+    try {
+      const response = await clientApi.searchPTs({pageSize: 8});
+      setTrainers(response.data?.data || []);
+      setTrainersStatus('ready');
+    } catch (error) {
+      setTrainersError(error.message);
+      setTrainersStatus('error');
+    }
   }, []);
 
-  // Refresh the summary every time Home is shown (e.g. after booking).
+  // Real numbers from the user's bookings.
+  const loadBookings = useCallback(async () => {
+    try {
+      const [upcomingRes, completedRes] = await Promise.all([
+        clientApi.getMyBookings({upcoming: 'true', pageSize: 50}),
+        clientApi.getMyBookings({status: 'completed', pageSize: 50}),
+      ]);
+      const upcoming = upcomingRes.data?.data || [];
+      const completed = completedRes.data?.data || [];
+      setNextBooking(upcoming[0] || null);
+      setStats({
+        upcoming: upcomingRes.data?.count ?? upcoming.length,
+        completed: completedRes.data?.count ?? completed.length,
+        hours: Math.round(completed.reduce((sum, b) => sum + hoursOf(b), 0)),
+      });
+    } catch {
+      // The home screen still works without the summary.
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTrainers();
+  }, [loadTrainers]);
+
+  // The summary changes after booking/cancelling, so refresh it on focus.
   useFocusEffect(
     useCallback(() => {
-      fetchStats();
-    }, []),
+      loadBookings();
+    }, [loadBookings]),
   );
 
-  // Real numbers from the user's bookings (previously hardcoded mock values).
-  const fetchStats = async () => {
-    try {
-      const response = await clientApi.getMyBookings({pageSize: 50});
-      const bookings = response.data?.data || [];
-      const now = Date.now();
-      const completed = bookings.filter(b => b.status === 'completed');
-      const upcoming = bookings.filter(
-        b =>
-          ['pending_confirmation', 'confirmed'].includes(b.status) &&
-          new Date(b.bookingTime?.startTime).getTime() > now,
-      );
-      const minutes = completed.reduce(
-        (total, b) =>
-          total +
-          (new Date(b.bookingTime.endTime) - new Date(b.bookingTime.startTime)) /
-            60000,
-        0,
-      );
-      setStats({
-        completed: completed.length,
-        upcoming: upcoming.length,
-        hours: Math.round(minutes / 60),
-      });
-    } catch (err) {
-      console.log('Error loading booking stats:', err.message);
-    }
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([loadBookings(), loadTrainers()]);
+    setRefreshing(false);
   };
 
-  const fetchFeaturedPTs = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await clientApi.searchPTs({
-        pageSize: 8,
-      });
-
-      if (
-        response.data &&
-        response.data.data &&
-        Array.isArray(response.data.data)
-      ) {
-        setPtList(response.data.data);
-      } else if (response.data && Array.isArray(response.data)) {
-        setPtList(response.data);
-      } else {
-        setError('Failed to load trainers');
-      }
-    } catch (err) {
-      console.error('Error fetching PTs:', err);
-      setError('Error loading trainers');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const renderPTItem = ({item}) => {
-    const locationString =
-      item.location && item.location.district && item.location.city
-        ? `${item.location.district}, ${item.location.city}`
-        : 'Location not specified';
-
-    return (
-      <PtItem
-        type="card"
-        size="medium"
-        item={{
-          _id: item._id,
-          title: item.user?.username || 'Personal Trainer',
-          description: item.bio || 'Professional Personal Trainer',
-          location: locationString,
-          imageURL: item.user?.photoUrl || '',
-          rating: item.rating || 0,
-          hourlyRate: item.hourlyRate || 0,
-          specializations: item.specializations || [],
-          experienceYears: item.experienceYears || 0,
-          ptData: item,
-        }}
-        onPress={() => navigation.navigate('PTDetailScreen', {item: item})}
-      />
-    );
-  };
+  const firstName = (auth.username || '').trim().split(' ').pop() || 'bạn';
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-
-      {/* Header Section */}
-      <View style={styles.headerContainer}>
-        <View style={styles.headerContent}>
-          {/* Top Bar */}
-          <RowComponent justify="space-between" styles={styles.topBar}>
-            <TouchableOpacity
-              onPress={() => navigation.openDrawer()}
-              style={styles.menuButton}>
-              <HambergerMenu color={appColors.white} size={24} />
-            </TouchableOpacity>
-
-            <View style={styles.locationContainer}>
-              <TextComponent
-                text="BookingPT"
-                color={appColors.white}
-                font={fontFamilies.bold}
-                size={18}
-                styles={styles.locationText}
+      <HeroScrollView
+        hero={
+          <GradientView style={styles.hero}>
+            <View style={styles.heroTop}>
+              <HeaderIconButton
+                icon={<HambergerMenu size={header.iconSize} color={appColors.white} />}
+                onPress={() => navigation.openDrawer()}
+                accessibilityLabel="Mở menu"
               />
+              <HeaderNotificationButton />
             </View>
 
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ClientBookings')}
-                style={styles.actionButton}>
-                <CircleComponent color="rgba(255,255,255,0.2)" size={40}>
-                  <TextComponent text="📅" size={18} />
-                </CircleComponent>
-              </TouchableOpacity>
+            <TextComponent text={`${greeting()},`} size={15} color="rgba(255,255,255,0.85)" />
+            <TextComponent
+              text={`${firstName} 👋`}
+              size={28}
+              font={fontFamilies.bold}
+              color={appColors.white}
+              numberOfLines={1}
+            />
+            <TextComponent
+              text="Hôm nay bạn muốn tập gì?"
+              size={14}
+              color="rgba(255,255,255,0.85)"
+              styles={styles.heroSubtitle}
+            />
 
+            <View style={styles.searchRow}>
               <TouchableOpacity
-                onPress={() => navigation.navigate('Notifications')}
-                style={styles.actionButton}>
-                <CircleComponent color="rgba(255,255,255,0.2)" size={40}>
-                  <View style={styles.notificationIconContainer}>
-                    <Icon
-                      name="notifications"
-                      size={20}
-                      color={appColors.white}
-                    />
-                    <NotificationBadge
-                      size={14}
-                      style={styles.notificationBadge}
+                style={styles.search}
+                onPress={() => navigation.navigate('SearchPtScreen')}
+                activeOpacity={0.85}
+                accessibilityRole="search"
+                accessibilityLabel="Tìm huấn luyện viên">
+                <SearchNormal1 size={20} color={appColors.textMuted} />
+                <TextComponent
+                  text="Tìm huấn luyện viên..."
+                  size={15}
+                  color={appColors.placeholder}
+                  styles={styles.searchText}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.filterButton}
+                onPress={() => navigation.navigate('SearchPtScreen', {isFilter: true})}
+                accessibilityRole="button"
+                accessibilityLabel="Bộ lọc">
+                <Setting4 size={20} color={appColors.white} />
+              </TouchableOpacity>
+            </View>
+          </GradientView>
+        }
+        title={`Xin chào, ${firstName}`}
+        left={
+          <HeaderIconButton
+            icon={<HambergerMenu size={header.iconSize} color={appColors.white} />}
+            onPress={() => navigation.openDrawer()}
+            accessibilityLabel="Mở menu"
+          />
+        }
+        right={<HeaderNotificationButton />}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={appColors.white}
+            colors={[appColors.primary]}
+          />
+        }>
+        {/* Next session (overlaps the hero) */}
+        <View style={styles.overlap}>
+          {nextBooking ? (
+            <TouchableOpacity
+              style={styles.nextCard}
+              onPress={() => navigation.navigate('ClientBookings')}
+              activeOpacity={0.9}
+              accessibilityRole="button">
+              <View style={styles.nextHeader}>
+                <TextComponent
+                  text="BUỔI TẬP SẮP TỚI"
+                  size={11}
+                  font={fontFamilies.semiBold}
+                  color={appColors.textMuted}
+                  styles={styles.overline}
+                />
+                <StatusBadge status={nextBooking.status} />
+              </View>
+              <View style={styles.nextBody}>
+                <Avatar uri={nextBooking.pt?.photoUrl} name={nextBooking.pt?.username} size={52} />
+                <View style={styles.flex}>
+                  <TextComponent
+                    text={nextBooking.pt?.username || 'Huấn luyện viên'}
+                    size={16}
+                    font={fontFamilies.semiBold}
+                    numberOfLines={1}
+                  />
+                  <View style={styles.inline}>
+                    <Calendar size={14} color={appColors.primary} />
+                    <TextComponent
+                      text={` ${formatBookingDate(nextBooking.bookingTime.startTime)}`}
+                      size={13}
+                      color={appColors.textMuted}
                     />
                   </View>
-                </CircleComponent>
-              </TouchableOpacity>
-            </View>
-          </RowComponent>
-
-          {/* Welcome Message */}
-          <View style={styles.welcomeSection}>
-            <TextComponent
-              text={`Hello, ${auth.username || 'User'}! `}
-              color={appColors.white}
-              size={24}
-              font={fontFamilies.bold}
-              styles={styles.welcomeText}
-            />
-            <TextComponent
-              text="Ready for your workout today?"
-              color="rgba(255,255,255,0.8)"
-              size={16}
-              font={fontFamilies.regular}
-              styles={styles.welcomeSubtext}
-            />
-          </View>
-
-          {/* Search Bar */}
-          <TouchableOpacity
-            style={styles.searchContainer}
-            onPress={() =>
-              navigation.navigate('SearchPtScreen', {isFilter: false})
-            }>
-            <SearchNormal1
-              color={appColors.text2}
-              size={20}
-              style={styles.searchIcon}
-            />
-            <TextComponent
-              text="Search for trainers..."
-              color={appColors.text2}
-              size={16}
-              flex={1}
-              styles={styles.searchText}
-            />
-            <TouchableOpacity
-              onPress={() =>
-                navigation.navigate('SearchPtScreen', {isFilter: true})
-              }
-              style={styles.filterButton}>
-              <Sort size={18} color={appColors.primary} />
+                  <View style={styles.inline}>
+                    <Clock size={14} color={appColors.primary} />
+                    <TextComponent
+                      text={` ${timeUtils.formatTo24HourTime(
+                        nextBooking.bookingTime.startTime,
+                      )} – ${timeUtils.formatTo24HourTime(nextBooking.bookingTime.endTime)}`}
+                      size={13}
+                      color={appColors.textMuted}
+                    />
+                  </View>
+                </View>
+                <ArrowRight2 size={18} color={appColors.placeholder} />
+              </View>
             </TouchableOpacity>
-          </TouchableOpacity>
+          ) : (
+            <View style={[styles.nextCard, styles.ctaCard]}>
+              <View style={styles.flex}>
+                <TextComponent text="Bắt đầu hành trình" size={16} font={fontFamilies.semiBold} />
+                <TextComponent
+                  text="Đặt buổi tập đầu tiên với huấn luyện viên phù hợp."
+                  size={13}
+                  color={appColors.textMuted}
+                />
+              </View>
+              <ButtonComponent
+                text="Đặt lịch"
+                type="primary"
+                size="sm"
+                onPress={() => navigation.navigate('SearchPtScreen')}
+              />
+            </View>
+          )}
+        </View>
+
+        {/* Stats */}
+        <View style={styles.stats}>
+          <StatCard
+            icon={<TickCircle size={18} color={appColors.success} variant="Bold" />}
+            value={stats.completed}
+            label="Buổi hoàn thành"
+            tint={appColors.success}
+            soft={appColors.successSoft}
+          />
+          <StatCard
+            icon={<Calendar size={18} color={appColors.primary} variant="Bold" />}
+            value={stats.upcoming}
+            label="Buổi sắp tới"
+            onPress={() => navigation.navigate('ClientBookings')}
+          />
+          <StatCard
+            icon={<Timer1 size={18} color={appColors.info} variant="Bold" />}
+            value={`${stats.hours}h`}
+            label="Giờ tập"
+            tint={appColors.info}
+            soft={appColors.infoSoft}
+          />
         </View>
 
         {/* Categories */}
-        <View style={styles.categoriesContainer}>
-          <CategoriesList isFill />
-        </View>
-      </View>
+        <SectionTitle title="Bạn muốn tập gì?" />
+        <CategoriesList
+          onSelectCategory={category =>
+            navigation.navigate('SearchPtScreen', {specialization: category.id})
+          }
+        />
 
-      {/* Content Section */}
-      <ScrollView
-        style={styles.contentContainer}
-        contentContainerStyle={styles.contentScrollView}
-        showsVerticalScrollIndicator={false}
-        bounces={true}>
-        {/* Quick Stats */}
-        <SectionComponent>
-          <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <TextComponent text="💪" size={24} styles={styles.statIcon} />
-              <TextComponent
-                text={String(stats.completed)}
-                size={20}
-                font={fontFamilies.bold}
-                color={appColors.text}
+        {/* Trainers */}
+        <SectionTitle
+          title="Huấn luyện viên nổi bật"
+          action="Xem tất cả"
+          onAction={() => navigation.navigate('SearchPtScreen')}
+        />
+        {trainersStatus === 'loading' ? (
+          <ActivityIndicator color={appColors.primary} style={styles.loader} />
+        ) : trainersStatus === 'error' ? (
+          <StateView type="error" message={trainersError} onAction={loadTrainers} compact />
+        ) : (
+          <FlatList
+            horizontal
+            data={trainers}
+            keyExtractor={item => item._id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.trainers}
+            renderItem={({item}) => (
+              <PtItem
+                type="card"
+                size="medium"
+                item={toPtItem(item)}
+                onPress={() => navigation.navigate('PTDetailScreen', {item})}
               />
-              <TextComponent
-                text="Completed"
-                size={12}
-                color={appColors.text2}
+            )}
+            ListEmptyComponent={
+              <StateView
+                compact
+                title="Chưa có huấn luyện viên"
+                message="Hãy quay lại sau nhé."
               />
-            </View>
-            <View style={styles.statCard}>
-              <TextComponent text="📅" size={24} styles={styles.statIcon} />
-              <TextComponent
-                text={String(stats.upcoming)}
-                size={20}
-                font={fontFamilies.bold}
-                color={appColors.text}
-              />
-              <TextComponent
-                text="Upcoming"
-                size={12}
-                color={appColors.text2}
-              />
-            </View>
-            <View style={styles.statCard}>
-              <TextComponent text="⏱️" size={24} styles={styles.statIcon} />
-              <TextComponent
-                text={`${stats.hours}h`}
-                size={20}
-                font={fontFamilies.bold}
-                color={appColors.text}
-              />
-              <TextComponent
-                text="Training"
-                size={12}
-                color={appColors.text2}
-              />
-            </View>
-          </View>
-        </SectionComponent>
-
-        {/* Featured Trainers */}
-        <SectionComponent>
-          <RowComponent justify="space-between" styles={styles.sectionHeader}>
-            <TextComponent
-              text="Featured Trainers"
-              size={20}
-              font={fontFamilies.bold}
-              color={appColors.text}
-            />
-            <TouchableOpacity
-              onPress={() => navigation.navigate('SearchPtScreen')}>
-              <TextComponent
-                text="See All"
-                size={14}
-                font={fontFamilies.medium}
-                color={appColors.primary}
-              />
-            </TouchableOpacity>
-          </RowComponent>
-
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={appColors.primary} />
-              <TextComponent
-                text="Loading trainers..."
-                color={appColors.text2}
-                styles={styles.loadingText}
-              />
-            </View>
-          ) : error ? (
-            <View style={styles.errorContainer}>
-              <TextComponent
-                text={error}
-                color={appColors.danger}
-                styles={styles.errorText}
-              />
-              <TouchableOpacity
-                onPress={fetchFeaturedPTs}
-                style={styles.retryButton}>
-                <TextComponent
-                  text="Retry"
-                  color={appColors.white}
-                  font={fontFamilies.medium}
-                />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <FlatList
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              data={ptList}
-              keyExtractor={item => `featured-${item._id}`}
-              renderItem={renderPTItem}
-              contentContainerStyle={styles.trainersList}
-              ItemSeparatorComponent={() => (
-                <View style={styles.trainerSeparator} />
-              )}
-              ListEmptyComponent={() => (
-                <View style={styles.emptyContainer}>
-                  <TextComponent
-                    text="No trainers available"
-                    color={appColors.text2}
-                  />
-                </View>
-              )}
-            />
-          )}
-        </SectionComponent>
-
-        <SpaceComponent height={100} />
-      </ScrollView>
+            }
+          />
+        )}
+      </HeroScrollView>
     </View>
   );
 };
@@ -389,174 +349,114 @@ export default ClientHomeScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.gray5,
+    backgroundColor: appColors.background,
   },
-
-  // Header Styles
-  headerContainer: {
-    backgroundColor: appColors.primary,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    paddingBottom: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+  scroll: {
+    paddingBottom: spacing.xl,
   },
-  headerContent: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  menuButton: {
-    padding: 8,
-    width: 70, // Fixed width to balance layout
-  },
-  locationContainer: {
-    alignItems: 'center',
+  flex: {
     flex: 1,
-    justifyContent: 'center',
   },
-  locationIcon: {
-    marginLeft: 4,
-  },
-  locationText: {
+  inline: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 2,
-    textAlign: 'center',
   },
-  actionButtons: {
+  hero: {
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg + 4,
+    paddingBottom: 64,
+    borderBottomLeftRadius: header.radius,
+    borderBottomRightRadius: header.radius,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  heroSubtitle: {
+    marginTop: 2,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  search: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    width: 70, // Fixed width to balance layout
-    justifyContent: 'flex-end',
-  },
-  actionButton: {
-    marginLeft: 8,
-  },
-
-  // Welcome Section
-  welcomeSection: {
-    marginBottom: 20,
-  },
-  welcomeText: {
-    marginBottom: 4,
-  },
-  welcomeSubtext: {
-    opacity: 0.9,
-  },
-
-  // Search Bar
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: appColors.white,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 20,
-    shadowColor: appColors.black,
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  searchIcon: {
-    marginRight: 12,
+    minHeight: 50,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: appColors.surface,
   },
   searchText: {
-    flex: 1,
+    marginLeft: spacing.sm,
   },
   filterButton: {
-    padding: 8,
-    backgroundColor: `${appColors.primary}15`,
-    borderRadius: 12,
+    width: 50,
+    height: 50,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
-
-  categoriesContainer: {
-    marginTop: 10,
-    marginBottom: -30,
+  overlap: {
+    marginTop: -44,
+    paddingHorizontal: spacing.lg,
   },
-
-  contentContainer: {
-    flex: 1,
-    marginTop: 40,
+  nextCard: {
+    backgroundColor: appColors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadow.md,
   },
-  contentScrollView: {
-    paddingBottom: 100,
+  ctaCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-
-  statsContainer: {
+  nextHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: appColors.white,
-    borderRadius: 16,
-    padding: 16,
     alignItems: 'center',
-    marginHorizontal: 4,
-    shadowColor: appColors.black,
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  statIcon: {
-    marginBottom: 4,
+  overline: {
+    letterSpacing: 0.8,
   },
-
+  nextBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  stats: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+  },
   sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
   },
-
-  loadingContainer: {
+  sectionAction: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 40,
+    gap: 2,
+    minHeight: 32,
   },
-  loadingText: {
-    marginTop: 12,
+  trainers: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    gap: spacing.md,
   },
-  errorContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  errorText: {
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: appColors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  notificationIconContainer: {
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    zIndex: 1,
-  },
-
-  // Trainers List
-  trainersList: {
-    paddingHorizontal: 4,
-    paddingVertical: 8,
-  },
-  trainerSeparator: {
-    width: 12,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
+  loader: {
+    paddingVertical: spacing.xl,
   },
 });

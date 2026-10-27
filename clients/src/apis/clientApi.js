@@ -12,6 +12,11 @@ const clientApi = {
     return axiosClient.get(url);
   },
 
+  getPTReviews: async (ptId, params = {}) => {
+    const url = `/api/client/pt/${ptId}/reviews`;
+    return axiosClient.get(url, { params });
+  },
+
   getPTAvailability: async (ptId, params = {}) => {
     const url = `/api/client/pt/${ptId}/availability`;
     return axiosClient.get(url, { params });
@@ -28,9 +33,14 @@ const clientApi = {
     return axiosClient.get(url, { params });
   },
 
-  cancelBooking: async (bookingId) => {
+  createReview: async (bookingId, data) => {
+    const url = `/api/client/my-bookings/${bookingId}/review`;
+    return axiosClient.post(url, data);
+  },
+
+  cancelBooking: async (bookingId, reason) => {
     const url = `/api/client/my-bookings/${bookingId}/cancel`;
-    return axiosClient.post(url);
+    return axiosClient.post(url, { reason });
   },
 };
 

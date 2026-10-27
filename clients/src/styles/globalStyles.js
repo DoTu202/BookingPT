@@ -15,7 +15,7 @@ export const globalStyles = StyleSheet.create({
     includeFontPadding: false,
   },
   shadow:{
-    shadowColor: Platform.OS === 'ios' ? 'rgba(0,0,0,0.3)': 'rgba(0,0,0,0.5)',
+    shadowColor: Platform.OS === 'ios' ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.5)',
     shadowOffset: {
       width: 0,
       height: 6,
@@ -41,7 +41,7 @@ export const globalStyles = StyleSheet.create({
   },
   row:{
     flexDirection: 'row',
-    justifyContent: 'flex-start'
+    justifyContent: 'flex-start',
   },
   card: {
     backgroundColor: appColors.white,
@@ -51,4 +51,4 @@ export const globalStyles = StyleSheet.create({
     marginVertical: 6,
   },
 
-})
+});

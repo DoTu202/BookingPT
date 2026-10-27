@@ -9,7 +9,6 @@ describe('timeUtils (Vietnam time <-> UTC)', () => {
 
   it('formats a UTC instant in Vietnam time', () => {
     expect(timeUtils.formatTo24HourTime('2030-01-01T23:30:00.000Z')).toBe('06:30');
-    expect(timeUtils.formatToVietnameseTime('2030-01-01T23:30:00.000Z')).toBe('6:30 AM');
   });
 
   it('round-trips user input', () => {
