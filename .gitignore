@@ -84,3 +84,10 @@ server/uploads/
 
 # Personal documents
 *Thesis*.pdf
+.mongodb-binaries/
+
+# Firebase service account keys (server push credentials)
+*service-account*.json
+
+# Local credential files (e.g. atlas-credentials.env); .env.example stays tracked
+*.env
