@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const {MONGODB_URI} = require('./env');
+const logger = require('./logger');
 
 const connectDB = async (uri = MONGODB_URI) => {
   const connection = await mongoose.connect(uri, {
@@ -7,7 +8,7 @@ const connectDB = async (uri = MONGODB_URI) => {
     connectTimeoutMS: 30000,
     socketTimeoutMS: 30000,
   });
-  console.log('Connected to MongoDB:', connection.connection.name);
+  logger.info(`Connected to MongoDB: ${connection.connection.name}`);
   return connection;
 };
 

@@ -8,6 +8,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY index.js ./
 COPY src ./src
+# Maintenance scripts (npm run seed) for use with docker compose exec.
+COPY scripts ./scripts
 RUN mkdir -p uploads/profiles && chown -R node:node uploads
 
 # Run as an unprivileged user.

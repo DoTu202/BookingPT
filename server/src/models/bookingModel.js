@@ -49,6 +49,17 @@ const bookingSchema = new mongoose.Schema({
         enum: ['pending', 'paid', 'failed', 'refunded'],
         default: 'pending'
     },
+    // Optional for client cancellations and PT rejections, required when the
+    // PT cancels a confirmed session.
+    cancellationReason: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 500
+    },
+    cancelledAt: { type: Date },
+    // Set once the "session starts soon" reminder has been sent.
+    reminderSentAt: { type: Date },
     // Set when one side deletes their account; the booking is kept for history.
     clientDeleted: { type: Boolean, default: false },
     ptDeleted: { type: Boolean, default: false },
@@ -68,5 +79,6 @@ bookingSchema.index({ client: 1, "bookingTime.startTime": -1 });
 bookingSchema.index({ pt: 1, "bookingTime.startTime": -1 });
 bookingSchema.index({ availabilitySlot: 1 });
 bookingSchema.index({ status: 1, "bookingTime.startTime": 1 });
+bookingSchema.index({ status: 1, "bookingTime.endTime": 1 });
 
 module.exports = mongoose.model('Booking', bookingSchema);

@@ -12,7 +12,10 @@ const Availability = require('../src/models/AvailabilityModel');
 const Booking = require('../src/models/bookingModel');
 const Notification = require('../src/models/NotificationModel');
 const {ChatRoom, Message} = require('../src/models/ChatModel');
+const Review = require('../src/models/ReviewModel');
+const {refreshPtRating} = require('../src/services/reviewService');
 const {dayjs, APP_TIMEZONE} = require('../src/utils/helpers');
+const {BCRYPT_ROUNDS} = require('../src/utils/validators');
 
 const DEMO_PASSWORD = 'Password123!';
 
@@ -23,8 +26,6 @@ const trainers = [
     specializations: ['muscle_building', 'strength', 'nutrition'],
     experienceYears: 6,
     hourlyRate: 350000,
-    rating: 4.9,
-    numReviews: 48,
     location: {city: 'Ha Noi', district: 'Cau Giay'},
   },
   {
@@ -33,8 +34,6 @@ const trainers = [
     specializations: ['weight_loss', 'cardio', 'functional_training'],
     experienceYears: 4,
     hourlyRate: 250000,
-    rating: 4.7,
-    numReviews: 31,
     location: {city: 'Ha Noi', district: 'Dong Da'},
   },
   {
@@ -43,8 +42,6 @@ const trainers = [
     specializations: ['yoga', 'pilates', 'rehabilitation'],
     experienceYears: 8,
     hourlyRate: 300000,
-    rating: 4.8,
-    numReviews: 62,
     location: {city: 'Ho Chi Minh', district: 'District 1'},
   },
   {
@@ -53,8 +50,6 @@ const trainers = [
     specializations: ['general', 'weight_loss'],
     experienceYears: 2,
     hourlyRate: 180000,
-    rating: 4.5,
-    numReviews: 12,
     location: {city: 'Ho Chi Minh', district: 'Binh Thanh'},
   },
 ];
@@ -71,12 +66,12 @@ const seed = async () => {
   }
   await connectDB();
   await Promise.all(
-    [User, PTProfile, Availability, Booking, Notification, ChatRoom, Message].map(m =>
+    [User, PTProfile, Availability, Booking, Notification, ChatRoom, Message, Review].map(m =>
       m.deleteMany({}),
     ),
   );
 
-  const password = await bcrypt.hash(DEMO_PASSWORD, 12);
+  const password = await bcrypt.hash(DEMO_PASSWORD, BCRYPT_ROUNDS);
   const client = await User.create({
     username: 'Demo Client',
     email: 'client@demo.com',
@@ -96,7 +91,7 @@ const seed = async () => {
       dob: new Date('1992-01-01'),
       role: 'pt',
     });
-    const {username, ...profile} = t;
+    const {username: _username, ...profile} = t;
     await PTProfile.create({user: user._id, ...profile});
     pts.push(user);
 
@@ -112,7 +107,7 @@ const seed = async () => {
 
   // Bookings for the demo client with the first trainer, in several states.
   const mainPt = pts[0];
-  const makeBooking = async (dayOffset, hour, status) => {
+  const makeBooking = async (dayOffset, hour, status, extra = {}) => {
     const times = slotAt(dayOffset, hour);
     const slot = await Availability.findOneAndUpdate(
       {pt: mainPt._id, startTime: times.startTime},
@@ -127,17 +122,60 @@ const seed = async () => {
       status,
       priceAtBooking: trainers[0].hourlyRate,
       notesFromClient: 'Focus on upper body please',
+      ...extra,
     });
   };
   const pending = await makeBooking(2, 17, 'pending_confirmation');
   const confirmed = await makeBooking(3, 9, 'confirmed');
   await makeBooking(-3, 17, 'completed');
   await makeBooking(-7, 9, 'completed');
+  const cancelledByPt = await makeBooking(4, 19, 'cancelled_by_pt', {
+    cancellationReason: 'I have a competition that day, sorry! Please pick another slot.',
+    cancelledAt: new Date(),
+  });
+  // A PT cancellation blocks the slot instead of re-opening it.
+  await Availability.updateOne({_id: cancelledByPt.availabilitySlot}, {status: 'unavailable_by_pt'});
 
   await Notification.insertMany([
     {recipient: mainPt._id, sender: client._id, type: 'new_booking_request', message: `New booking request from ${client.username}`, relatedBooking: pending._id},
     {recipient: client._id, sender: mainPt._id, type: 'booking_confirmed', message: `Your booking has been confirmed by ${mainPt.username}`, relatedBooking: confirmed._id},
+    {recipient: client._id, sender: mainPt._id, type: 'booking_cancelled_by_pt', message: `${mainPt.username} cancelled your session. Reason: ${cancelledByPt.cancellationReason}`, relatedBooking: cancelledByPt._id},
   ]);
+
+  // Past sessions with reviews from a few other clients, so every trainer has
+  // a real rating (computed from reviews, never hardcoded).
+  const reviewers = await User.insertMany(
+    ['Lan Vo', 'Quang Do', 'Mai Bui'].map((username, i) => ({
+      username,
+      email: `reviewer${i + 1}@demo.com`,
+      password,
+      phoneNumber: `09000002${i}0`,
+      dob: new Date('1995-06-01'),
+      role: 'client',
+    })),
+  );
+  const comments = [
+    [5, 'Very knowledgeable and motivating. Saw results in a month!'],
+    [5, 'Sessions are well planned and fun.'],
+    [4, 'Great trainer, sometimes runs a few minutes late.'],
+  ];
+  for (const [i, pt] of pts.entries()) {
+    for (const [j, reviewer] of reviewers.slice(0, 3 - (i % 2)).entries()) {
+      const times = slotAt(-10 - j * 3, 7 + i);
+      const slot = await Availability.create({pt: pt._id, status: 'booked', ...times});
+      const booking = await Booking.create({
+        client: reviewer._id,
+        pt: pt._id,
+        availabilitySlot: slot._id,
+        bookingTime: times,
+        status: 'completed',
+        priceAtBooking: trainers[i].hourlyRate,
+      });
+      const [rating, comment] = comments[(i + j) % comments.length];
+      await Review.create({booking: booking._id, client: reviewer._id, pt: pt._id, rating, comment});
+    }
+    await refreshPtRating(pt._id);
+  }
 
   const room = await ChatRoom.create({ptUser: mainPt._id, clientUser: client._id});
   const conversation = [

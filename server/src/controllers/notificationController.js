@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const Notification = require('../models/NotificationModel');
 const {assertValidId, parsePagination} = require('../utils/helpers');
+const {notFound} = require('../utils/httpError');
 
 const getNotifications = asyncHandler(async (req, res) => {
   const userId = req.user._id;
@@ -44,7 +45,7 @@ const getNotifications = asyncHandler(async (req, res) => {
 
 const markAsRead = asyncHandler(async (req, res) => {
   const {notificationId} = req.params;
-  assertValidId(res, notificationId, 'notification id');
+  assertValidId(notificationId, 'notification id');
 
   // Filtering by recipient means users can only touch their own notifications.
   const notification = await Notification.findOneAndUpdate(
@@ -54,8 +55,7 @@ const markAsRead = asyncHandler(async (req, res) => {
   );
 
   if (!notification) {
-    res.status(404);
-    throw new Error('Notification not found');
+    throw notFound('Notification not found');
   }
 
   res.status(200).json({success: true, data: notification});
@@ -72,7 +72,7 @@ const markAllAsRead = asyncHandler(async (req, res) => {
 
 const deleteNotification = asyncHandler(async (req, res) => {
   const {notificationId} = req.params;
-  assertValidId(res, notificationId, 'notification id');
+  assertValidId(notificationId, 'notification id');
 
   const notification = await Notification.findOneAndDelete({
     _id: notificationId,
@@ -80,34 +80,11 @@ const deleteNotification = asyncHandler(async (req, res) => {
   });
 
   if (!notification) {
-    res.status(404);
-    throw new Error('Notification not found');
+    throw notFound('Notification not found');
   }
 
   res.status(200).json({success: true, message: 'Notification deleted successfully'});
 });
-
-// Internal helper used by booking flows (not an HTTP handler).
-const createNotification = ({
-  recipient,
-  sender = null,
-  senderType = 'User',
-  type,
-  message,
-  relatedBooking = null,
-  relatedReview = null,
-  relatedUser = null,
-}) =>
-  Notification.create({
-    recipient,
-    sender,
-    senderType,
-    type,
-    message,
-    relatedBooking,
-    relatedReview,
-    relatedUser,
-  });
 
 const getUnreadCount = asyncHandler(async (req, res) => {
   const unreadCount = await Notification.countDocuments({
@@ -123,6 +100,5 @@ module.exports = {
   markAsRead,
   markAllAsRead,
   deleteNotification,
-  createNotification,
   getUnreadCount,
 };

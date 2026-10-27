@@ -41,16 +41,6 @@ const userSchema = new mongoose.Schema({
     default: 'client',
     required: true,
   },
-  createAt: {
-    type: Date,
-    // Pass the function, not Date.now(): calling it would freeze the value at
-    // server start time for every document.
-    default: Date.now,
-  },
-  updateAt: {
-    type: Date,
-    default: Date.now,
-  },
   isActive: {
     type: Boolean,
     default: true,
@@ -62,11 +52,12 @@ const userSchema = new mongoose.Schema({
   passwordChangedAt: {
     type: Date,
   },
-});
-
-userSchema.pre('save', function (next) {
-  this.updateAt = Date.now();
-  next();
+  // Set by "sign out of all devices": tokens issued before it are rejected.
+  tokensValidAfter: {
+    type: Date,
+  },
+}, {
+  timestamps: true,
 });
 
 userSchema.set('toJSON', {
@@ -77,5 +68,5 @@ userSchema.set('toJSON', {
   },
 });
 
-const UserModal = mongoose.model('User', userSchema);
-module.exports = UserModal;
+const User = mongoose.model('User', userSchema);
+module.exports = User;

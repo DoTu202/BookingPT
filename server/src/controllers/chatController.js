@@ -1,15 +1,17 @@
 const asyncHandler = require('express-async-handler');
 const {ChatRoom, Message} = require('../models/ChatModel');
 const User = require('../models/userModel');
+const chatService = require('../services/chatService');
 const {assertValidId} = require('../utils/helpers');
+const {badRequest, forbidden, notFound} = require('../utils/httpError');
 
 const MESSAGE_PAGE_SIZE = 100;
 const PARTICIPANT_FIELDS = 'username photoUrl role';
 
 // Loads a room and checks that the current user is one of its two members.
-const findRoomForMember = async (req, res) => {
+const findRoomForMember = async req => {
   const {chatRoomId} = req.params;
-  assertValidId(res, chatRoomId, 'chat room id');
+  assertValidId(chatRoomId, 'chat room id');
 
   const userId = req.user._id.toString();
   const chatRoom = await ChatRoom.findById(chatRoomId);
@@ -17,22 +19,20 @@ const findRoomForMember = async (req, res) => {
     !chatRoom ||
     (chatRoom.ptUser.toString() !== userId && chatRoom.clientUser.toString() !== userId)
   ) {
-    res.status(403);
-    throw new Error('Access denied');
+    throw forbidden('Access denied');
   }
   return chatRoom;
 };
 
 const getOrCreateChatRoom = asyncHandler(async (req, res) => {
   const {otherUserId} = req.params;
-  assertValidId(res, otherUserId, 'user id');
+  assertValidId(otherUserId, 'user id');
 
   // Chats are always between one PT and one client.
   const otherRole = req.user.role === 'pt' ? 'client' : 'pt';
   const otherUser = await User.exists({_id: otherUserId, role: otherRole, isActive: true});
   if (!otherUser) {
-    res.status(404);
-    throw new Error('User not found');
+    throw notFound('User not found');
   }
 
   const members =
@@ -64,11 +64,9 @@ const getChatRooms = asyncHandler(async (req, res) => {
 });
 
 const getMessages = asyncHandler(async (req, res) => {
-  const chatRoom = await findRoomForMember(req, res);
+  const chatRoom = await findRoomForMember(req);
 
   // Take the newest messages, then return them oldest-first for display.
-  // (Previously the oldest 100 were returned, so new messages never appeared
-  // once a conversation grew past 100.)
   const messages = await Message.find({chatRoom: chatRoom._id})
     .populate('sender', 'username role')
     .sort({createdAt: -1})
@@ -81,26 +79,20 @@ const getMessages = asyncHandler(async (req, res) => {
 const sendMessage = asyncHandler(async (req, res) => {
   const content = typeof req.body.content === 'string' ? req.body.content.trim() : '';
   if (!content) {
-    res.status(400);
-    throw new Error('Message content required');
+    throw badRequest('Message content required');
   }
+  // Optional id of the sender's optimistic bubble, echoed in the socket event.
+  const {clientId} = req.body;
+  const validClientId =
+    typeof clientId === 'string' && /^[\w-]{1,64}$/.test(clientId) ? clientId : undefined;
 
-  // Membership check: previously any logged-in user could post into any room.
-  const chatRoom = await findRoomForMember(req, res);
-
-  const message = await Message.create({
-    chatRoom: chatRoom._id,
-    sender: req.user._id,
+  const chatRoom = await findRoomForMember(req);
+  const message = await chatService.sendMessage({
+    chatRoom,
+    senderId: req.user._id,
     content,
+    clientId: validClientId,
   });
-  await message.populate('sender', 'username role');
-
-  chatRoom.lastMessage = {
-    content,
-    sender: req.user._id,
-    timestamp: message.createdAt,
-  };
-  await chatRoom.save();
 
   res.json({success: true, data: message});
 });

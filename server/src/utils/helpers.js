@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const dayjs = require('dayjs');
 const utc = require('dayjs/plugin/utc');
 const timezone = require('dayjs/plugin/timezone');
+const {badRequest} = require('./httpError');
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -10,6 +11,11 @@ dayjs.extend(timezone);
 const APP_TIMEZONE = 'Asia/Ho_Chi_Minh';
 
 const dayRange = date => {
+  // dayjs.tz throws (RangeError) on unparseable input instead of returning an
+  // invalid date, which turned `?date=nope` into a 500.
+  if (typeof date !== 'string' || !dayjs(date).isValid()) {
+    return null;
+  }
   const day = dayjs.tz(date, APP_TIMEZONE);
   if (!day.isValid()) {
     return null;
@@ -35,10 +41,9 @@ const parsePagination = (query, {pageKey = 'pageNumber', sizeKey = 'pageSize', d
 };
 
 // Throws a 400 error (handled by errorHandler) when an id param is malformed.
-const assertValidId = (res, value, name = 'id') => {
+const assertValidId = (value, name = 'id') => {
   if (!isValidId(value)) {
-    res.status(400);
-    throw new Error(`Invalid ${name}.`);
+    throw badRequest(`Invalid ${name}.`);
   }
 };
 

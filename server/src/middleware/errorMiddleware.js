@@ -1,5 +1,6 @@
 const multer = require('multer');
 const {isProduction} = require('../configs/env');
+const logger = require('../configs/logger');
 
 const notFound = (req, res, next) => {
   res.status(404);
@@ -8,7 +9,6 @@ const notFound = (req, res, next) => {
 
 // Central error handler. Controllers throw (via express-async-handler) after
 // optionally setting res.status(); everything ends up here.
-// eslint-disable-next-line no-unused-vars
 const errorHandler = (err, req, res, next) => {
   let statusCode = err.statusCode || (res.statusCode >= 400 ? res.statusCode : 500);
   let message = err.message;
@@ -37,7 +37,7 @@ const errorHandler = (err, req, res, next) => {
   }
 
   if (statusCode >= 500) {
-    console.error(err);
+    (req.log || logger).error({err}, 'Unhandled error');
     // Never leak internal error details to clients in production.
     if (isProduction) {
       message = 'Internal server error';

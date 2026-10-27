@@ -126,6 +126,21 @@ describe('public PT search', () => {
     expect(res.body.count).toBe(0);
   });
 
+  it('hides deactivated trainers', async () => {
+    const inactive = await createUser('pt', {username: 'Inactive Trainer', isActive: false});
+    await PTProfile.create({user: inactive.user._id, hourlyRate: 300000});
+
+    const all = await request(app).get('/api/client/pt').expect(200);
+    const byName = await request(app).get('/api/client/pt?name=Inactive').expect(200);
+    const profile = await request(app)
+      .get(`/api/client/pt/${inactive.user._id}/profile`)
+      .set('Authorization', (await createUser('client')).auth);
+
+    expect(all.body.count).toBe(1);
+    expect(byName.body.count).toBe(0);
+    expect(profile.status).toBe(404);
+  });
+
   it('caps the page size', async () => {
     const res = await request(app).get('/api/client/pt?pageSize=100000');
     expect(res.status).toBe(200);

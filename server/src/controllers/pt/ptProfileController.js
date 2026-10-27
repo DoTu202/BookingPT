@@ -1,22 +1,26 @@
 const asyncHandler = require('express-async-handler');
 const PTProfile = require('../../models/PTProfileModel');
-const UserModel = require('../../models/userModel');
+const {badRequest} = require('../../utils/httpError');
 
-// Get profile of PT now
+const SPECIALIZATIONS = PTProfile.schema.path('specializations').caster.enumValues;
+const BIO_MAX_LENGTH = 500;
+
+// The signed-in PT's own profile (with private fields).
 const getProfile = asyncHandler(async (req, res) => {
   const profile = await PTProfile.findOne({user: req.user._id}).populate(
     'user',
     'username email photoUrl dob role phoneNumber',
   );
 
-  // If found profile, return it
   if (profile) {
     return res.status(200).json({
+      success: true,
       data: profile,
       message: 'Get profile successfully',
     });
   }
   return res.status(200).json({
+    success: true,
     message: 'PT has not created a detailed profile yet.',
     data: {
       user: req.user,
@@ -31,47 +35,47 @@ const getProfile = asyncHandler(async (req, res) => {
   });
 });
 
-//Update or create profile of PT
+// Accepts numbers or numeric strings (form inputs); anything else is NaN.
+const toNumber = value =>
+  typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')
+    ? Number(value)
+    : NaN;
+
+// Update or create the PT's profile. Only whitelisted fields are copied.
 const updatePtProfile = asyncHandler(async (req, res) => {
-  const {bio, specializations, experienceYears, location, hourlyRate} =
-    req.body;
+  const {bio, specializations, experienceYears, location, hourlyRate} = req.body;
+  const profileFields = {user: req.user._id};
 
-  if (
-    hourlyRate !== undefined &&
-    (isNaN(parseFloat(hourlyRate)) || parseFloat(hourlyRate) < 10000)
-  ) {
-    return res.status(400).json({
-      message: 'Hourly rate must be at least 10,000 VND',
-    });
+  if (hourlyRate !== undefined) {
+    const rate = toNumber(hourlyRate);
+    if (!Number.isFinite(rate) || rate < 10000) {
+      throw badRequest('Hourly rate must be at least 10,000 VND');
+    }
+    profileFields.hourlyRate = rate;
   }
-  if (
-    experienceYears !== undefined &&
-    (isNaN(parseInt(experienceYears)) || parseInt(experienceYears) < 0)
-  ) {
-    return res.status(400).json({
-      message: 'Experience years must be a positive number',
-    });
+  if (experienceYears !== undefined) {
+    const years = toNumber(experienceYears);
+    if (!Number.isInteger(years) || years < 0) {
+      throw badRequest('Experience years must be a positive number');
+    }
+    profileFields.experienceYears = years;
   }
-
-  const profileFields = {
-    user: req.user._id,
-  };
-
   if (bio !== undefined) {
-    profileFields.bio = bio;
+    if (typeof bio !== 'string' || bio.trim().length > BIO_MAX_LENGTH) {
+      throw badRequest(`Bio must be text of at most ${BIO_MAX_LENGTH} characters`);
+    }
+    profileFields.bio = bio.trim();
   }
   if (specializations !== undefined) {
     if (!Array.isArray(specializations)) {
-      return res.status(400).json({
-        message: 'Specializations should be an array',
-      });
+      throw badRequest('Specializations should be an array');
     }
-    profileFields.specializations = specializations;
+    const unknown = specializations.filter(item => !SPECIALIZATIONS.includes(item));
+    if (unknown.length > 0) {
+      throw badRequest(`Unknown specializations: ${unknown.map(String).join(', ')}`);
+    }
+    profileFields.specializations = [...new Set(specializations)];
   }
-  if (experienceYears !== undefined)
-    profileFields.experienceYears = parseInt(experienceYears);
-  if (hourlyRate !== undefined)
-    profileFields.hourlyRate = parseFloat(hourlyRate);
   if (location !== undefined) {
     // Only copy known string fields so arbitrary objects are never stored.
     const pick = value => (typeof value === 'string' ? value.trim().slice(0, 100) : '');
@@ -84,30 +88,19 @@ const updatePtProfile = asyncHandler(async (req, res) => {
     profileFields.isAcceptingClients = req.body.isAcceptingClients;
   }
 
-  try {
-    let profile = await PTProfile.findOneAndUpdate(
-      {user: req.user._id},
-      {$set: profileFields},
-      {new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true},
-    ).populate('user', 'username email photoUrl');
+  // Schema validation errors (e.g. hourlyRate above the max) become 400s in
+  // errorHandler.
+  const profile = await PTProfile.findOneAndUpdate(
+    {user: req.user._id},
+    {$set: profileFields},
+    {new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true},
+  ).populate('user', 'username email photoUrl');
 
-    res.status(200).json({
-      message: 'PT profile updated successfully',
-      data: profile,
-      success: true,
-    });
-  } catch (error) {
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({
-        message:
-          'Validation failed: ' +
-          Object.values(error.errors)
-            .map(e => e.message)
-            .join(', '),
-      });
-    }
-    throw error;
-  }
+  res.status(200).json({
+    message: 'PT profile updated successfully',
+    data: profile,
+    success: true,
+  });
 });
 
 module.exports = {

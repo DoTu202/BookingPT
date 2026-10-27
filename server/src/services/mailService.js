@@ -22,8 +22,10 @@ const sendMail = ({to, subject, text, html}) =>
   });
 
 const sendOtpMail = (to, code, purpose) => {
-  const action =
-    purpose === 'reset_password' ? 'reset your password' : 'verify your email';
+  const action = {
+    reset_password: 'reset your password',
+    change_email: 'confirm your new email address',
+  }[purpose] || 'verify your email';
   return sendMail({
     to,
     subject: `Your BookingPT code: ${code}`,
@@ -32,4 +34,4 @@ const sendOtpMail = (to, code, purpose) => {
   });
 };
 
-module.exports = {sendMail, sendOtpMail, transporter};
+module.exports = {sendOtpMail};

@@ -4,8 +4,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const isTest = NODE_ENV === 'test';
 const isProduction = NODE_ENV === 'production';
 
-// Accept the legacy SECRET_KEY name so existing .env files keep working.
-const JWT_SECRET = process.env.JWT_SECRET || process.env.SECRET_KEY;
+const {JWT_SECRET} = process.env;
 
 const required = {
   MONGODB_URI: process.env.MONGODB_URI,
@@ -25,7 +24,6 @@ if (!isTest) {
 }
 
 module.exports = {
-  NODE_ENV,
   isTest,
   isProduction,
   PORT: Number(process.env.PORT) || 3001,
@@ -44,7 +42,10 @@ module.exports = {
   // Number of reverse proxies in front of the app (for correct client IPs in
   // rate limiting). 0 when the app is exposed directly.
   TRUST_PROXY: Number(process.env.TRUST_PROXY) || 0,
-  MAIL_USER: process.env.MAIL_USER || process.env.USERNAME_EMAIL,
-  MAIL_PASSWORD: process.env.MAIL_PASSWORD || process.env.USERNAME_PASSWORD,
+  MAIL_USER: process.env.MAIL_USER,
+  MAIL_PASSWORD: process.env.MAIL_PASSWORD,
   MAIL_FROM: process.env.MAIL_FROM,
+  // Firebase service account (JSON or a path to the JSON file) for push
+  // notifications. Push is disabled when empty.
+  FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT || '',
 };

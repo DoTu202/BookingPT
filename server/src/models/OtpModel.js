@@ -12,8 +12,14 @@ const otpSchema = new mongoose.Schema(
     },
     purpose: {
       type: String,
-      enum: ['register', 'reset_password'],
+      enum: ['register', 'reset_password', 'change_email'],
       required: true,
+    },
+    // For change_email: the account the new address is being verified for,
+    // so a code can only be used by the user who requested it.
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
     },
     codeHash: {
       type: String,
