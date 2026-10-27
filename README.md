@@ -23,11 +23,11 @@ I designed and built the whole project on my own: the React Native app, the Node
 
 ## Screenshots
 
-| Client home | Search | Trainer profile and booking | Chat |
+| Sign in | Client home | Search | Book a session |
 | :---: | :---: | :---: | :---: |
-| <img src="docs/screenshots/client-home.png" width="190" alt="Client home"/> | <img src="docs/screenshots/search.png" width="190" alt="Search trainers"/> | <img src="docs/screenshots/trainer-profile.png" width="190" alt="Trainer profile"/> | <img src="docs/screenshots/chat.png" width="190" alt="Chat"/> |
-| **Trainer home** | **Dashboard** | **Availability** | **Booking requests** |
-| <img src="docs/screenshots/pt-home.png" width="190" alt="Trainer home"/> | <img src="docs/screenshots/pt-dashboard.png" width="190" alt="Trainer dashboard"/> | <img src="docs/screenshots/pt-availability.png" width="190" alt="Availability"/> | <img src="docs/screenshots/pt-bookings.png" width="190" alt="Trainer bookings"/> |
+| <img src="docs/screenshots/sign-in.jpg" width="190" alt="Sign in"/> | <img src="docs/screenshots/client-home.jpg" width="190" alt="Client home"/> | <img src="docs/screenshots/search-trainers.jpg" width="190" alt="Search trainers"/> | <img src="docs/screenshots/book-session.jpg" width="190" alt="Book a session"/> |
+| **Booking sent** | **Chat** | **Trainer dashboard** | **Availability** |
+| <img src="docs/screenshots/booking-success.jpg" width="190" alt="Booking sent"/> | <img src="docs/screenshots/chat.jpg" width="190" alt="Chat"/> | <img src="docs/screenshots/pt-dashboard.jpg" width="190" alt="Trainer dashboard"/> | <img src="docs/screenshots/pt-availability.jpg" width="190" alt="Availability"/> |
 
 ## What the app does
 
