@@ -24,7 +24,6 @@
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		942B51F790E344AB8206B96D /* Poppins-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8084B5C360E54E51B767B3F6 /* Poppins-Regular.ttf */; };
 		9479E9252D214F92AE11AE90 /* Poppins-LightItalic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 83D887ECD2444E26B8AC3B2F /* Poppins-LightItalic.ttf */; };
-		9A42A725309091D6005C0D03 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 9A42A724309091D6005C0D03 /* GoogleService-Info.plist */; };
 		A00FE37EA4B74711980C428E /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8BD776D4806D43A693D53CC7 /* OFL.txt */; };
 		A91A3BE33C7445FEADD427FF /* Poppins-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5454A58D82934EE798BF6EB8 /* Poppins-SemiBold.ttf */; };
 		BDBCE16C0C5A4E4FB2CA55FD /* Poppins-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3F2CA6EF2C614462982E0083 /* Poppins-Light.ttf */; };
@@ -57,7 +56,6 @@
 		83D887ECD2444E26B8AC3B2F /* Poppins-LightItalic.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Poppins-LightItalic.ttf"; path = "../assets/fonts/Poppins-LightItalic.ttf"; sourceTree = "<group>"; };
 		8B550A2AFA6744E28F5F6A59 /* Poppins-ExtraLightItalic.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Poppins-ExtraLightItalic.ttf"; path = "../assets/fonts/Poppins-ExtraLightItalic.ttf"; sourceTree = "<group>"; };
 		8BD776D4806D43A693D53CC7 /* OFL.txt */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = OFL.txt; path = ../assets/fonts/OFL.txt; sourceTree = "<group>"; };
-		9A42A724309091D6005C0D03 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		9BDA19BB6D5945F4BA185F95 /* Poppins-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Poppins-Medium.ttf"; path = "../assets/fonts/Poppins-Medium.ttf"; sourceTree = "<group>"; };
 		B2DA26291A404784BB087395 /* Poppins-BlackItalic.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Poppins-BlackItalic.ttf"; path = "../assets/fonts/Poppins-BlackItalic.ttf"; sourceTree = "<group>"; };
 		C47FE6400685479D955539B6 /* Poppins-ExtraLight.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Poppins-ExtraLight.ttf"; path = "../assets/fonts/Poppins-ExtraLight.ttf"; sourceTree = "<group>"; };
@@ -82,7 +80,6 @@
 		13B07FAE1A68108700A75B9A /* Project */ = {
 			isa = PBXGroup;
 			children = (
-				9A42A724309091D6005C0D03 /* GoogleService-Info.plist */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
@@ -249,7 +246,6 @@
 				4D26AFF798B74A32A299B3DF /* Poppins-Thin.ttf in Resources */,
 				491E1F6938F44893BA356A09 /* Poppins-ThinItalic.ttf in Resources */,
 				A00FE37EA4B74711980C428E /* OFL.txt in Resources */,
-				9A42A725309091D6005C0D03 /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

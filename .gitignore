@@ -89,5 +89,8 @@ server/uploads/
 # Firebase service account keys (server push credentials)
 *service-account*.json
 
+# Firebase iOS app config (kept locally, not committed)
+**/GoogleService-Info.plist
+
 # Local credential files (e.g. atlas-credentials.env); .env.example stays tracked
 *.env
