@@ -1,501 +1,341 @@
-import {
-  StyleSheet,
-  Text,
-  View,
-  Button,
-  ImageBackground,
-  TouchableOpacity,
-  ScrollView,
-  Switch,
-  Alert,
-  Platform,
-} from 'react-native';
-import React, {useEffect} from 'react';
-import {ButtonComponent} from '../../components';
-import {globalStyles} from '../../styles/globalStyles';
-import {InputComponent} from '../../components';
-import {useState} from 'react';
-import {fontFamilies} from '../../constants/fontFamilies';
-import appColors from '../../constants/appColors';
-import {
-  LockCircle,
-  Sms,
-  Calendar,
-  ArrowLeft,
-  CloseCircle,
-} from 'iconsax-react-native';
-import TextComponent from '../../components/TextComponent';
-import SocialLogin from './components/SocialLogin';
+import React, {useRef, useState} from 'react';
+import {Platform, StyleSheet, TouchableOpacity, View} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import {LoadingModal} from '../../modals';
+import dayjs from '../../utils/dayjs';
+import {Calendar, Call, Lock, Profile, Sms, TickCircle} from 'iconsax-react-native';
+import {ButtonComponent, InputComponent, RowComponent, TextComponent} from '../../components';
+import AuthLayout, {FormError} from './components/AuthLayout';
 import authApi from '../../apis/authApi';
-import {Validate} from '../../utils/validate';
-import {useDispatch} from 'react-redux';
-import {SectionComponent} from '../../components';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {setLoggedInUser} from '../../redux/reducers/authReducer';
+import {MIN_PASSWORD_LENGTH, Validate} from '../../utils/validate';
+import appColors from '../../constants/appColors';
+import {fontFamilies} from '../../constants/fontFamilies';
+import {radius, spacing} from '../../constants/theme';
+
+const ROLES = [
+  {value: 'client', title: 'Học viên', description: 'Tìm và đặt lịch với huấn luyện viên'},
+  {value: 'pt', title: 'Huấn luyện viên', description: 'Nhận học viên và quản lý lịch dạy'},
+];
 
 const initValue = {
-  email: '',
-  password: '',
   username: '',
+  email: '',
   phoneNumber: '',
-  confirmPassword: '',
   dob: null,
+  password: '',
+  confirmPassword: '',
   role: 'client',
 };
 
+// Returns a Vietnamese error message per field ('' when valid).
+const validateField = (key, values) => {
+  const value = values[key];
+  switch (key) {
+    case 'username':
+      return value.trim().length < 2 ? 'Tên cần ít nhất 2 ký tự' : '';
+    case 'email':
+      return !value.trim()
+        ? 'Vui lòng nhập email'
+        : !Validate.email(value.trim())
+        ? 'Email không hợp lệ'
+        : '';
+    case 'phoneNumber':
+      return !Validate.phone(value) ? 'Số điện thoại gồm 9–12 chữ số' : '';
+    case 'dob':
+      return !value ? 'Vui lòng chọn ngày sinh' : '';
+    case 'password':
+      return !Validate.password(value) ? `Mật khẩu cần ít nhất ${MIN_PASSWORD_LENGTH} ký tự` : '';
+    case 'confirmPassword':
+      return !value
+        ? 'Vui lòng nhập lại mật khẩu'
+        : value !== values.password
+        ? 'Mật khẩu xác nhận không khớp'
+        : '';
+    default:
+      return '';
+  }
+};
+
+const FIELDS = ['username', 'email', 'phoneNumber', 'dob', 'password', 'confirmPassword'];
+
 const SignUpScreen = ({navigation}) => {
   const [values, setValues] = useState(initValue);
-  const [errorMessage, setErrorMessage] = useState({});
-  const [isDisable, setIsDisable] = useState(true);
-  const [show, setShow] = useState(false);
-  const [isDateFocused, setIsDateFocused] = useState(false);
+  const [touched, setTouched] = useState({});
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  const dispatch = useDispatch();
-
-  useEffect(() => {
-    if (
-      !values.username ||
-      !values.email ||
-      !values.password ||
-      !values.confirmPassword ||
-      !values.phoneNumber ||
-      (errorMessage &&
-        (errorMessage.email ||
-          errorMessage.password ||
-          errorMessage.confirmPassword))
-    ) {
-      setIsDisable(true);
-    } else {
-      setIsDisable(false);
-    }
-  }, [errorMessage, values]);
-
-  const handleChangeValue = (key, value) => {
-    const data = {...values};
-    data[`${key}`] = value;
-    setValues(data);
+  const [formError, setFormError] = useState('');
+  const refs = {
+    email: useRef(null),
+    phoneNumber: useRef(null),
+    password: useRef(null),
+    confirmPassword: useRef(null),
   };
 
-  const formValidator = key => {
-    const data = {...errorMessage};
-    let message = '';
+  const errors = Object.fromEntries(FIELDS.map(key => [key, validateField(key, values)]));
+  const isValid = FIELDS.every(key => !errors[key]);
+  const errorFor = key => (touched[key] ? errors[key] : '');
 
-    switch (key) {
-      case 'email':
-        if (!values.email) {
-          message = 'Email is required!';
-        } else if (!Validate.email(values.email)) {
-          message = 'Email is not valid!';
-        } else {
-          message = '';
-        }
-        break;
-
-      case 'password':
-        message = !values.password ? 'Password is required!' : '';
-        break;
-
-      case 'confirmPassword':
-        if (!values.confirmPassword) {
-          message = 'Please type confirm password!';
-        } else if (values.confirmPassword !== values.password) {
-          message = 'Password is not match!';
-        } else {
-          message = '';
-        }
-        break;
-    }
-
-    data[key] = message;
-    setErrorMessage(data);
-  };
-
-  const formatDate = date => {
-    if (!date) return 'Select your birthday';
-    return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
-  };
+  const setValue = (key, value) => setValues(prev => ({...prev, [key]: value}));
+  const touch = key => setTouched(prev => ({...prev, [key]: true}));
 
   const handleDateChange = (event, selectedDate) => {
-    if (event.type === 'set' && selectedDate) {
-      handleChangeValue('dob', selectedDate);
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
     }
-    setShow(false);
+    if (event.type === 'set' && selectedDate) {
+      setValue('dob', selectedDate);
+    }
+    if (event.type !== 'set' || Platform.OS === 'android') {
+      touch('dob');
+    }
   };
 
-  const closeDatePicker = () => {
-    setIsDateFocused(false);
-    setShow(false);
-  };
-
-  //handle register
   const handleRegister = async () => {
-    if (
-      !values.username ||
-      !values.phoneNumber ||
-      !values.email ||
-      !values.password
-    ) {
-      Alert.alert('Error', 'Please fill in all required fields.');
+    if (!isValid) {
+      setTouched(Object.fromEntries(FIELDS.map(key => [key, true])));
       return;
     }
-    
-    const api = '/verification';
+    setFormError('');
     setIsLoading(true);
     try {
-      const res = await authApi.HandleAuthentication(
-        api,
-        {email: values.email},
-        'post',
-      );
+      const email = values.email.trim();
+      await authApi.HandleAuthentication('/verification', {email}, 'post');
       navigation.navigate('VerifyCodeScreen', {
-        code: res.data.data.verificationCode,
-        ...values,
-        dob: values.dob.toISOString(),
+        username: values.username.trim(),
+        email,
+        phoneNumber: values.phoneNumber,
+        password: values.password,
         role: values.role,
+        dob: values.dob.toISOString(),
       });
     } catch (error) {
-      console.log(error);
-      const message = error.response?.data?.message || 'Failed to send verification code';
-      Alert.alert('Error', message);
+      setFormError(error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <ImageBackground
-      source={require('../../../assets/images/Main.png')}
-      style={[
-        {alignItems: 'center', padding: 50, justifyContent: 'center'},
-        globalStyles.container,
-      ]}>
-      <TouchableOpacity
-        onPress={() => navigation.goBack()}
-        style={{
-          position: 'absolute',
-          top: 50,
-          left: 20,
-          zIndex: 10,
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          backgroundColor: 'rgba(255, 255, 255, 0.2)',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}>
-        <ArrowLeft size={22} color={appColors.white} />
-      </TouchableOpacity>
+    <AuthLayout
+      title="Tạo tài khoản"
+      subtitle="Chỉ mất một phút. Chúng tôi sẽ gửi mã xác minh tới email của bạn."
+      onBack={() => navigation.goBack()}
+      footer={
+        <RowComponent>
+          <TextComponent text="Đã có tài khoản? " color={appColors.white} />
+          <ButtonComponent
+            type="link"
+            text="Đăng nhập"
+            textColor={appColors.primaryLight}
+            onPress={() => navigation.navigate('LoginScreen')}
+          />
+        </RowComponent>
+      }>
+      <View>
+        <TextComponent text="Bạn là" size={13} font={fontFamilies.medium} styles={styles.label} />
+        <View style={styles.roles}>
+          {ROLES.map(role => {
+            const selected = values.role === role.value;
+            return (
+              <TouchableOpacity
+                key={role.value}
+                style={[styles.roleCard, selected && styles.roleCardSelected]}
+                onPress={() => setValue('role', role.value)}
+                accessibilityRole="radio"
+                accessibilityState={{selected}}>
+                <RowComponent justify="space-between">
+                  <TextComponent
+                    text={role.title}
+                    font={fontFamilies.semiBold}
+                    color={selected ? appColors.primaryDark : appColors.text}
+                  />
+                  {selected ? (
+                    <TickCircle size={18} color={appColors.primary} variant="Bold" />
+                  ) : null}
+                </RowComponent>
+                <TextComponent
+                  text={role.description}
+                  size={12}
+                  color={appColors.textMuted}
+                  styles={styles.roleDescription}
+                />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
-      <TextComponent text="Sign Up" title styles={styles.textSignUp} />
+      <InputComponent
+        label="Họ và tên"
+        value={values.username}
+        onChange={val => setValue('username', val)}
+        onBlur={() => touch('username')}
+        placeholder="Nguyễn Văn A"
+        autoCapitalize="words"
+        autoComplete="name"
+        returnKeyType="next"
+        onSubmitEditing={() => refs.email.current?.focus()}
+        error={errorFor('username')}
+        prefix={<Profile size={20} color={appColors.textMuted} />}
+      />
+      <InputComponent
+        ref={refs.email}
+        label="Email"
+        value={values.email}
+        onChange={val => setValue('email', val)}
+        onBlur={() => touch('email')}
+        placeholder="ban@email.com"
+        type="email-address"
+        autoComplete="email"
+        returnKeyType="next"
+        onSubmitEditing={() => refs.phoneNumber.current?.focus()}
+        error={errorFor('email')}
+        prefix={<Sms size={20} color={appColors.textMuted} />}
+      />
+      <InputComponent
+        ref={refs.phoneNumber}
+        label="Số điện thoại"
+        value={values.phoneNumber}
+        onChange={val => setValue('phoneNumber', val.replace(/[^0-9]/g, ''))}
+        onBlur={() => touch('phoneNumber')}
+        placeholder="0901234567"
+        type="phone-pad"
+        autoComplete="tel"
+        maxLength={12}
+        error={errorFor('phoneNumber')}
+        prefix={<Call size={20} color={appColors.textMuted} />}
+      />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        style={styles.scrollViewFlex}
-        contentContainerStyle={styles.scrollContentContainer}>
-        {/* username */}
-        <TextComponent
-          text="Username"
-          styles={{
-            color: appColors.white,
-            alignSelf: 'flex-start',
-            marginBottom: 5,
-            padding: 5,
-          }}
-        />
-        <InputComponent
-          value={values.username}
-          onChange={val => handleChangeValue('username', val)}
-          placeholder="Username"
-          autoCapitalize="none"
-          allowClear
-        />
-
-        {/* email  */}
-        <TextComponent
-          text="Email"
-          styles={{
-            color: appColors.white,
-            alignSelf: 'flex-start',
-            marginBottom: 5,
-            padding: 5,
-          }}
-        />
-        <InputComponent
-          value={values.email}
-          onChange={val => handleChangeValue('email', val)}
-          placeholder="Email"
-          autoCapitalize="none"
-          allowClear
-          onEnd={() => formValidator('email')}
-        />
-
-        {/* phone number */}
-        <TextComponent
-          text="Phone Number"
-          styles={{
-            color: appColors.white,
-            alignSelf: 'flex-start',
-            marginBottom: 5,
-            padding: 5,
-          }}
-        />
-        <InputComponent
-          value={values.phoneNumber}
-          onChange={val =>
-            handleChangeValue('phoneNumber', val.replace(/[^0-9]/g, ''))
-          }
-          placeholder="Phone Number"
-          allowClear
-          keyboradType={Platform.OS === 'ios' ? 'number-pad' : 'numeric'}
-        />
-
-        {/* Date of Birth */}
-        <TextComponent
-          text="Date of Birth"
-          styles={{
-            color: appColors.white,
-            alignSelf: 'flex-start',
-            marginBottom: 5,
-            padding: 5,
-          }}
-        />
+      <View>
+        <TextComponent text="Ngày sinh" size={13} font={fontFamilies.medium} styles={styles.label} />
         <TouchableOpacity
-          style={{
-            flexDirection: 'row',
-            borderRadius: 12,
-            borderWidth: 2,
-            borderColor: appColors.gray,
-            width: '100%',
-            height: 40,
-            alignItems: 'center',
-            paddingHorizontal: 10,
-            backgroundColor: appColors.white,
-            marginBottom: 10,
-            justifyContent: 'space-between',
-          }}
-          onPress={() => {
-            setIsDateFocused(true);
-            setShow(true);
-          }}>
-          <Text
-            style={{
-              paddingLeft: 14,
-              color: values.dob ? appColors.text : appColors.placeholder,
-              fontSize: 14,
-              fontFamily: fontFamilies.medium,
-            }}>
-            {formatDate(values.dob)}
-          </Text>
-          <Calendar size={22} color={appColors.placeholder} />
+          style={[styles.dateField, errorFor('dob') && styles.dateFieldError]}
+          onPress={() => setShowDatePicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Chọn ngày sinh">
+          <Calendar size={20} color={appColors.textMuted} />
+          <TextComponent
+            text={values.dob ? dayjs(values.dob).format('DD/MM/YYYY') : 'Chọn ngày sinh'}
+            size={15}
+            color={values.dob ? appColors.text : appColors.placeholder}
+            styles={styles.dateText}
+          />
         </TouchableOpacity>
-
-        {/* DateTimePicker */}
-        {show && (
-          <View style={{width: '100%'}}>
+        {errorFor('dob') ? (
+          <TextComponent text={errors.dob} size={12} color={appColors.danger} styles={styles.helper} />
+        ) : null}
+        {showDatePicker && (
+          <View>
             <DateTimePicker
-              testID="dateTimePicker"
-              value={values.dob || new Date()}
+              value={values.dob || new Date(2000, 0, 1)}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleDateChange}
               maximumDate={new Date()}
-              minimumDate={new Date(1950, 0, 1)}
-              textColor={appColors.primary}
+              minimumDate={new Date(1940, 0, 1)}
+              locale="vi-VN"
             />
-
-            <TouchableOpacity
-              onPress={closeDatePicker}
-              style={{
-                padding: 10,
-                alignItems: 'center',
-                backgroundColor: 'rgba(249, 117, 22, 0.1)',
-                borderRadius: 8,
-                marginTop: 8,
-                marginBottom: 16,
-                flexDirection: 'row',
-                justifyContent: 'center',
-              }}>
-              <CloseCircle
-                size={18}
-                color={appColors.primary}
-                style={{marginRight: 5}}
+            {Platform.OS === 'ios' ? (
+              <ButtonComponent
+                text="Xong"
+                type="secondary"
+                size="sm"
+                onPress={() => {
+                  if (!values.dob) {
+                    setValue('dob', new Date(2000, 0, 1));
+                  }
+                  setShowDatePicker(false);
+                  touch('dob');
+                }}
               />
-              <Text
-                style={{
-                  color: appColors.primary,
-                  fontWeight: 'bold',
-                  fontFamily: fontFamilies.medium,
-                }}>
-                Close
-              </Text>
-            </TouchableOpacity>
+            ) : null}
           </View>
         )}
+      </View>
 
-        {/* password */}
-        <TextComponent
-          text="Password"
-          styles={{
-            color: appColors.white,
-            alignSelf: 'flex-start',
-            marginBottom: 5,
-            padding: 5,
-          }}
-        />
-        <InputComponent
-          value={values.password}
-          onChange={val => handleChangeValue('password', val)}
-          placeholder="Password"
-          autoCapitalize="none"
-          secureTextEntry
-          allowClear
-          isPassword
-          affix={<LockCircle size={22} color={appColors.gray} />}
-          onEnd={() => formValidator('password')}
-        />
+      <InputComponent
+        ref={refs.password}
+        label="Mật khẩu"
+        value={values.password}
+        onChange={val => setValue('password', val)}
+        onBlur={() => touch('password')}
+        placeholder="Tạo mật khẩu"
+        textContentType="newPassword"
+        returnKeyType="next"
+        onSubmitEditing={() => refs.confirmPassword.current?.focus()}
+        helperText={`Tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`}
+        error={errorFor('password')}
+        prefix={<Lock size={20} color={appColors.textMuted} />}
+        isPassword
+      />
+      <InputComponent
+        ref={refs.confirmPassword}
+        label="Nhập lại mật khẩu"
+        value={values.confirmPassword}
+        onChange={val => setValue('confirmPassword', val)}
+        onBlur={() => touch('confirmPassword')}
+        placeholder="Nhập lại mật khẩu"
+        textContentType="newPassword"
+        returnKeyType="done"
+        onSubmitEditing={handleRegister}
+        error={errorFor('confirmPassword')}
+        prefix={<Lock size={20} color={appColors.textMuted} />}
+        isPassword
+      />
 
-        {/* confirmPassword */}
-        <TextComponent
-          text="Confirm Password"
-          styles={{
-            color: appColors.white,
-            alignSelf: 'flex-start',
-            marginBottom: 5,
-            padding: 5,
-          }}
-        />
-        <InputComponent
-          value={values.confirmPassword}
-          onChange={val => handleChangeValue('confirmPassword', val)}
-          placeholder="Confirm Password"
-          autoCapitalize="none"
-          secureTextEntry
-          allowClear
-          isPassword
-          affix={<LockCircle size={22} color={appColors.gray} />}
-          onEnd={() => formValidator('confirmPassword')}
-        />
-        {errorMessage && (
-          <SectionComponent>
-            {Object.keys(errorMessage).map((error, index) =>
-              errorMessage[error] ? (
-                <TextComponent
-                  text={errorMessage[error]}
-                  key={`error${index}`}
-                  color={appColors.danger}
-                />
-              ) : null,
-            )}
-          </SectionComponent>
-        )}
-        <TextComponent text="You are :" styles={styles.inputLabel} />
-        <View style={styles.roleSelectionContainer}>
-          <ButtonComponent
-            text="Client"
-            onPress={() => handleChangeValue('role', 'client')}
-            type={values.role === 'client' ? 'primary' : 'outline'}
-            styles={styles.roleButton}
-            textStyles={{fontSize: 14}}
-          />
-          <ButtonComponent
-            text="Personal Trainer"
-            onPress={() => handleChangeValue('role', 'pt')}
-            type={values.role === 'pt' ? 'primary' : 'outline'}
-            styles={styles.roleButton}
-            textStyles={{fontSize: 14}}
-          />
-        </View>
+      <FormError message={formError} />
 
-        <ButtonComponent
-          text={isLoading ? 'Creating account...' : 'Sign Up'}
-          onPress={handleRegister}
-          styles={styles.button}
-          type="primary"
-          textFont={fontFamilies.semiBold}
-          disable={isDisable}
-        />
-        <SocialLogin />
-      </ScrollView>
-      <LoadingModal visible={isLoading} />
-    </ImageBackground>
+      <ButtonComponent
+        text="Tiếp tục"
+        type="primary"
+        size="lg"
+        onPress={handleRegister}
+        isLoading={isLoading}
+      />
+    </AuthLayout>
   );
 };
 
+export default SignUpScreen;
+
 const styles = StyleSheet.create({
-  textSignUp: {
-    marginBottom: 20,
-    fontSize: 28,
-    color: appColors.white,
-    alignSelf: 'center',
-    fontFamily: fontFamilies.extraBold,
-    justifyContent: 'flex-start',
+  label: {
+    marginBottom: 6,
   },
-  button: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    width: '100%',
-    height: 40,
-    marginTop: 40,
-  },
-  rememberMe: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontFamily: fontFamilies.regular,
-    fontSize: 12,
-    padding: 8,
-  },
-  datePickerButton: {
+  roles: {
     flexDirection: 'row',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: appColors.gray,
-    width: '100%',
-    height: 40,
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    backgroundColor: appColors.white,
-    marginBottom: 10,
-    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
-  datePickerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  inputLabel: {
-    color: appColors.white,
-    alignSelf: 'flex-start',
-    padding: 5,
-    fontFamily: fontFamilies.medium,
-    fontSize: 14,
-  },
-  roleSelectionContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 5,
-    marginBottom: 5,
-    width: '100%',
-  },
-  roleButton: {
+  roleCard: {
     flex: 1,
-    marginHorizontal: 5,
-    paddingVertical: 8,
+    borderWidth: 1.5,
+    borderColor: appColors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
-  scrollViewFlex: {
-    flex: 1,
-    width: '100%',
+  roleCardSelected: {
+    borderColor: appColors.primary,
+    backgroundColor: appColors.primarySoft,
   },
-  scrollContentContainer: {
-    paddingBottom: 120, // Khoảng trống ở cuối ScrollView, cần lớn hơn chiều cao của SocialLogin + margin
-    width: '100%',
+  roleDescription: {
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  dateField: {
+    flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 48,
+    borderWidth: 1.5,
+    borderColor: appColors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+  },
+  dateFieldError: {
+    borderColor: appColors.danger,
+  },
+  dateText: {
+    marginLeft: spacing.sm,
+  },
+  helper: {
+    marginTop: 4,
   },
 });
-
-export default SignUpScreen;

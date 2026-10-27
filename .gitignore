@@ -21,8 +21,6 @@ DerivedData
 *.ipa
 *.xcuserstate
 **/.xcode.env.local
-.env
-src/configs
 
 # Android/IntelliJ
 #
@@ -60,7 +58,7 @@ yarn-error.log
 
 # Ruby / CocoaPods
 **/Pods/
-/vendor/bundle/
+**/vendor/bundle/
 
 # Temporary files created by Metro to check the health of the file watcher
 .metro-health-check*
@@ -75,3 +73,24 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# User uploads (runtime data, may contain personal photos)
+server/uploads/
+
+# Personal documents
+*Thesis*.pdf
+.mongodb-binaries/
+
+# Firebase service account keys (server push credentials)
+*service-account*.json
+
+# Firebase iOS app config (kept locally, not committed)
+**/GoogleService-Info.plist
+
+# Local credential files (e.g. atlas-credentials.env); .env.example stays tracked
+*.env

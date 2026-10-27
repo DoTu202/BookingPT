@@ -1,71 +1,78 @@
-const jwt = require('jsonwebtoken');
-const UserModal = require('../models/userModel');
-require('dotenv').config();
+const User = require('../models/userModel');
+const {verifyAccessToken} = require('../services/tokenService');
+const {isValidId} = require('../utils/helpers');
 
-const JWT_SECRET = process.env.SECRET_KEY;
+const unauthorized = (res, message = 'Unauthorized') =>
+  res.status(401).json({success: false, message});
 
-const authenticateToken = async (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (token == null) {
-    return res.status(401).json({
-      message: 'Unauthorized',
-    });
+// Resolves a bearer token to an active user. Shared by the HTTP middleware
+// and the Socket.IO handshake. Returns {user} or {error: <401 message>}.
+const userFromToken = async token => {
+  let payload;
+  try {
+    payload = verifyAccessToken(token);
+  } catch (error) {
+    return {error: error.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token'};
   }
-  jwt.verify(token, JWT_SECRET, async (error, decodePayload) => {
-    if (error) {
-      if (error.name === 'TokenExpiredError') {
-        return res.status(401).json({
-          message: 'Token expired',
-        });
-      }
-      return res.status(403).json({
-        message: 'Forbidden',
-      });
-    }
 
-    try {
-      const user = await UserModal.findById(decodePayload.id).select(
-        '-password',
-      );
-      if (!user) {
-        return res.status(401).json({
-          message: 'Unauthorized',
-        });
-      }
-      req.user = user;
-      next();
-    } catch (error) {
-      return res.status(500).json({
-        message: 'Internal server error',
-      });
-    }
-  });
+  if (!isValidId(payload.id)) {
+    return {error: 'Invalid token'};
+  }
+
+  const user = await User.findById(payload.id);
+  if (!user || !user.isActive) {
+    return {error: 'Unauthorized'};
+  }
+
+  // Tokens issued before the last password change or "sign out of all
+  // devices" are no longer valid. JWT iat has second precision.
+  const revokedBefore = Math.max(
+    user.passwordChangedAt?.getTime() || 0,
+    user.tokensValidAfter?.getTime() || 0,
+  );
+  if (revokedBefore && payload.iat < Math.floor(revokedBefore / 1000)) {
+    return {error: 'Token expired'};
+  }
+
+  return {user};
 };
 
-//authorizeRoles
+const authenticateToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization || '';
+  const [scheme, token] = authHeader.split(' ');
+
+  if (scheme !== 'Bearer' || !token) {
+    return unauthorized(res);
+  }
+
+  try {
+    const {user, error} = await userFromToken(token);
+    if (error) {
+      return unauthorized(res, error);
+    }
+    req.user = user;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user || !req.user.role) {
-      return res.status(401).json({
-        message: 'Unauthorized',
-      });
+      return unauthorized(res);
     }
 
-    const userRole = req.user.role;
-
-    if (allowedRoles.includes(userRole)) {
+    if (allowedRoles.includes(req.user.role)) {
       next();
     } else {
-      return res.status(403).json({
-        message: 'Forbidden',
-      });
+      return res.status(403).json({success: false, message: 'Forbidden'});
     }
   };
 };
 
 module.exports = {
+  userFromToken,
   authenticateToken,
   authorizeRoles,
 };

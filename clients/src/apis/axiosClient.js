@@ -2,69 +2,61 @@ import axios from 'axios';
 import queryString from 'query-string';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {appInfo} from '../constants/appInfos';
+import store from '../redux/store';
+import {removeAuth} from '../redux/reducers/authReducer';
+import {NETWORK_ERROR, GENERIC_ERROR, translateServerMessage} from '../utils/errorMessage';
 
 const axiosClient = axios.create({
-  baseURL: appInfo.BASE_URL,  
-  timeout: 10000, 
-  paramSerializer: params => queryString.stringify(params),
+  baseURL: appInfo.BASE_URL,
+  timeout: 10000,
+  paramsSerializer: {serialize: params => queryString.stringify(params)},
 });
 
-axiosClient.interceptors.request.use(async config => {
-  let token = '';
-  try {
-    const authData = await AsyncStorage.getItem('auth');
-    if (authData) {
-      try {
-        const auth = JSON.parse(authData);
-        token = auth.token || auth.accesstoken || auth.accessToken || '';
-      } catch {
-        console.log('Auth data is email only, no token available');
-      }
-    }
-  } catch (error) {
-    console.log('Error getting token:', error);
+// The token lives in Redux for the whole session. AsyncStorage only holds it
+// when "Remember me" is ticked, so reading it from there (as before) sent
+// unauthenticated requests for users who did not tick it.
+const getToken = () => store.getState().authReducer.authData?.accesstoken;
+
+axiosClient.interceptors.request.use(config => {
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-
-  config.headers = {
-    Authorization: token ? `Bearer ${token}` : '',
-    Accept: 'application/json',
-    ...config.headers,
-  };
-  config.data;
-
+  config.headers.Accept = 'application/json';
   return config;
 });
 
 axiosClient.interceptors.response.use(
-  res => {
-    return res;
-  },
+  res => res,
   async error => {
-    console.log(`Error: ${JSON.stringify(error)}`);
+    const status = error.response?.status;
 
-    // Handle token expiration
-    if (error.response?.status === 401) {
-      // Token expired or unauthorized
+    // Expired/revoked session: sign out everywhere so the app returns to the
+    // login screen instead of showing broken screens.
+    if (status === 401 && getToken()) {
       try {
         await AsyncStorage.removeItem('auth');
-        console.log('Token expired - cleared auth data');
-        throw new Error('Token expired');
-      } catch (storageError) {
-        console.log('Error clearing auth data:', storageError);
+      } catch {
+        // Nothing else to clean up; Redux is cleared below.
       }
+      store.dispatch(removeAuth());
     }
 
+    // Screens show error.message directly, so it is always Vietnamese.
+    let message;
     if (error.response) {
-      const message =
-        error.response.data?.message ||
-        error.response.statusText ||
-        'Server Error';
-      throw new Error(message);
+      message = translateServerMessage(error.response.data?.message) || GENERIC_ERROR;
     } else if (error.request) {
-      throw new Error('Network Error - No response from server');
+      message = NETWORK_ERROR;
     } else {
-      throw new Error(error.message || 'Unknown error occurred');
+      message = GENERIC_ERROR;
     }
+
+    // Keep `response` so screens can read the raw server message if needed.
+    const wrapped = new Error(message);
+    wrapped.status = status;
+    wrapped.response = error.response;
+    throw wrapped;
   },
 );
 

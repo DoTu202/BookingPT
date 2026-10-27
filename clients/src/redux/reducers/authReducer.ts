@@ -6,7 +6,7 @@ interface AuthState {
     email: string;
     role: 'client' | 'pt';
     username?: string;
-    photo?: string;  
+    photo?: string;
 }
 
 const initialState: AuthState = {
@@ -28,9 +28,9 @@ const authSlice = createSlice({
       state.authData = action.payload;
     },
 
-    removeAuth: (state, action) => {
+    removeAuth: state => {
       state.authData = initialState;
-    }
+    },
   },
 });
 

@@ -1,412 +1,309 @@
-import {
-  StyleSheet,
-  Text,
-  View,
-  FlatList,
-  TouchableOpacity,
-  RefreshControl,
-  Alert,
-} from 'react-native';
-import React, {useState, useEffect, useCallback} from 'react';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import React, {useCallback, useMemo, useState} from 'react';
+import {Alert, FlatList, RefreshControl, ScrollView, StyleSheet, View} from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-import {useSelector} from 'react-redux';
-import dayjs from 'dayjs';
-import {fontFamilies} from '../../constants/fontFamilies';
-import appColors from '../../constants/appColors';
-import {LoadingModal} from '../../modals';
+import {Calendar, CloseCircle, MessageText1, TickCircle} from 'iconsax-react-native';
+import {
+  BookingCard,
+  ButtonComponent,
+  ChipComponent,
+  ScreenHeader,
+  StateView,
+} from '../../components';
+import {ReasonModal} from '../../modals';
 import ptApi from '../../apis/ptApi';
-import {timeUtils} from '../../utils/timeUtils';
-import {authSelector} from '../../redux/reducers/authReducer';
 import chatApi from '../../apis/chatApi';
-import {RowComponent} from '../../components'; 
+import appColors from '../../constants/appColors';
+import {spacing} from '../../constants/theme';
 
+const isPast = iso => new Date(iso).getTime() <= Date.now();
+
+// Groups are computed on the client from one request, so every count is right
+// whichever group is selected.
+const GROUPS = [
+  {
+    key: 'pending',
+    label: 'Chờ xác nhận',
+    match: b => b.status === 'pending_confirmation',
+    ascending: true,
+    empty: 'Không có yêu cầu nào đang chờ bạn xác nhận.',
+  },
+  {
+    key: 'upcoming',
+    label: 'Sắp tới',
+    match: b => b.status === 'confirmed' && !isPast(b.bookingTime?.endTime),
+    ascending: true,
+    empty: 'Chưa có buổi tập nào sắp tới.',
+  },
+  {
+    key: 'toComplete',
+    label: 'Chờ hoàn thành',
+    match: b => b.status === 'confirmed' && isPast(b.bookingTime?.endTime),
+    empty: 'Không có buổi tập nào cần đánh dấu hoàn thành.',
+  },
+  {
+    key: 'history',
+    label: 'Lịch sử',
+    match: b => !['pending_confirmation', 'confirmed'].includes(b.status),
+    empty: 'Các buổi đã hoàn thành, đã hủy hoặc bị từ chối sẽ hiện ở đây.',
+  },
+];
+
+// Reject (pending request, reason optional) and cancel (confirmed session,
+// reason required) both ask for a reason in a modal.
+const REASON_ACTIONS = {
+  reject: {
+    title: 'Từ chối yêu cầu',
+    message: 'Cho học viên biết lý do bạn không nhận được buổi này.',
+    confirmLabel: 'Từ chối',
+    required: false,
+    run: ptApi.rejectBooking,
+  },
+  cancel: {
+    title: 'Hủy buổi tập',
+    message:
+      'Học viên sẽ được thông báo kèm lý do. Khung giờ này sẽ bị khóa; bạn có thể sửa lại trong mục Lịch rảnh để mở lại.',
+    confirmLabel: 'Hủy buổi tập',
+    required: true,
+    run: ptApi.cancelBooking,
+  },
+};
 
 const PTBookingsScreen = ({navigation}) => {
   const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [group, setGroup] = useState(null);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+  const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all'); 
-  const auth = useSelector(authSelector);
+  const [busyId, setBusyId] = useState(null);
+  // {type: 'reject' | 'cancel', bookingId} while the reason modal is open.
+  const [reasonAction, setReasonAction] = useState(null);
 
-  const fetchBookings = async (isRefresh = false) => {
+  const load = useCallback(async ({refresh = false} = {}) => {
+    if (refresh) {
+      setRefreshing(true);
+    }
     try {
-      if (isRefresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const params = {};
-      if (filter !== 'all') {
-        params.status = filter === 'pending' ? 'pending_confirmation' : filter;
-      }
-
-      const response = await ptApi.getBookings(params);
-      if (response.data?.data) {
-        setBookings(response.data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
-      Alert.alert('Error', 'Unable to load bookings list');
+      const res = await ptApi.getBookings();
+      setBookings(res.data?.data || []);
+      setStatus('ready');
+    } catch (err) {
+      setError(err.message);
+      setStatus('error');
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      fetchBookings();
-    }, [filter]),
+      load();
+    }, [load]),
   );
 
-  const handleConfirmBooking = async bookingId => {
-    Alert.alert(
-      'Confirm Booking',
-      'Are you sure you want to confirm this booking?',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await ptApi.confirmBooking(bookingId);
-              fetchBookings();
-              Alert.alert('Success', 'Booking has been confirmed');
-            } catch (error) {
-              console.error('Error confirming booking:', error);
-              Alert.alert('Error', 'Unable to confirm booking');
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ],
-    );
+  const grouped = useMemo(() => {
+    const result = {};
+    for (const item of GROUPS) {
+      const list = bookings.filter(item.match);
+      if (item.ascending) {
+        list.sort(
+          (a, b) => new Date(a.bookingTime.startTime) - new Date(b.bookingTime.startTime),
+        );
+      }
+      result[item.key] = list;
+    }
+    return result;
+  }, [bookings]);
+
+  // Open on what needs attention first.
+  const activeGroup =
+    group || (grouped.pending?.length ? 'pending' : grouped.toComplete?.length ? 'toComplete' : 'upcoming');
+  const activeConfig = GROUPS.find(item => item.key === activeGroup);
+
+  const runAction = async (bookingId, action, successMessage) => {
+    setBusyId(bookingId);
+    try {
+      await action(bookingId);
+      await load();
+      Alert.alert('Thành công', successMessage);
+    } catch (err) {
+      Alert.alert('Không thực hiện được', err.message);
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const handleRejectBooking = async bookingId => {
-    Alert.alert(
-      'Reject Booking',
-      'Are you sure you want to reject this booking?',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await ptApi.rejectBooking(bookingId);
-              fetchBookings();
-              Alert.alert('Success', 'Booking has been rejected');
-            } catch (error) {
-              console.error('Error rejecting booking:', error);
-              Alert.alert('Error', 'Unable to reject booking');
-            } finally {
-              setLoading(false);
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleMarkCompleted = async bookingId => {
-    Alert.alert('Complete Session', 'Mark this session as completed?', [
-      {text: 'Cancel', style: 'cancel'},
+  const confirmBooking = booking =>
+    Alert.alert('Xác nhận buổi tập', `Nhận buổi tập với ${booking.client?.username || 'học viên'}?`, [
+      {text: 'Để sau', style: 'cancel'},
       {
-        text: 'Complete',
-        onPress: async () => {
-          try {
-            setLoading(true);
-            await ptApi.markBookingAsCompleted(bookingId);
-            fetchBookings();
-            Alert.alert('Success', 'Session has been marked as completed');
-          } catch (error) {
-            console.error('Error marking booking completed:', error);
-            Alert.alert('Error', 'Unable to mark as completed');
-          } finally {
-            setLoading(false);
-          }
-        },
+        text: 'Xác nhận',
+        onPress: () => runAction(booking._id, ptApi.confirmBooking, 'Đã xác nhận buổi tập.'),
       },
     ]);
+
+  const completeBooking = booking =>
+    Alert.alert('Hoàn thành buổi tập', 'Đánh dấu buổi tập này là đã hoàn thành?', [
+      {text: 'Để sau', style: 'cancel'},
+      {
+        text: 'Hoàn thành',
+        onPress: () =>
+          runAction(booking._id, ptApi.markBookingAsCompleted, 'Đã đánh dấu hoàn thành.'),
+      },
+    ]);
+
+  const activeReasonAction = reasonAction && REASON_ACTIONS[reasonAction.type];
+
+  // Errors are shown inside the modal, so they are not caught here.
+  const submitReasonAction = async reason => {
+    await activeReasonAction.run(reasonAction.bookingId, reason);
+    load();
   };
 
-  const handleStartChat = async clientId => {
+  const openChat = async client => {
     try {
-      setLoading(true);
-      // Get or create chat room with client
-      const response = await chatApi.startChat(auth.accesstoken, clientId);
-
-      if (response.success) {
-        // Navigate to chat screen
-        navigation.navigate('ChatScreen', {
-          chatRoomId: response.data._id,
-          otherUser: response.data.clientUser,
-        });
-      }
-    } catch (error) {
-      console.error('Error starting chat:', error);
-      Alert.alert('Error', 'Unable to start chat');
-    } finally {
-      setLoading(false);
+      const res = await chatApi.startChat(null, client._id);
+      navigation.navigate('ChatScreen', {chatRoomId: res.data._id, otherUser: res.data.clientUser});
+    } catch (err) {
+      Alert.alert('Không mở được cuộc trò chuyện', err.message);
     }
   };
 
-  const getStatusColor = status => {
-    switch (status) {
-      case 'pending_confirmation':
-        return appColors.warning;
-      case 'confirmed':
-        return appColors.success;
-      case 'completed':
-        return appColors.primary;
-      case 'rejected_by_pt':
-      case 'cancelled_by_client':
-        return appColors.danger;
-      default:
-        return appColors.text2;
-    }
-  };
+  const renderActions = booking => {
+    const busy = busyId === booking._id;
+    const buttons = [];
 
-  const getStatusText = status => {
-    switch (status) {
-      case 'pending_confirmation':
-        return 'Pending';
-      case 'confirmed':
-        return 'Confirmed';
-      case 'completed':
-        return 'Completed';
-      case 'rejected_by_pt':
-        return 'Rejected';
-      case 'cancelled_by_client':
-        return 'Cancelled';
-      default:
-        return status;
-    }
-  };
-
-  const renderBookingItem = ({item}) => {
-    if (
-      !item.bookingTime ||
-      !item.bookingTime.startTime ||
-      !item.bookingTime.endTime
-    ) {
-      return (
-        <View style={styles.bookingCard}>
-          <Text style={styles.errorText}>Invalid booking data</Text>
-        </View>
+    if (booking.status === 'pending_confirmation') {
+      buttons.push(
+        <ButtonComponent
+          key="reject"
+          text="Từ chối"
+          type="ghost"
+          size="sm"
+          textColor={appColors.danger}
+          icon={<CloseCircle size={16} color={appColors.danger} />}
+          disable={busy}
+          onPress={() => setReasonAction({type: 'reject', bookingId: booking._id})}
+        />,
+        <ButtonComponent
+          key="confirm"
+          text="Xác nhận"
+          type="primary"
+          size="sm"
+          icon={<TickCircle size={16} color={appColors.white} />}
+          isLoading={busy}
+          onPress={() => confirmBooking(booking)}
+        />,
+      );
+    } else if (booking.status === 'confirmed' && isPast(booking.bookingTime?.endTime)) {
+      buttons.push(
+        <ButtonComponent
+          key="complete"
+          text="Hoàn thành"
+          type="primary"
+          size="sm"
+          icon={<TickCircle size={16} color={appColors.white} />}
+          isLoading={busy}
+          onPress={() => completeBooking(booking)}
+        />,
+      );
+    } else if (booking.status === 'confirmed' && !isPast(booking.bookingTime?.startTime)) {
+      buttons.push(
+        <ButtonComponent
+          key="cancel"
+          text="Hủy buổi"
+          type="ghost"
+          size="sm"
+          textColor={appColors.danger}
+          icon={<CloseCircle size={16} color={appColors.danger} />}
+          onPress={() => setReasonAction({type: 'cancel', bookingId: booking._id})}
+        />,
       );
     }
-
-    const startTimeStr = item.bookingTime.startTime;
-    const endTimeStr = item.bookingTime.endTime;
-
-    // Check if time strings are valid
-    if (typeof startTimeStr !== 'string' || typeof endTimeStr !== 'string') {
-      return (
-        <View style={styles.bookingCard}>
-          <Text style={styles.errorText}>Invalid time format</Text>
-        </View>
+    if (booking.client?._id && ['pending_confirmation', 'confirmed'].includes(booking.status)) {
+      buttons.push(
+        <ButtonComponent
+          key="chat"
+          text="Nhắn tin"
+          type="outline"
+          size="sm"
+          icon={<MessageText1 size={16} color={appColors.primary} />}
+          onPress={() => openChat(booking.client)}
+        />,
       );
     }
+    return buttons.length ? buttons : null;
+  };
 
-    const canConfirmOrReject = item.status === 'pending_confirmation';
-    const canMarkCompleted =
-      item.status === 'confirmed' && dayjs(endTimeStr).isBefore(dayjs());
-
+  const renderContent = () => {
+    if (status === 'loading') {
+      return <StateView type="loading" title="Đang tải lịch đặt..." />;
+    }
+    if (status === 'error') {
+      return <StateView type="error" message={error} onAction={() => load()} />;
+    }
     return (
-      <View style={styles.bookingCard}>
-        <View style={styles.bookingHeader}>
-          <View style={styles.clientInfo}>
-            <Text style={styles.clientName}>
-              {item.client?.username || 'Client'}
-            </Text>
-            <Text style={styles.clientEmail}>{item.client?.email || ''}</Text>
-          </View>
-          <View
-            style={[
-              styles.statusBadge,
-              {backgroundColor: getStatusColor(item.status)},
-            ]}>
-            <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.bookingDetails}>
-          <View style={styles.detailRow}>
-            <MaterialIcons name="schedule" size={16} color={appColors.text2} />
-            <Text style={styles.detailText}>
-              {timeUtils.formatToShortDate(startTimeStr)} • {timeUtils.formatToVietnameseTime(startTimeStr)} -{' '}
-              {timeUtils.formatToVietnameseTime(endTimeStr)}
-            </Text>
-          </View>
-
-          <View style={styles.detailRow}>
-            <MaterialIcons
-              name="attach-money"
-              size={16}
-              color={appColors.text2}
-            />
-            <Text style={styles.detailText}>
-              {item.priceAtBooking?.toLocaleString() || '0'} VNĐ
-            </Text>
-          </View>
-
-          {item.notesFromClient && (
-            <View style={styles.detailRow}>
-              <MaterialIcons name="note" size={16} color={appColors.text2} />
-              <Text style={styles.detailText}>{item.notesFromClient}</Text>
-            </View>
-          )}
-        </View>
-
-        {(canConfirmOrReject || canMarkCompleted || item.client) && (
-          <View style={styles.actionButtons}>
-            {canConfirmOrReject && (
-              <>
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.rejectButton]}
-                  onPress={() => handleRejectBooking(item._id)}>
-                  <MaterialIcons
-                    name="close"
-                    size={16}
-                    color={appColors.white}
-                  />
-                  <Text style={styles.actionButtonText}>Reject</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.confirmButton]}
-                  onPress={() => handleConfirmBooking(item._id)}>
-                  <MaterialIcons
-                    name="check"
-                    size={16}
-                    color={appColors.white}
-                  />
-                  <Text style={styles.actionButtonText}>Confirm</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {canMarkCompleted && (
-              <TouchableOpacity
-                style={[styles.actionButton, styles.completeButton]}
-                onPress={() => handleMarkCompleted(item._id)}>
-                <MaterialIcons
-                  name="done-all"
-                  size={16}
-                  color={appColors.white}
-                />
-                <Text style={styles.actionButtonText}>Complete</Text>
-              </TouchableOpacity>
-            )}
-
-            {item.client && (
-              <TouchableOpacity
-                style={[styles.actionButton, styles.chatButton]}
-                onPress={() => handleStartChat(item.client._id)}>
-                <RowComponent justify="center">
-                  <MaterialIcons
-                    name="chat"
-                    size={16}
-                    color={appColors.white}
-                  />
-                  <Text style={styles.actionButtonText}> Chat</Text>
-                </RowComponent>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  const filterOptions = [
-    {key: 'all', label: 'All', count: bookings.length},
-    {
-      key: 'pending',
-      label: 'Pending',
-      count: bookings.filter(b => b.status === 'pending_confirmation').length,
-    },
-    {
-      key: 'confirmed',
-      label: 'Confirmed',
-      count: bookings.filter(b => b.status === 'confirmed').length,
-    },
-    {
-      key: 'completed',
-      label: 'Completed',
-      count: bookings.filter(b => b.status === 'completed').length,
-    },
-  ];
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <MaterialIcons name="event-busy" size={80} color={appColors.text2} />
-      <Text style={styles.emptyTitle}>No bookings yet</Text>
-      <Text style={styles.emptySubtitle}>
-        {filter === 'pending'
-          ? 'No pending bookings to review'
-          : 'Your bookings will appear here'}
-      </Text>
-    </View>
-  );
-
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Bookings</Text>
-      </View>
-
-      <View style={styles.filterContainer}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={filterOptions}
-          keyExtractor={item => item.key}
-          renderItem={({item}) => (
-            <TouchableOpacity
-              style={[
-                styles.filterButton,
-                filter === item.key && styles.filterButtonActive,
-              ]}
-              onPress={() => setFilter(item.key)}>
-              <Text
-                style={[
-                  styles.filterText,
-                  filter === item.key && styles.filterTextActive,
-                ]}>
-                {item.label} ({item.count})
-              </Text>
-            </TouchableOpacity>
-          )}
-        />
-      </View>
-
       <FlatList
-        data={bookings}
+        data={grouped[activeGroup]}
         keyExtractor={item => item._id}
-        renderItem={renderBookingItem}
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
+        renderItem={({item}) => (
+          <BookingCard
+            booking={item}
+            person={item.client}
+            personSubtitle={item.client?.email}
+            reasonLabel={item.status === 'cancelled_by_client' ? 'Lý do học viên hủy' : 'Lý do của bạn'}
+            actions={renderActions(item)}
+          />
+        )}
+        contentContainerStyle={styles.list}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={() => fetchBookings(true)}
+            onRefresh={() => load({refresh: true})}
+            colors={[appColors.primary]}
+            tintColor={appColors.primary}
           />
         }
-        ListEmptyComponent={!loading && renderEmptyState}
-        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <StateView
+            icon={<Calendar size={30} color={appColors.primary} />}
+            title="Trống"
+            message={activeConfig?.empty}
+          />
+        }
       />
+    );
+  };
 
-      <LoadingModal visible={loading} />
-    </SafeAreaView>
+  return (
+    <View style={styles.container}>
+      <ScreenHeader title="Lịch đặt" />
+      <View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.groups}>
+          {GROUPS.map(item => (
+            <ChipComponent
+              key={item.key}
+              label={`${item.label} (${grouped[item.key]?.length || 0})`}
+              selected={activeGroup === item.key}
+              onPress={() => setGroup(item.key)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+      <View style={styles.flex}>{renderContent()}</View>
+
+      <ReasonModal
+        visible={!!activeReasonAction}
+        title={activeReasonAction?.title}
+        message={activeReasonAction?.message}
+        confirmLabel={activeReasonAction?.confirmLabel}
+        required={activeReasonAction?.required}
+        onSubmit={submitReasonAction}
+        onClose={() => setReasonAction(null)}
+      />
+    </View>
   );
 };
 
@@ -415,175 +312,19 @@ export default PTBookingsScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.white,
+    backgroundColor: appColors.background,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: appColors.primary,
-    height: 140,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+  flex: {
+    flex: 1,
   },
-  title: {
-    fontSize: 18,
-    fontFamily: fontFamilies.semiBold,
-    color: appColors.white,
-    marginTop: 20,
-  },
-  filterContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: appColors.gray5,
-  },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: appColors.white,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: appColors.gray4,
-  },
-  filterButtonActive: {
-    backgroundColor: appColors.primary,
-    borderColor: appColors.primary,
-  },
-  filterText: {
-    fontSize: 14,
-    color: appColors.text,
-    fontWeight: '500',
-  },
-  filterTextActive: {
-    color: appColors.white,
+  groups: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   list: {
-    flex: 1,
-  },
-  listContent: {
-    padding: 16,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
     flexGrow: 1,
-  },
-  bookingCard: {
-    backgroundColor: appColors.white,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: appColors.black,
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: appColors.gray5,
-  },
-  bookingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  clientInfo: {
-    flex: 1,
-  },
-  clientName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: appColors.text,
-    marginBottom: 2,
-  },
-  clientEmail: {
-    fontSize: 12,
-    color: appColors.text2,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: appColors.white,
-  },
-  bookingDetails: {
-    marginBottom: 12,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  detailText: {
-    fontSize: 14,
-    color: appColors.text,
-    marginLeft: 8,
-    flex: 1,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 4,
-  },
-  confirmButton: {
-    backgroundColor: appColors.success,
-  },
-  rejectButton: {
-    backgroundColor: appColors.danger,
-  },
-  completeButton: {
-    backgroundColor: appColors.primary,
-  },
-  chatButton: {
-    backgroundColor: appColors.primary,
-    shadowColor: appColors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: appColors.white,
-    marginLeft: 4,
-  },
-  errorText: {
-    fontSize: 14,
-    color: appColors.danger,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: appColors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: appColors.text2,
-    textAlign: 'center',
-    lineHeight: 20,
   },
 });

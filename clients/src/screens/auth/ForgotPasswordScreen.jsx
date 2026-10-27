@@ -1,130 +1,161 @@
-import {
-  StyleSheet,
-  Text,
-  View,
-  SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
-import React from 'react';
-import {globalStyles} from '../../styles/globalStyles';
-import appColors from '../../constants/appColors';
-import {TextComponent, InputComponent, ButtonComponent} from '../../components';
-import {fontFamilies} from '../../constants/fontFamilies';
-import {ArrowLeft} from 'iconsax-react-native';
-import {useState} from 'react';
-import {Validate} from '../../utils/validate';
-import {LoadingModal} from '../../modals';
+import React, {useState} from 'react';
+import {Alert} from 'react-native';
+import {Key, Lock, Sms} from 'iconsax-react-native';
+import {ButtonComponent, InputComponent, RowComponent} from '../../components';
+import AuthLayout, {FormError} from './components/AuthLayout';
 import authApi from '../../apis/authApi';
+import {MIN_PASSWORD_LENGTH, Validate} from '../../utils/validate';
+import appColors from '../../constants/appColors';
+import {fontFamilies} from '../../constants/fontFamilies';
 
+// Two steps: request a code by email, then submit code + new password.
 const ForgotPasswordScreen = ({navigation}) => {
+  const [step, setStep] = useState('email');
   const [email, setEmail] = useState('');
-  const [isDisable, setIsDisable] = useState(false);
+  const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleCheckEmail = () => {
-    const isValidEmail = Validate.email(email);
-    setIsDisable(!isValidEmail);
-    setErrorMessage(isValidEmail ? '' : 'Invalid email format');
-  };
+  const trimmedEmail = email.trim();
+  const passwordError =
+    newPassword && !Validate.password(newPassword)
+      ? `Mật khẩu cần ít nhất ${MIN_PASSWORD_LENGTH} ký tự`
+      : '';
+  const confirmError =
+    confirmPassword && confirmPassword !== newPassword ? 'Mật khẩu xác nhận không khớp' : '';
+  const canReset =
+    /^\d{4}$/.test(code) &&
+    Validate.password(newPassword) &&
+    confirmPassword === newPassword;
 
-  const handleForgotPassword = async () => {
-    const api = '/forgotPassword';
+  const handleRequestCode = async () => {
+    if (!Validate.email(trimmedEmail)) {
+      setErrorMessage('Email không hợp lệ');
+      return;
+    }
+    setErrorMessage('');
     setIsLoading(true);
     try {
-      const res = await authApi.HandleAuthentication(
-        api,
-        {email},
-        'post',
-      );
-      console.log(res);
-      Alert.alert('Success', 'Please check your email for the new password', [
-        {text: 'OK', onPress: () => navigation.replace('LoginScreen')},
-      ]);
-      setIsLoading(false);
+      await authApi.HandleAuthentication('/forgotPassword', {email: trimmedEmail}, 'post');
+      setStep('reset');
     } catch (error) {
-      console.log(error);
-      Alert.alert('Can not create new password', error.message);
+      setErrorMessage(error.message);
+    } finally {
       setIsLoading(false);
     }
   };
 
+  const handleResetPassword = async () => {
+    setErrorMessage('');
+    setIsLoading(true);
+    try {
+      await authApi.HandleAuthentication(
+        '/resetPassword',
+        {email: trimmedEmail, code, newPassword},
+        'post',
+      );
+      Alert.alert('Đổi mật khẩu thành công', 'Hãy đăng nhập bằng mật khẩu mới.', [
+        {text: 'Đăng nhập', onPress: () => navigation.navigate('LoginScreen')},
+      ]);
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const isEmailStep = step === 'email';
+
   return (
-    <SafeAreaView
-      style={[
-        globalStyles.container,
-        {backgroundColor: appColors.black, height: '100%'},
-      ]}>
-      <TouchableOpacity
-        onPress={() => navigation.goBack()}
-        style={{
-          position: 'absolute',
-          top: 50,
-          left: 20,
-          zIndex: 10,
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          backgroundColor: 'rgba(255, 255, 255, 0.2)',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}>
-        <ArrowLeft size={22} color={appColors.white} />
-      </TouchableOpacity>
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 30,
-        }}>
-        <TextComponent
-          text="Reset Password"
-          styles={{
-            color: appColors.primary,
-            fontSize: 24,
-            fontFamily: fontFamilies.bold,
-            padding: 20,
-            alignSelf: 'center',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        />
-        <TextComponent
-          text="Enter your email to reset your password"
-          styles={{
-            color: appColors.white,
-            fontSize: 14,
-            fontFamily: fontFamilies.regular,
-            padding: 20,
-            alignSelf: 'center',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        />
+    <AuthLayout
+      title={isEmailStep ? 'Quên mật khẩu' : 'Đặt mật khẩu mới'}
+      subtitle={
+        isEmailStep
+          ? 'Nhập email đã đăng ký, chúng tôi sẽ gửi mã để đặt lại mật khẩu.'
+          : `Nếu ${trimmedEmail} đã đăng ký, mã 4 số đã được gửi tới email này.`
+      }
+      onBack={() => {
+        setErrorMessage('');
+        if (isEmailStep) {
+          navigation.goBack();
+        } else {
+          setStep('email');
+        }
+      }}>
+      {isEmailStep ? (
         <InputComponent
+          label="Email"
           value={email}
           onChange={setEmail}
-          placeholder="Email"
-          secureTextEntry
+          placeholder="ban@email.com"
+          type="email-address"
+          autoComplete="email"
+          returnKeyType="send"
+          onSubmitEditing={handleRequestCode}
+          prefix={<Sms size={20} color={appColors.textMuted} />}
           allowClear
-          onEnd={handleCheckEmail}
         />
-        <ButtonComponent
-          disabled={!email}
-          text="Reset Password"
-          type="primary"
-          onPress={handleForgotPassword}
-          styles={{width: '100%', marginTop: 30}}
-        />
-      </View>
-      <LoadingModal visible={isLoading} />
-    </SafeAreaView>
+      ) : (
+        <>
+          <InputComponent
+            label="Mã xác minh"
+            value={code}
+            onChange={val => setCode(val.replace(/[^0-9]/g, ''))}
+            placeholder="4 chữ số"
+            type="number-pad"
+            textContentType="oneTimeCode"
+            maxLength={4}
+            prefix={<Key size={20} color={appColors.textMuted} />}
+          />
+          <InputComponent
+            label="Mật khẩu mới"
+            value={newPassword}
+            onChange={setNewPassword}
+            placeholder="Mật khẩu mới"
+            textContentType="newPassword"
+            helperText={`Tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`}
+            error={passwordError}
+            prefix={<Lock size={20} color={appColors.textMuted} />}
+            isPassword
+          />
+          <InputComponent
+            label="Nhập lại mật khẩu mới"
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            placeholder="Nhập lại mật khẩu"
+            textContentType="newPassword"
+            error={confirmError}
+            prefix={<Lock size={20} color={appColors.textMuted} />}
+            isPassword
+          />
+        </>
+      )}
+
+      <FormError message={errorMessage} />
+
+      <ButtonComponent
+        text={isEmailStep ? 'Gửi mã' : 'Đổi mật khẩu'}
+        type="primary"
+        size="lg"
+        disable={isEmailStep ? !trimmedEmail : !canReset}
+        isLoading={isLoading}
+        onPress={isEmailStep ? handleRequestCode : handleResetPassword}
+      />
+      {!isEmailStep ? (
+        <RowComponent justify="center">
+          <ButtonComponent
+            type="link"
+            text="Gửi lại mã"
+            textFont={fontFamilies.semiBold}
+            disable={isLoading}
+            onPress={handleRequestCode}
+          />
+        </RowComponent>
+      ) : null}
+    </AuthLayout>
   );
 };
 
 export default ForgotPasswordScreen;
-
-const styles = StyleSheet.create({});

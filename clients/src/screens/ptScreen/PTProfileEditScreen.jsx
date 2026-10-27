@@ -1,310 +1,243 @@
-import React, {useState, useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
+import {Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View} from 'react-native';
+import {Briefcase, Location, Moneys} from 'iconsax-react-native';
 import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  StatusBar,
-} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import {
-  User,
-  MapPin,
-  Clock,
-  DollarSign,
-  Save,
-  ArrowLeft,
-} from 'lucide-react-native';
-import {InputComponent, ButtonComponent} from '../../components';
-import {SectionComponent, RowComponent} from '../../components';
-import LoadingModal from '../../modals/LoadingModal';
+  ButtonComponent,
+  ChipComponent,
+  InputComponent,
+  ScreenHeader,
+  StateView,
+  TextComponent,
+} from '../../components';
+import ptApi from '../../apis/ptApi';
 import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
-import ptApi from '../../apis/ptApi';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {SPECIALIZATIONS} from '../../constants/labels';
+import {radius, shadow, spacing} from '../../constants/theme';
+import {formatCurrency} from '../../utils/format';
 
-const PTProfileEditScreen = () => {
-  const navigation = useNavigation();
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [isNewProfile, setIsNewProfile] = useState(true);
+// Same limits as the server's PTProfile model.
+const MIN_RATE = 10000;
+const MAX_RATE = 1000000;
+const BIO_MIN = 20;
+const BIO_MAX = 500;
 
-  // Form data
-  const [formData, setFormData] = useState({
+const validate = form => {
+  const rate = Number(form.hourlyRate);
+  return {
+    specializations: form.specializations.length === 0 ? 'Chọn ít nhất một chuyên môn' : '',
+    experienceYears: form.experienceYears === '' ? 'Nhập số năm kinh nghiệm' : '',
+    hourlyRate:
+      !form.hourlyRate || rate < MIN_RATE || rate > MAX_RATE
+        ? `Giá từ ${formatCurrency(MIN_RATE)} đến ${formatCurrency(MAX_RATE)}`
+        : '',
+    city: !form.city.trim() ? 'Nhập tỉnh/thành phố' : '',
+    district: !form.district.trim() ? 'Nhập quận/huyện' : '',
+    bio: form.bio.trim().length < BIO_MIN ? `Giới thiệu cần ít nhất ${BIO_MIN} ký tự` : '',
+  };
+};
+
+const Section = ({title, subtitle, children}) => (
+  <View style={styles.card}>
+    <View>
+      <TextComponent text={title} size={16} font={fontFamilies.semiBold} />
+      {subtitle ? <TextComponent text={subtitle} size={13} color={appColors.textMuted} /> : null}
+    </View>
+    {children}
+  </View>
+);
+
+const PTProfileEditScreen = ({navigation}) => {
+  const [status, setStatus] = useState('loading');
+  const [isNew, setIsNew] = useState(true);
+  const [form, setForm] = useState({
     specializations: [],
     experienceYears: '',
-    bio: '',
     hourlyRate: '',
-    location: {
-      city: '',
-      district: '',
-    },
+    city: '',
+    district: '',
+    bio: '',
   });
-
-  const specializationOptions = [
-    {label: 'Weight Loss', value: 'weight_loss'},
-    {label: 'Muscle Building', value: 'muscle_building'},
-    {label: 'Cardio Training', value: 'cardio'},
-    {label: 'Yoga', value: 'yoga'},
-    {label: 'Strength Training', value: 'strength'},
-    {label: 'General Training', value: 'general'},
-    {label: 'Functional Training', value: 'functional_training'},
-    {label: 'Rehabilitation', value: 'rehabilitation'},
-    {label: 'Nutrition Coaching', value: 'nutrition'},
-    {label: 'Pilates', value: 'pilates'},
-  ];
+  const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    loadProfile();
+    ptApi
+      .getProfile()
+      .then(res => {
+        const profile = res.data?.data;
+        if (profile?._id) {
+          setIsNew(false);
+          setForm({
+            specializations: profile.specializations || [],
+            experienceYears: String(profile.experienceYears ?? ''),
+            hourlyRate: profile.hourlyRate ? String(profile.hourlyRate) : '',
+            city: profile.location?.city || '',
+            district: profile.location?.district || '',
+            bio: profile.bio || '',
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setStatus('ready'));
   }, []);
 
-  const loadProfile = async () => {
+  const errors = validate(form);
+  const hasErrors = Object.values(errors).some(Boolean);
+  const errorFor = key => (submitted ? errors[key] : '');
+  const setField = (key, value) => setForm(prev => ({...prev, [key]: value}));
+
+  const toggleSpec = key =>
+    setField(
+      'specializations',
+      form.specializations.includes(key)
+        ? form.specializations.filter(s => s !== key)
+        : [...form.specializations, key],
+    );
+
+  const save = async () => {
+    setSubmitted(true);
+    if (hasErrors) {
+      return;
+    }
+    setError('');
+    setSaving(true);
     try {
-      setLoading(true);
-      const response = await ptApi.getProfile();
-      const profile = response.data.data || response.data ; 
-      if (profile && profile._id) {
-        setIsNewProfile(false);
-        setFormData({
-          specializations: profile.specializations || [],
-          experienceYears: profile.experienceYears?.toString() || '',
-          bio: profile.bio || '',
-          hourlyRate: profile.hourlyRate?.toString() || '',
-          location: profile.location || {city: '', district: ''},
-        });
-      } else {
-        setIsNewProfile(true);
+      await ptApi.updateProfile({
+        specializations: form.specializations,
+        experienceYears: Number(form.experienceYears),
+        hourlyRate: Number(form.hourlyRate),
+        location: {city: form.city.trim(), district: form.district.trim()},
+        bio: form.bio.trim(),
+      });
+      if (isNew) {
+        Alert.alert('Hồ sơ đã sẵn sàng 🎉', 'Học viên giờ đã có thể tìm thấy và đặt lịch với bạn.');
       }
-    } catch (error) {
-      console.log('No existing profile, creating new one');
-      setIsNewProfile(true); // New profile
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateFormData = (field, value) => {
-    if (field === 'location.city' || field === 'location.district') {
-      const locationField = field.split('.')[1];
-      setFormData(prev => ({
-        ...prev,
-        location: {
-          ...prev.location,
-          [locationField]: value,
-        },
-      }));
-    } else {
-      setFormData(prev => ({...prev, [field]: value}));
-    }
-  };
-
-  const toggleSpecialization = specValue => {
-    setFormData(prev => ({
-      ...prev,
-      specializations: prev.specializations.includes(specValue)
-        ? prev.specializations.filter(s => s !== specValue)
-        : [...prev.specializations, specValue],
-    }));
-  };
-
-  const validateForm = () => {
-    if (formData.specializations.length === 0) {
-      Alert.alert('Error', 'Please select at least one specialization');
-      return false;
-    }
-    if (!formData.experienceYears || parseInt(formData.experienceYears) < 0) {
-      Alert.alert('Error', 'Please enter valid experience in years');
-      return false;
-    }
-    if (!formData.bio || formData.bio.trim().length < 20) {
-      Alert.alert('Error', 'Please provide a bio (at least 20 characters)');
-      return false;
-    }
-    const rate = parseFloat(formData.hourlyRate);
-    if (!formData.hourlyRate || rate < 10000 || rate > 1000000) {
-      Alert.alert(
-        'Error',
-        'Hourly rate must be between 10,000 and 1,000,000 VND',
-      );
-      return false;
-    }
-    if (!formData.location.city || !formData.location.district) {
-      Alert.alert('Error', 'Please provide your city and district');
-      return false;
-    }
-    return true;
-  };
-
-  const handleSave = async () => {
-    if (!validateForm()) return;
-
-    try {
-      setSaving(true);
-
-      const profileData = {
-        specializations: formData.specializations,
-        experienceYears: parseInt(formData.experienceYears),
-        bio: formData.bio,
-        hourlyRate: parseFloat(formData.hourlyRate),
-        location: formData.location,
-      };
-
-      const response = await ptApi.updateProfile(profileData);
-
-      console.log('API Response:', response.data);
-
-      if (response.data && (response.data.success || response.data.data)) {
-        const successMessage = isNewProfile
-          ? 'Profile created successfully! You can now receive bookings.'
-          : 'Profile updated successfully!';
-
-        Alert.alert('Success', successMessage, [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigation.goBack();
-            },
-          },
-        ]);
+      // When this form is the first screen (new profile) there is nothing to
+      // go back to, so move on to the profile instead.
+      if (navigation.canGoBack()) {
+        navigation.goBack();
       } else {
-        Alert.alert('Error', 'Failed to save profile. Please try again.');
+        navigation.replace('PTProfileDisplay');
       }
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      Alert.alert('Error', 'Failed to save profile. Please try again.');
+    } catch (err) {
+      setError(err.message);
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return <LoadingModal visible={loading} />;
-  }
-
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
+    <View style={styles.container}>
+      <ScreenHeader
+        title={isNew ? 'Tạo hồ sơ huấn luyện viên' : 'Sửa hồ sơ huấn luyện viên'}
+        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      />
+      {status === 'loading' ? (
+        <StateView type="loading" />
+      ) : (
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            {isNew ? (
+              <View style={styles.intro}>
+                <TextComponent
+                  text="Hoàn thiện các thông tin dưới đây để xuất hiện trong kết quả tìm kiếm của học viên."
+                  size={14}
+                  color={appColors.primaryDark}
+                />
+              </View>
+            ) : null}
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}>
-          <ArrowLeft size={24} color={appColors.white} strokeWidth={2} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {isNewProfile ? 'Setup Your Profile' : 'Edit Profile'}
-        </Text>
-        <View style={styles.placeholder} />
-      </View>
+            <Section title="Chuyên môn" subtitle="Chọn các lĩnh vực bạn có thể hướng dẫn">
+              <View style={styles.wrap}>
+                {Object.entries(SPECIALIZATIONS).map(([key, label]) => (
+                  <ChipComponent
+                    key={key}
+                    label={label}
+                    selected={form.specializations.includes(key)}
+                    onPress={() => toggleSpec(key)}
+                  />
+                ))}
+              </View>
+              {errorFor('specializations') ? (
+                <TextComponent text={errors.specializations} size={12} color={appColors.danger} />
+              ) : null}
+            </Section>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        bounces={true}>
-        {/* Specialization */}
-        <SectionComponent>
-          <Text style={styles.sectionTitle}>Specialization</Text>
-          <Text style={styles.sectionSubtitle}>
-            Select your areas of expertise
-          </Text>
-          <View style={styles.specializationGrid}>
-            {specializationOptions.map(spec => (
-              <TouchableOpacity
-                key={spec.value}
-                style={[
-                  styles.specializationChip,
-                  formData.specializations.includes(spec.value) &&
-                    styles.specializationChipSelected,
-                ]}
-                onPress={() => toggleSpecialization(spec.value)}>
-                <Text
-                  style={[
-                    styles.specializationText,
-                    formData.specializations.includes(spec.value) &&
-                      styles.specializationTextSelected,
-                  ]}>
-                  {spec.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={styles.sectionTitle}>Experience</Text>
-          <InputComponent
-            value={formData.experienceYears}
-            onChangeText={text => updateFormData('experienceYears', text)}
-            placeholder="Years of experience"
-            keyboardType="numeric"
-            prefix={<User size={20} color={appColors.gray} />}
-          />
-          <Text style={styles.sectionTitle}>Hourly Rate</Text>
-          <InputComponent
-            value={formData.hourlyRate}
-            onChangeText={text => updateFormData('hourlyRate', text)}
-            placeholder="Rate per hour (VND)"
-            keyboardType="numeric"
-            prefix={<DollarSign size={20} color={appColors.gray} />}
-          />
-          <Text style={styles.sectionTitle}>Location</Text>
-          <InputComponent
-            value={formData.location.city}
-            onChangeText={text => updateFormData('location.city', text)}
-            placeholder="City"
-            prefix={<MapPin size={20} color={appColors.gray} />}
-          />
-          <View style={{marginTop: 12}} />
-          <InputComponent
-            value={formData.location.district}
-            onChangeText={text => updateFormData('location.district', text)}
-            placeholder="District"
-            prefix={<MapPin size={20} color={appColors.gray} />}
-          />
-        </SectionComponent>
+            <Section title="Kinh nghiệm & giá">
+              <InputComponent
+                label="Số năm kinh nghiệm"
+                value={form.experienceYears}
+                onChange={val => setField('experienceYears', val.replace(/[^0-9]/g, '').slice(0, 2))}
+                type="number-pad"
+                placeholder="VD: 3"
+                error={errorFor('experienceYears')}
+                prefix={<Briefcase size={20} color={appColors.textMuted} />}
+              />
+              <InputComponent
+                label="Giá mỗi giờ (₫)"
+                value={form.hourlyRate}
+                onChange={val => setField('hourlyRate', val.replace(/[^0-9]/g, ''))}
+                type="number-pad"
+                placeholder="VD: 300000"
+                helperText={form.hourlyRate ? formatCurrency(form.hourlyRate) : 'Giá hiển thị cho học viên'}
+                error={errorFor('hourlyRate')}
+                prefix={<Moneys size={20} color={appColors.textMuted} />}
+              />
+            </Section>
 
-        {/* Description */}
-        <SectionComponent>
-          <Text style={styles.sectionTitle}>About You</Text>
-          <Text style={styles.sectionSubtitle}>
-            Describe your training philosophy and approach (min. 50 characters)
-          </Text>
-          <InputComponent
-            value={formData.bio}
-            onChangeText={text => updateFormData('bio', text)}
-            placeholder="Tell clients about your training style, achievements, and what makes you unique..."
-            multiline
-            numberOfLines={1}
-            style={styles.textArea}
-          />
-          <Text style={styles.characterCount}>
-            {formData.bio.length}/50 characters minimum
-          </Text>
-        </SectionComponent>
+            <Section title="Khu vực dạy">
+              <InputComponent
+                label="Tỉnh / thành phố"
+                value={form.city}
+                onChange={val => setField('city', val)}
+                placeholder="VD: Hà Nội"
+                autoCapitalize="words"
+                error={errorFor('city')}
+                prefix={<Location size={20} color={appColors.textMuted} />}
+              />
+              <InputComponent
+                label="Quận / huyện"
+                value={form.district}
+                onChange={val => setField('district', val)}
+                placeholder="VD: Cầu Giấy"
+                autoCapitalize="words"
+                error={errorFor('district')}
+                prefix={<Location size={20} color={appColors.textMuted} />}
+              />
+            </Section>
 
-        {/* Save Button */}
-        <SectionComponent>
-          <ButtonComponent
-            title
-            onPress={handleSave}
-            loading={saving}
-            icon={<Save size={20} color={appColors.white} strokeWidth={2} />}
-            type="primary"
-            text={isNewProfile ? 'Create Profile & Go Live' : 'Save Changes'}
-          />
-          {isNewProfile && (
-            <Text style={styles.createProfileHint}>
-              Once you create your profile, you'll appear in client searches and
-              can start receiving bookings!
-            </Text>
-          )}
-        </SectionComponent>
+            <Section title="Giới thiệu" subtitle="Phong cách huấn luyện, thành tích, điều làm bạn khác biệt">
+              <InputComponent
+                value={form.bio}
+                onChange={val => setField('bio', val)}
+                placeholder="VD: 5 năm kinh nghiệm giúp học viên giảm mỡ và tăng sức bền..."
+                multiline
+                maxLength={BIO_MAX}
+                autoCapitalize="sentences"
+                error={errorFor('bio')}
+                helperText={`${form.bio.trim().length}/${BIO_MAX} ký tự (tối thiểu ${BIO_MIN})`}
+              />
+            </Section>
 
-        <View style={{height: 120}} />
-      </ScrollView>
-    </SafeAreaView>
+            {error ? (
+              <View style={styles.errorBox}>
+                <TextComponent text={error} size={13} color={appColors.danger} />
+              </View>
+            ) : null}
+
+            <ButtonComponent
+              text={isNew ? 'Tạo hồ sơ' : 'Lưu thay đổi'}
+              type="primary"
+              size="lg"
+              onPress={save}
+              isLoading={saving}
+            />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      )}
+    </View>
   );
 };
 
@@ -313,92 +246,35 @@ export default PTProfileEditScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: appColors.white,
+    backgroundColor: appColors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: appColors.primary,
-    borderBottomWidth: 1,
-    borderBottomColor: appColors.primary,
-    height: 140,
-    borderRadius: 20,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: fontFamilies.semiBold,
-    color: appColors.white,
-    marginTop: 20,
-  },
-  placeholder: {
-    width: 40,
-  },
-  scrollView: {
+  flex: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 120,
-    flexGrow: 1,
+  scroll: {
+    padding: spacing.lg,
+    gap: spacing.lg,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: fontFamilies.semiBold,
-    color: appColors.text,
-    marginBottom: 4,
+  intro: {
+    backgroundColor: appColors.primarySoft,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
-  sectionSubtitle: {
-    fontSize: 14,
-    fontFamily: fontFamilies.regular,
-    color: appColors.gray,
-    marginBottom: 16,
-    lineHeight: 20,
+  card: {
+    backgroundColor: appColors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadow.sm,
   },
-  specializationGrid: {
+  wrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.sm,
   },
-  specializationChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: appColors.gray4,
-    backgroundColor: appColors.white,
-    marginBottom: 8,
-  },
-  specializationChipSelected: {
-    backgroundColor: appColors.primary,
-    borderColor: appColors.primary,
-  },
-  specializationText: {
-    fontSize: 14,
-    fontFamily: fontFamilies.medium,
-    color: appColors.text,
-  },
-  specializationTextSelected: {
-    color: appColors.white,
-  },
-  characterCount: {
-    fontSize: 12,
-    fontFamily: fontFamilies.regular,
-    color: appColors.gray,
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  createProfileHint: {
-    fontSize: 14,
-    fontFamily: fontFamilies.regular,
-    color: appColors.gray,
-    textAlign: 'center',
-    marginTop: 12,
-    lineHeight: 20,
-    paddingHorizontal: 16,
+  errorBox: {
+    backgroundColor: appColors.dangerSoft,
+    borderRadius: radius.sm,
+    padding: spacing.md,
   },
 });

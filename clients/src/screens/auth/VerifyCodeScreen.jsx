@@ -1,270 +1,212 @@
-import {StyleSheet, Text, View, TextInput, SafeAreaView} from 'react-native';
-import React, {useEffect, useState} from 'react';
-import {useRef} from 'react';
-
-import appColors from '../../constants/appColors';
-
-import {LoadingModal} from '../../modals';
-import {
-  SectionComponent,
-  RowComponent,
-  SpaceComponent,
-  TextComponent,
-  ButtonComponent,
-} from '../../components';
-import authApi from '../../apis/authApi';
+import React, {useEffect, useRef, useState} from 'react';
+import {StyleSheet, TextInput, View} from 'react-native';
 import {useDispatch} from 'react-redux';
-import {addAuth} from '../../redux/reducers/authReducer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {appInfo} from '../../constants/appInfos';
+import {ButtonComponent, RowComponent, TextComponent} from '../../components';
+import AuthLayout, {FormError} from './components/AuthLayout';
+import authApi from '../../apis/authApi';
+import {addAuth} from '../../redux/reducers/authReducer';
+import appColors from '../../constants/appColors';
+import {fontFamilies} from '../../constants/fontFamilies';
+import {radius, spacing} from '../../constants/theme';
+
+const CODE_LENGTH = 4;
+const RESEND_SECONDS = 60;
+
+// "nguyenvana@gmail.com" -> "ng••••••@gmail.com"
+const maskEmail = email => {
+  const [name, domain] = String(email).split('@');
+  if (!domain) {
+    return email;
+  }
+  return `${name.slice(0, 2)}${'•'.repeat(Math.max(name.length - 2, 3))}@${domain}`;
+};
 
 const VerifyCodeScreen = ({navigation, route}) => {
-  const {code, email, password, username, dob, phoneNumber, role} =
-    route.params;
+  const {email, password, username, dob, phoneNumber, role} = route.params;
 
-  const [currentCode, setCurrentCode] = useState(code);
-  const [codeValues, setCodeValues] = useState(['']);
-  const [newCode, setNewCode] = useState(['']);
-  const [limit, setLimit] = useState(60);
+  const [digits, setDigits] = useState(Array(CODE_LENGTH).fill(''));
+  const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState(null);
-
+  const [isResending, setIsResending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [notice, setNotice] = useState('');
+  const inputs = useRef([]);
   const dispatch = useDispatch();
 
-  const ref1 = useRef(null);
-  const ref2 = useRef(null);
-  const ref3 = useRef(null);
-  const ref4 = useRef(null);
+  const code = digits.join('');
 
   useEffect(() => {
-    ref1.current.focus();
+    inputs.current[0]?.focus();
   }, []);
 
   useEffect(() => {
-    if (limit > 0) {
-      const interval = setInterval(() => {
-        setLimit(limit => limit - 1);
-      }, 1000);
-
-      return () => clearInterval(interval);
+    if (secondsLeft <= 0) {
+      return undefined;
     }
-  }, [limit]);
+    const timer = setTimeout(() => setSecondsLeft(s => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [secondsLeft]);
 
-  useEffect(() => {
-    let item = ``;
-    codeValues.forEach(val => (item += val));
-    setNewCode(item);
-  }, [codeValues]);
-
-  const handleChangeCode = (val, index) => {
-    const data = [...codeValues];
-    data[index] = val;
-    setCodeValues(data);
-  };
-
-  const handleResendVerifaction = async () => {
-    setCodeValues(['', '', '', '']);
-    setNewCode('');
-    const api = '/verification';
+  const submit = async fullCode => {
+    setErrorMessage('');
     setIsLoading(true);
     try {
       const res = await authApi.HandleAuthentication(
-        api,
-        {email},
+        '/register',
+        {email, password, username, dob, phoneNumber, role, code: fullCode},
         'post',
       );
-      setLimit(60);
-      setCurrentCode(res.data.data.verificationCode);
-    } catch {
-      console.log(`Error in resend verification ${error}`);
-    } finally {
+      const authData = res.data.data || res.data;
+      await AsyncStorage.setItem('auth', JSON.stringify(authData));
+      dispatch(addAuth(authData));
+    } catch (error) {
+      setErrorMessage(error.message);
+      setDigits(Array(CODE_LENGTH).fill(''));
+      inputs.current[0]?.focus();
       setIsLoading(false);
     }
   };
 
-  const handleVerification = async () => {
-    if (limit > 0) {
-      if (parseInt(newCode) !== parseInt(currentCode)) {
-        setErrorMessage('Code is not correct');
-      } else {
-        setIsLoading(true);
-
-        const api = '/register';
-
-        const data = {
-          email,
-          password,
-          username,
-          dob,
-          phoneNumber,
-          role,
-        };
-        try {
-          const res = await authApi.HandleAuthentication(
-            api,
-            data,
-            'post',
-          );
-          
-          // Extract the actual auth data from nested response
-          const authData = res.data.data || res.data;
-          
-          dispatch(addAuth(authData));
-          await AsyncStorage.setItem('auth', JSON.stringify(authData));
-          setIsLoading(false);
-        } catch (error) {
-          console.log(`Error in verification ${error}`);
-          const message =
-            error.response?.data?.message || 'An unexpected error occurred.';
-          setErrorMessage(message);
-          setIsLoading(false);
-        }
-      }
+  const handleChange = (text, index) => {
+    const clean = text.replace(/[^0-9]/g, '');
+    const next = [...digits];
+    if (clean.length > 1) {
+      // Pasted or autofilled code: spread it across the boxes.
+      clean
+        .slice(0, CODE_LENGTH - index)
+        .split('')
+        .forEach((digit, offset) => {
+          next[index + offset] = digit;
+        });
     } else {
-      setErrorMessage('Code expired, please resend');
+      next[index] = clean;
+    }
+    setDigits(next);
+    setErrorMessage('');
+
+    const firstEmpty = next.findIndex(d => !d);
+    if (firstEmpty === -1) {
+      inputs.current[CODE_LENGTH - 1]?.blur();
+      submit(next.join(''));
+    } else if (clean) {
+      inputs.current[Math.min(index + clean.length, firstEmpty)]?.focus();
+    }
+  };
+
+  const handleKeyPress = ({nativeEvent}, index) => {
+    if (nativeEvent.key === 'Backspace' && !digits[index] && index > 0) {
+      const next = [...digits];
+      next[index - 1] = '';
+      setDigits(next);
+      inputs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleResend = async () => {
+    setErrorMessage('');
+    setNotice('');
+    setIsResending(true);
+    try {
+      await authApi.HandleAuthentication('/verification', {email}, 'post');
+      setDigits(Array(CODE_LENGTH).fill(''));
+      setSecondsLeft(RESEND_SECONDS);
+      setNotice('Đã gửi mã mới. Vui lòng kiểm tra hộp thư (kể cả mục Spam).');
+      inputs.current[0]?.focus();
+    } catch (error) {
+      setErrorMessage(error.message);
+    } finally {
+      setIsResending(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container]}>
-      <View style={[styles.content]}>
-        <SectionComponent>
-          <TextComponent text="Verify Code" title color={appColors.primary} />
-          <TextComponent
-            text={`Please enter the code sent to ${email.replace(/.{1,5}/, m =>
-              '*'.repeat(m.length),
-            )}`}
-            color={appColors.white}
-            style={styles.subtitle}
-            fontSize={16}
+    <AuthLayout
+      title="Xác minh email"
+      subtitle={`Nhập mã ${CODE_LENGTH} số chúng tôi vừa gửi tới ${maskEmail(email)}.`}
+      onBack={() => navigation.goBack()}>
+      <View style={styles.codeRow}>
+        {digits.map((digit, index) => (
+          <TextInput
+            key={index}
+            ref={el => {
+              inputs.current[index] = el;
+            }}
+            value={digit}
+            onChangeText={text => handleChange(text, index)}
+            onKeyPress={event => handleKeyPress(event, index)}
+            keyboardType="number-pad"
+            textContentType="oneTimeCode"
+            autoComplete="sms-otp"
+            maxLength={index === 0 ? CODE_LENGTH : 1}
+            selectTextOnFocus
+            editable={!isLoading}
+            style={[styles.codeBox, digit && styles.codeBoxFilled, errorMessage && styles.codeBoxError]}
+            accessibilityLabel={`Chữ số thứ ${index + 1}`}
           />
-          <SpaceComponent height={20} />
-          <RowComponent justify="space-around">
-            <TextInput
-              ref={ref1}
-              style={[styles.input]}
-              maxLength={1}
-              onChangeText={val => {
-                val.length > 0 && ref2.current.focus();
-                handleChangeCode(val, 0);
-              }}
-              keyboardType="number-pad"
-              value={codeValues[0]}
-            />
-            <TextInput
-              ref={ref2}
-              onChangeText={val => {
-                handleChangeCode(val, 1);
-                val.length > 0 && val && ref3.current.focus();
-              }}
-              style={[styles.input]}
-              keyboardType="number-pad"
-              maxLength={1}
-              value={codeValues[1]}
-            />
-            <TextInput
-              ref={ref3}
-              onChangeText={val => {
-                handleChangeCode(val, 2);
-                val.length > 0 && val && ref4.current.focus();
-              }}
-              style={styles.input}
-              keyboardType="number-pad"
-              maxLength={1}
-              value={codeValues[2]}
-            />
-            <TextInput
-              ref={ref4}
-              onChangeText={val => {
-                handleChangeCode(val, 3);
-                // Remove immediate console.log since newCode hasn't updated yet
-                // The actual newCode will be logged in useEffect
-              }}
-              style={[styles.input]}
-              keyboardType="number-pad"
-              maxLength={1}
-              value={codeValues[3]}
-            />
-          </RowComponent>
-        </SectionComponent>
+        ))}
+      </View>
 
-        <SectionComponent>
-          <ButtonComponent
-            disable={newCode.length < 4}
-            onPress={handleVerification}
-            text="Continue"
-            type="primary"
-          />
-        </SectionComponent>
-        {errorMessage && (
+      <FormError message={errorMessage} />
+      {notice && !errorMessage ? (
+        <TextComponent text={notice} size={13} color={appColors.success} />
+      ) : null}
+
+      <ButtonComponent
+        text="Xác minh"
+        type="primary"
+        size="lg"
+        disable={code.length < CODE_LENGTH}
+        isLoading={isLoading}
+        onPress={() => submit(code)}
+      />
+
+      <RowComponent justify="center">
+        {secondsLeft > 0 ? (
           <TextComponent
-            flex={0}
-            text={errorMessage}
-            color={appColors.danger}
-            styles={{textAlign: 'center'}}
+            text={`Gửi lại mã sau 00:${String(secondsLeft).padStart(2, '0')}`}
+            size={13}
+            color={appColors.textMuted}
+          />
+        ) : (
+          <ButtonComponent
+            type="link"
+            text={isResending ? 'Đang gửi...' : 'Gửi lại mã'}
+            textFont={fontFamilies.semiBold}
+            disable={isResending}
+            onPress={handleResend}
           />
         )}
-        <SectionComponent>
-          {limit > 0 ? (
-            <RowComponent>
-              <TextComponent
-                text="Re-send code in "
-                flex={0}
-                color={appColors.white}
-              />
-              <TextComponent
-                text={`${Math.floor(limit / 60)
-                  .toString()
-                  .padStart(2, '0')}:${(limit % 60)
-                  .toString()
-                  .padStart(2, '0')}`}
-                flex={0}
-                color={appColors.primary}
-              />
-            </RowComponent>
-          ) : (
-            <ButtonComponent
-              type="link"
-              text="Resend email verification"
-              onPress={handleResendVerifaction}
-            />
-          )}
-        </SectionComponent>
-      </View>
-      <LoadingModal visible={isLoading} />
-    </SafeAreaView>
+      </RowComponent>
+    </AuthLayout>
   );
 };
 
 export default VerifyCodeScreen;
 
 const styles = StyleSheet.create({
-  container: {
+  codeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  codeBox: {
     flex: 1,
-    backgroundColor: appColors.black,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    alignItems: 'center',
-    width: '100%',
-    paddingHorizontal: 16,
-    paddingVertical: 40,
-  },
-  input: {
-    width: 55,
-    height: 55,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: appColors.gray2,
-    backgroundColor: appColors.white,
-    fontSize: 24,
-    fontWeight: 'bold',
+    height: 60,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: appColors.border,
     textAlign: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
+    fontSize: 24,
+    fontFamily: fontFamilies.semiBold,
+    color: appColors.text,
+    backgroundColor: appColors.background,
   },
-  inputFocused: {
+  codeBoxFilled: {
     borderColor: appColors.primary,
+    backgroundColor: appColors.surface,
+  },
+  codeBoxError: {
+    borderColor: appColors.danger,
   },
 });

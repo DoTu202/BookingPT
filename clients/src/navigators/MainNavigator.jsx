@@ -2,7 +2,8 @@ import React from 'react';
 import {createStackNavigator} from '@react-navigation/stack';
 import {useSelector} from 'react-redux';
 import {authSelector} from '../redux/reducers/authReducer';
-import appColors from '../constants/appColors';
+import {useRealtimeConnection} from '../apis/socketClient';
+import {usePushNotifications} from '../utils/pushNotifications';
 
 import PTTabNavigator from './PTTabNavigator';
 import DrawerNavigator from './DrawerNavigator';
@@ -17,15 +18,21 @@ import {
 
 import {
   PTDetailScreen,
-  PaymentScreen,
-  ClientProfileScreen,
   SearchPtScreen,
   ClientBookingsScreen,
 } from '../screens/clientScreen';
 
+import {PTDashboardScreen} from '../screens/ptScreen';
+
+// Created once: creating the navigator inside the component made React
+// remount every screen on each render of MainNavigator.
+const Stack = createStackNavigator();
+
 const MainNavigator = () => {
-  const Stack = createStackNavigator();
   const auth = useSelector(authSelector);
+  // Mounted only while signed in, so the socket lives exactly as long as the session.
+  useRealtimeConnection(auth.accesstoken);
+  usePushNotifications(auth.accesstoken);
 
   return (
     <Stack.Navigator
@@ -45,6 +52,8 @@ const MainNavigator = () => {
             component={PTTabNavigator}
             options={{gestureEnabled: false}}
           />
+
+          <Stack.Screen name="PTDashboard" component={PTDashboardScreen} />
 
           <Stack.Screen
             name="Notifications"
@@ -111,17 +120,6 @@ const MainNavigator = () => {
           />
 
           <Stack.Screen
-            name="ClientProfile"
-            component={ClientProfileScreen}
-            options={{
-              headerShown: true,
-              title: 'My Profile',
-              headerTintColor: appColors.primary,
-              headerBackTitleVisible: false,
-            }}
-          />
-
-          <Stack.Screen
             name="ChatScreen"
             component={ChatScreen}
             options={{headerShown: false}}
@@ -150,8 +148,7 @@ const MainNavigator = () => {
             name="Chat"
             component={ChatScreen}
             options={{
-              headerShown: true,
-              title: 'Chat',
+              headerShown: false,
             }}
           />
 

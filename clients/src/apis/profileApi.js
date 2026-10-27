@@ -19,28 +19,22 @@ const profileApi = {
     return axiosClient.post(url, passwordData);
   },
 
-  // Upload photo
+  // Upload photo (multipart; uploads get a longer timeout)
+  uploadPhoto: async photoFile =>
+    axiosClient.post('/api/profile/upload-photo', photoFile, {
+      headers: {'Content-Type': 'multipart/form-data'},
+      timeout: 30000,
+    }),
 
-  uploadPhoto: async photoFile => {
-    const url = '/api/profile/upload-photo';
-    console.log('Sending photo to:', url);
+  // Revoke every session, including this one
+  logoutAllDevices: async () => axiosClient.post('/api/profile/logout-all'),
 
-    try {
-      const response = await axiosClient.post(url, photoFile, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        // Thêm timeout dài hơn cho việc upload ảnh
-        timeout: 30000, // 30 giây
-      });
+  // Push notifications: link / unlink this device's FCM token
+  registerPushToken: async ({token, platform}) =>
+    axiosClient.post('/api/profile/push-token', {token, platform}),
+  unregisterPushToken: async token =>
+    axiosClient.delete('/api/profile/push-token', {data: {token}}),
 
-      console.log('Upload photo response:', response.data);
-      return response;
-    } catch (error) {
-      console.error('Error in uploadPhoto API call:', error);
-      throw error;
-    }
-  },
   // Delete account
   deleteAccount: async deleteData => {
     const url = '/api/profile/delete-account';

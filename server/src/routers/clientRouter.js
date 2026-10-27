@@ -14,6 +14,7 @@ const {
   getClientBookings,
   cancelBookingByClient,
 } = require('../controllers/clientController');
+const {createReview, getPtReviews} = require('../controllers/reviewController');
 
 router.get('/pt', searchPTs); 
 
@@ -44,6 +45,15 @@ router.post(
   authenticateToken,
   authorizeRoles('client'),
   cancelBookingByClient,
+);
+
+router.get('/pt/:ptId/reviews', authenticateToken, getPtReviews);
+
+router.post(
+  '/my-bookings/:bookingId/review',
+  authenticateToken,
+  authorizeRoles('client'),
+  createReview,
 );
 
 module.exports = router;

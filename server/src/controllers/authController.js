@@ -1,210 +1,182 @@
-const UserModal = require('../models/userModel');
 const bcrypt = require('bcrypt');
 const asyncHandler = require('express-async-handler');
-const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
-require('dotenv').config();
+const User = require('../models/userModel');
+const {issueOtp, verifyOtp} = require('../services/otpService');
+const {sendOtpMail} = require('../services/mailService');
+const {buildAuthResponse} = require('../services/tokenService');
+const {badRequest, unauthorized} = require('../utils/httpError');
+const {disconnectUser} = require('../services/realtimeService');
+const {removeUserDeviceTokens} = require('../services/pushService');
+const {
+  BCRYPT_ROUNDS,
+  str,
+  normalizeEmail,
+  rawString,
+  assertEmail,
+  assertPassword,
+  assertPhone,
+  parseDob,
+} = require('../utils/validators');
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  auth: {
-    user: process.env.USERNAME_EMAIL,
-    pass: process.env.USERNAME_PASSWORD,
-  },
-});
-
-// Function to generate JSON Web Token
-const getJsonWebToken = (email, id, role, username, photoUrl) => {
-  const payload = {
-    email,
-    id,
-    role,
-    username,
-    photoUrl
-  };
-  const token = jwt.sign(payload, process.env.SECRET_KEY, {
-    expiresIn: '1d',
-  });
-  return token;
-};
-
-const handleSendMail = async val => {
-  try {
-    await transporter.sendMail(val);
-    return 'OK';
-  } catch (error) {
-    return error;
-  }
-};
-
+// Step 1 of sign up: email a one-time code. The code is never returned in the
+// response; the client must send it back to /register.
 const verification = asyncHandler(async (req, res) => {
-  const {email} = req.body;
+  const email = normalizeEmail(req.body.email);
+  assertEmail(email);
 
-  // Check if user already exists before sending verification
-  const existingUser = await UserModal.findOne({email});
-  if (existingUser) {
-    return res.status(400).json({message: 'User already exists'});
+  if (await User.exists({email})) {
+    throw badRequest('User already exists');
   }
 
-  const verificationCode = Math.round(1000 + Math.random() * 9000);
+  const code = await issueOtp(email, 'register');
+  await sendOtpMail(email, code, 'register');
 
-  try {
-    const data = {
-      from: `Support FitnessApp <${process.env.USERNAME_EMAIL}>`, // sender address
-      to: email,
-      subject: 'Verification email code',
-      text: 'Your code to verification email', // plain‑text body
-      html: `<h1>${verificationCode}</h1>`, // HTML body
-    };
-
-    await handleSendMail(data);
-
-    res.status(200).json({
-      message: 'Verification code sent successfully',
-      data: {
-        verificationCode,
-      },
-    });
-  } catch (error) {
-    res.status(401);
-    throw new Error('Error sending email, Can not send email verification');
-  }
+  res.status(200).json({
+    success: true,
+    message: 'Verification code sent successfully',
+  });
 });
 
+// Step 2 of sign up: create the account if the emailed code is correct.
 const register = asyncHandler(async (req, res) => {
-  const {username, email, password, dob, phoneNumber, role='client'} = req.body;
+  const username = str(req.body.username);
+  const email = normalizeEmail(req.body.email);
+  const password = rawString(req.body.password);
+  const phoneNumber = str(req.body.phoneNumber);
+  const code = str(req.body.code);
+  const role = str(req.body.role) || 'client';
 
-  if (!username || !email || !password || !dob || !phoneNumber) {
-    return res.status(400).json({message: 'All fields are required'});
+  if (!username || !email || !password || !phoneNumber || !code) {
+    throw badRequest('All fields are required');
+  }
+  assertEmail(email);
+  assertPassword(password);
+  const dob = parseDob(req.body.dob);
+  assertPhone(phoneNumber);
+  // Only these two roles may self-register.
+  if (!['client', 'pt'].includes(role)) {
+    throw badRequest('Role is not valid');
   }
 
-  //Check role send from client
-  if(!['client', 'pt'].includes(role)){
-    return res.status(400).json({message: 'Role is not valid'});
+  if (await User.exists({email})) {
+    throw badRequest('User already exists');
   }
 
-  //Check if user already exists
-  const existingUser = await UserModal.findOne({email});
-  if (existingUser) {
-    return res.status(400).json({message: 'User already exists'});
-  }
+  await verifyOtp(email, 'register', code);
 
-  //Hash password
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(password, salt);
-
-  //Create new user
-  const newUser = new UserModal({
+  const newUser = await User.create({
     username,
     email,
-    password: hashedPassword,
+    password: await bcrypt.hash(password, BCRYPT_ROUNDS),
     dob,
     phoneNumber,
     role,
     photoUrl: '',
+    lastLoginAt: new Date(),
   });
 
-  await newUser.save();
-
-  res.status(200).json({
+  res.status(201).json({
+    success: true,
     message: 'User registered successfully',
-    data: {
-      email: newUser.email,
-      id: newUser._id,
-      accesstoken: getJsonWebToken(newUser.email, newUser._id, newUser.role),
-      role: newUser.role,
-      username: newUser.username,
-      photoUrl: newUser.photoUrl ?? '',
-    },
+    data: buildAuthResponse(newUser),
   });
 });
 
-//Login
+// Used to keep login timing similar whether or not the email exists, so
+// response times do not reveal which emails are registered.
+const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing', BCRYPT_ROUNDS);
+
 const login = asyncHandler(async (req, res) => {
-  const {email, password} = req.body;
+  const email = normalizeEmail(req.body.email);
+  const password = rawString(req.body.password);
 
-  //Check require fields
   if (!email || !password) {
-    return res.status(400).json({message: 'All fields are required'});
+    throw badRequest('All fields are required');
   }
 
-  //Check if user exists
-  const existingUser = await UserModal.findOne({email});
-  if (!existingUser) {
-    return res.status(400).json({message: 'Invalid credentials'});
+  const user = await User.findOne({email}).select('+password');
+  const isMatch = await bcrypt.compare(password, user ? user.password : DUMMY_HASH);
+
+  // Same message for unknown email and wrong password (no user enumeration).
+  if (!user || !isMatch || !user.isActive) {
+    throw unauthorized('Invalid email or password');
   }
-  //Validate password
-  const isMatch = await bcrypt.compare(password, existingUser.password);
-  if (!isMatch) {
-    return res.status(400).json({message: 'Invalid email or password'});
-  }
+
+  await User.updateOne({_id: user._id}, {lastLoginAt: new Date()});
+
   res.status(200).json({
+    success: true,
     message: 'Login successful',
-    data: {
-      id: existingUser._id,
-      email: existingUser.email,
-      username: existingUser.username,
-      accesstoken: getJsonWebToken(existingUser.email, existingUser._id, existingUser.role),
-      photoUrl: existingUser.photoUrl ?? '',
-      role: existingUser.role,
-    },
+    data: buildAuthResponse(user),
   });
 });
 
-function generatePassword(length = 8) {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&';
-    let password = '';
-    for (let i = 0; i < length; i++) {
-        const randomIndex = Math.floor(Math.random() * characters.length);
-        password += characters[randomIndex];
-    }
-    return password;
-}
-
-// Forgot password
+// Step 1 of password reset: email a code. Always answers the same way so it
+// cannot be used to discover which emails have an account.
 const forgotPassword = asyncHandler(async (req, res) => {
-  const {email} = req.body;
-  const randomPassword = generatePassword(8);
-  const data = {
-    from: `Support FitnessApp <${process.env.USERNAME_EMAIL}>`, // sender address
-    to: email,
-    subject: 'Your new password',
-    text: 'Your code to reset password', // plain‑text body
-    html: `<h1>${randomPassword}</h1>`, // HTML body
-  };
+  const email = normalizeEmail(req.body.email);
+  assertEmail(email);
 
-  const user = await UserModal.findOne({email});
-  if (user) {
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(`${randomPassword}`, salt);
-
-    await User.findByIdAndUpdate(user._id, {
-      password: hashedPassword,
-      isChangePassword: true,
-    });
-
-    await handleSendMail(data)
-      .then(() => {
-        res.status(200).json({
-          message: 'Send email new password successfully',
-          data: [],
-        });
-      })
-      .catch(error => {
-        res.status(401);
-        throw new Error('Error sending email, Can not send email verification');
-      });
-  } else {
-    res.status(401);
-    throw new Error('Email not found');
+  const user = await User.findOne({email});
+  if (user && user.isActive) {
+    try {
+      const code = await issueOtp(email, 'reset_password');
+      await sendOtpMail(email, code, 'reset_password');
+    } catch (error) {
+      // Rate-limit errors from issueOtp are safe to surface; anything else is
+      // logged but hidden to keep the response uniform.
+      if (error.statusCode === 429) {
+        throw error;
+      }
+      req.log.error({err: error}, 'Failed to send reset code');
+    }
   }
+
+  res.status(200).json({
+    success: true,
+    message: 'If an account exists for this email, a reset code has been sent.',
+  });
+});
+
+// Step 2 of password reset: set a new password with the emailed code.
+const resetPassword = asyncHandler(async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const code = str(req.body.code);
+  const newPassword = rawString(req.body.newPassword);
+
+  if (!email || !code || !newPassword) {
+    throw badRequest('Email, code and new password are required');
+  }
+  assertPassword(newPassword);
+
+  await verifyOtp(email, 'reset_password', code);
+
+  const user = await User.findOne({email});
+  if (!user) {
+    throw badRequest('Code is invalid or has expired. Please request a new one.');
+  }
+
+  // Also invalidates every token issued before now (see authMiddleware).
+  await User.updateOne(
+    {_id: user._id},
+    {
+      password: await bcrypt.hash(newPassword, BCRYPT_ROUNDS),
+      passwordChangedAt: new Date(),
+    },
+  );
+  disconnectUser(user._id);
+  await removeUserDeviceTokens(user._id);
+
+  res.status(200).json({
+    success: true,
+    message: 'Password has been reset. Please sign in with your new password.',
+  });
 });
 
 module.exports = {
   register,
   login,
-  getJsonWebToken,
   verification,
   forgotPassword,
+  resetPassword,
 };

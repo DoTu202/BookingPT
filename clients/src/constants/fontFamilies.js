@@ -9,4 +9,3 @@ export const fontFamilies = {
     extraBold: 'Poppins-ExtraBold',
     black: 'Poppins-Black',
   };
-  

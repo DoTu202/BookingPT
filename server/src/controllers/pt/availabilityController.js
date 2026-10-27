@@ -1,68 +1,57 @@
 const Availability = require('../../models/AvailabilityModel');
 const asyncHandler = require('express-async-handler');
-const dayjs = require('dayjs');
-const timezone = require('dayjs/plugin/timezone');
-dayjs.extend(timezone);
+const {dayjs, dayRange, assertValidId} = require('../../utils/helpers');
+const {badRequest, notFound} = require('../../utils/httpError');
+
+const MAX_SLOT_HOURS = 12;
+const MAX_RANGE_DAYS = 62;
+
+// Validates a start/end pair sent as ISO 8601 strings and returns Dates.
+const parseSlotTimes = (startTime, endTime) => {
+  if (!startTime || !endTime) {
+    throw badRequest('startTime and endTime are required as UTC ISO strings');
+  }
+
+  const start = dayjs(startTime);
+  const end = dayjs(endTime);
+  if (!start.isValid() || !end.isValid()) {
+    throw badRequest('Invalid ISO 8601 format for startTime or endTime');
+  }
+  if (!end.isAfter(start)) {
+    throw badRequest('End time must be after start time');
+  }
+  if (end.diff(start, 'hour', true) > MAX_SLOT_HOURS) {
+    throw badRequest(`A slot cannot be longer than ${MAX_SLOT_HOURS} hours`);
+  }
+  if (start.isBefore(dayjs())) {
+    throw badRequest('Start time must be in the future');
+  }
+  return {start: start.toDate(), end: end.toDate()};
+};
+
+// Two intervals overlap when each starts before the other ends.
+const findOverlap = (ptId, start, end, excludeId) =>
+  Availability.findOne({
+    pt: ptId,
+    ...(excludeId ? {_id: {$ne: excludeId}} : {}),
+    startTime: {$lt: end},
+    endTime: {$gt: start},
+  });
 
 const addAvailability = asyncHandler(async (req, res) => {
-  const {startTime, endTime} = req.body;
   const ptId = req.user._id;
+  const {start, end} = parseSlotTimes(req.body.startTime, req.body.endTime);
 
-  // Check required fields
-  if (!startTime || !endTime) {
-    res.status(400);
-    throw new Error('startTime and endTime are required as UTC ISO strings');
+  if (await findOverlap(ptId, start, end)) {
+    throw badRequest('This time slot overlaps with an existing one');
   }
 
-  // Validate ISO 8601 format
-  const startDateTime = dayjs(startTime);
-  const endDateTime = dayjs(endTime);
-
-  if (!startDateTime.isValid() || !endDateTime.isValid()) {
-    res.status(400);
-    throw new Error('Invalid ISO 8601 format for startTime or endTime');
-  }
-
-  // Check time logic
-  if (endDateTime.isBefore(startDateTime)) {
-    res.status(400);
-    throw new Error('End time must be after start time');
-  }
-
-  if (startDateTime.isBefore(dayjs())) {
-    res.status(400);
-    throw new Error('Start time must be in the future');
-  }
-
-  // Convert to Date objects for MongoDB
-  const _startTime = startDateTime.toDate();
-  const _endTime = endDateTime.toDate();
-
-  // Check for overlapping slots
-  const overlappingAvailability = await Availability.findOne({
+  const newAvailability = await Availability.create({
     pt: ptId,
-    $or: [
-      {startTime: {$lt: _endTime, $gte: _startTime}},
-      {endTime: {$gt: _startTime, $lte: _endTime}},
-      {startTime: {$lte: _startTime}, endTime: {$gte: _endTime}},
-    ],
+    startTime: start,
+    endTime: end,
   });
 
-  if (overlappingAvailability) {
-    res.status(400);
-    throw new Error('This time slot overlaps with an existing one');
-  }
-
-  // Create and save new slot
-  const newAvailability = new Availability({
-    pt: ptId,
-    startTime: _startTime,
-    endTime: _endTime,
-  });
-
-  await newAvailability.save();
-
-  // Return the created slot
   res.status(201).json({
     success: true,
     data: newAvailability,
@@ -71,62 +60,31 @@ const addAvailability = asyncHandler(async (req, res) => {
 
 const updateAvailability = asyncHandler(async (req, res) => {
   const {availabilityId} = req.params;
-  const {startTime, endTime} = req.body;
   const ptId = req.user._id;
+  assertValidId(availabilityId, 'availability id');
 
-  // Check avaiblability exists
-  const availability = await Availability.findOne({
-    _id: availabilityId,
-    pt: ptId,
-  });
-
+  const availability = await Availability.findOne({_id: availabilityId, pt: ptId});
   if (!availability) {
-    res.status(404);
-    throw new Error('Availability slot not found');
+    throw notFound('Availability slot not found');
+  }
+  // A booked slot is referenced by a booking that copied its times; moving it
+  // would silently desynchronise the two.
+  if (availability.status === 'booked') {
+    throw badRequest('Cannot change a slot that already has a booking');
   }
 
-  // Check required fields
-  if (!startTime || !endTime) {
-    res.status(400);
-    throw new Error('startTime and endTime are required');
+  const {start, end} = parseSlotTimes(req.body.startTime, req.body.endTime);
+
+  if (await findOverlap(ptId, start, end, availabilityId)) {
+    throw badRequest('Updated time slot overlaps with an existing one');
   }
 
-  const startDateTime = dayjs(startTime);
-  const endDateTime = dayjs(endTime);
-
-  if (!startDateTime.isValid() || !endDateTime.isValid()) {
-    res.status(400);
-    throw new Error('Invalid ISO 8601 format');
+  availability.startTime = start;
+  availability.endTime = end;
+  // Moving a slot blocked by a PT cancellation re-opens it for booking.
+  if (availability.status === 'unavailable_by_pt') {
+    availability.status = 'available';
   }
-
-  if (endDateTime.isBefore(startDateTime)) {
-    res.status(400);
-    throw new Error('End time must be after start time');
-  }
-
-  // Check for overlapping slots
-  const overlappingAvailability = await Availability.findOne({
-    pt: ptId,
-    _id: {$ne: availabilityId}, // Exclude current slot
-    $or: [
-      {startTime: {$lt: endDateTime.toDate(), $gte: startDateTime.toDate()}},
-      {endTime: {$gt: startDateTime.toDate(), $lte: endDateTime.toDate()}},
-      {
-        startTime: {$lte: startDateTime.toDate()},
-        endTime: {$gte: endDateTime.toDate()},
-      },
-    ],
-  });
-
-  if (overlappingAvailability) {
-    res.status(400);
-    throw new Error('Updated time slot overlaps with an existing one');
-  }
-
-  // Update availability
-  availability.startTime = startDateTime.toDate();
-  availability.endTime = endDateTime.toDate();
-
   await availability.save();
 
   res.status(200).json({
@@ -136,26 +94,31 @@ const updateAvailability = asyncHandler(async (req, res) => {
 });
 
 const getAvailabilitySlots = asyncHandler(async (req, res) => {
-  const ptId = req.user._id;
-  const {date} = req.query;
+  const query = {pt: req.user._id};
 
-  let query = {pt: ptId};
-
-  // If date is provided, filter by startTime within that date
+  const {date, from, to} = req.query;
   if (date) {
-    const timeZone = 'Asia/Ho_Chi_Minh';
-    const startOfDay = dayjs.tz(date, timeZone).startOf('day').toDate();
-    const endOfDay = dayjs.tz(date, timeZone).endOf('day').toDate();
-
-    query.startTime = {
-      $gte: startOfDay,
-      $lte: endOfDay,
-    };
+    const range = dayRange(date);
+    if (!range) {
+      throw badRequest('date is not a valid date');
+    }
+    query.startTime = {$gte: range.start, $lte: range.end};
+  } else if (from || to) {
+    // Several days at once (the app marks which days have slots).
+    const first = dayRange(from);
+    const last = dayRange(to);
+    if (!first || !last || last.end < first.start) {
+      throw badRequest('from and to must be valid dates, from not after to');
+    }
+    if (last.end - first.start > MAX_RANGE_DAYS * 24 * 3600 * 1000) {
+      throw badRequest(`The range cannot be longer than ${MAX_RANGE_DAYS} days`);
+    }
+    query.startTime = {$gte: first.start, $lte: last.end};
   }
 
   const availabilitySlots = await Availability.find(query)
     .sort({startTime: 1})
-    .populate('pt', 'username email');
+    .limit(500);
 
   res.status(200).json({
     success: true,
@@ -163,27 +126,24 @@ const getAvailabilitySlots = asyncHandler(async (req, res) => {
   });
 });
 
-const deletedAvailabilitySlot = asyncHandler(async (req, res) => {
+const deleteAvailabilitySlot = asyncHandler(async (req, res) => {
   const {availabilityId} = req.params;
-  const ptId = req.user._id;
+  assertValidId(availabilityId, 'availability id');
 
   const availability = await Availability.findOne({
     _id: availabilityId,
-    pt: ptId,
+    pt: req.user._id,
   });
 
   if (!availability) {
-    res.status(404);
-    throw new Error('Availability slot not found');
+    throw notFound('Availability slot not found');
   }
 
-  // Check if slot is booked
-  if (availability.isBooked) {
-    res.status(400);
-    throw new Error('Cannot delete a booked time slot');
+  if (availability.status === 'booked') {
+    throw badRequest('Cannot delete a booked time slot');
   }
 
-  await Availability.findByIdAndDelete(availabilityId);
+  await availability.deleteOne();
 
   res.status(200).json({
     success: true,
@@ -195,5 +155,5 @@ module.exports = {
   addAvailability,
   updateAvailability,
   getAvailabilitySlots,
-  deletedAvailabilitySlot,
+  deleteAvailabilitySlot,
 };

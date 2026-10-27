@@ -46,11 +46,16 @@ const messageSchema = new mongoose.Schema({
   content: {
     type: String,
     required: true,
-    trim: true
+    trim: true,
+    maxlength: 2000
   }
 }, {
   timestamps: true
 });
+
+// One room per PT/client pair; also lets the DB reject concurrent duplicates.
+chatRoomSchema.index({ptUser: 1, clientUser: 1}, {unique: true});
+messageSchema.index({chatRoom: 1, createdAt: -1});
 
 const ChatRoom = mongoose.model('ChatRoom', chatRoomSchema);
 const Message = mongoose.model('Message', messageSchema);

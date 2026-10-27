@@ -1,353 +1,289 @@
-import React, { useState, useEffect } from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  FlatList,
-  TouchableOpacity,
-  RefreshControl,
-  Alert,
   ActivityIndicator,
-  StatusBar
+  Alert,
+  FlatList,
+  RefreshControl,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSelector } from 'react-redux';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import {useSelector} from 'react-redux';
+import {
+  Alarm,
+  CalendarAdd,
+  CalendarRemove,
+  CalendarTick,
+  Notification,
+  Star1,
+  TickCircle,
+  TickSquare,
+} from 'iconsax-react-native';
+import {ScreenHeader, HeaderIconButton, StateView, TextComponent} from '../../components';
 import notificationApi from '../../apis/notificationApi';
-import { authSelector } from '../../redux/reducers/authReducer';
+import {authSelector} from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
-import { fontFamilies } from '../../constants/fontFamilies';
+import {fontFamilies} from '../../constants/fontFamilies';
+import {radius, shadow, spacing} from '../../constants/theme';
+import {formatRelativeTime} from '../../utils/format';
 
-const NotificationScreen = ({ navigation }) => {
+const PAGE_SIZE = 20;
+
+// Title, icon and colours per notification type (types from the server's
+// Notification model).
+const TYPES = {
+  new_booking_request: {title: 'Yêu cầu đặt lịch mới', Icon: CalendarAdd, color: appColors.primary, soft: appColors.primarySoft},
+  booking_confirmed: {title: 'Lịch đã được xác nhận', Icon: CalendarTick, color: appColors.success, soft: appColors.successSoft},
+  booking_rejected: {title: 'Lịch bị từ chối', Icon: CalendarRemove, color: appColors.danger, soft: appColors.dangerSoft},
+  booking_cancelled_by_client: {title: 'Học viên đã hủy lịch', Icon: CalendarRemove, color: appColors.danger, soft: appColors.dangerSoft},
+  booking_cancelled_by_pt: {title: 'Huấn luyện viên đã hủy buổi tập', Icon: CalendarRemove, color: appColors.danger, soft: appColors.dangerSoft},
+  booking_system_rejected: {title: 'Yêu cầu đặt lịch đã hết hạn', Icon: CalendarRemove, color: appColors.textMuted, soft: appColors.gray6},
+  booking_completed_pt: {title: 'Buổi tập đã hoàn thành', Icon: TickCircle, color: appColors.info, soft: appColors.infoSoft},
+  booking_completed_client: {title: 'Buổi tập đã hoàn thành', Icon: TickCircle, color: appColors.info, soft: appColors.infoSoft},
+  booking_reminder: {title: 'Sắp đến giờ tập', Icon: Alarm, color: appColors.warning, soft: appColors.warningSoft},
+  new_review_on_pt_profile: {title: 'Bạn có đánh giá mới', Icon: Star1, color: appColors.yellow, soft: appColors.warningSoft},
+};
+const DEFAULT_TYPE = {title: 'Thông báo', Icon: Notification, color: appColors.primary, soft: appColors.primarySoft};
+
+const NotificationScreen = ({navigation}) => {
   const auth = useSelector(authSelector);
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const [status, setStatus] = useState('loading');
+  const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  // Fetch notifications from API
-  const fetchNotifications = async () => {
+  const load = useCallback(async () => {
     try {
-      setLoading(true);
-      const response = await notificationApi.getNotifications(auth.accesstoken);
-      
-      if (response.success) {
-        setNotifications(response.data.notifications || []);
-      }
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      Alert.alert('Error', 'Cannot load notifications');
+      const response = await notificationApi.getNotifications(null, 1, PAGE_SIZE);
+      setItems(response.data.notifications || []);
+      setHasMore(Boolean(response.data.pagination?.hasMore));
+      setUnread(response.data.unreadCount || 0);
+      setPage(1);
+      setStatus('ready');
+    } catch (err) {
+      setError(err.message);
+      setStatus('error');
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
-  };
-
-  // Handle notification click
-  const markAsRead = async (notificationId) => {
-    try {
-      await notificationApi.markAsRead(auth.accesstoken, notificationId);
-      
-      // Update local state to mark notification as read
-      setNotifications(prev => 
-        prev.map(notif => 
-          notif._id === notificationId 
-            ? { ...notif, isRead: true }
-            : notif
-        )
-      );
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-    }
-  };
-
-  // 
-  const markAllAsRead = async () => {
-    try {
-      await notificationApi.markAllAsRead(auth.accesstoken);
-      setNotifications(prev => 
-        prev.map(notif => ({ ...notif, isRead: true }))
-      );
-      Alert.alert('Success', 'All notifications marked as read');
-    } catch (error) {
-      console.error('Error marking all as read:', error);
-      Alert.alert('Error', 'Cannot mark all as read');
-    }
-  };
-
-  // Refresh notification list
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchNotifications();
-    setRefreshing(false);
-  };
-
-  // Format notification time
-  const formatTime = (date) => {
-    if (!date) return '';
-    
-    const now = new Date();
-    const notifDate = new Date(date);
-    const diffInMinutes = Math.floor((now - notifDate) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `${diffInDays}d ago`;
-  };
-
-  // Get notification icon based on type
-  const getNotificationIcon = (type) => {
-    switch (type) {
-      case 'booking_confirmed': return 'check-circle';
-      case 'booking_cancelled': return 'cancel';
-      case 'booking_reminder': return 'alarm';
-      case 'payment_success': return 'payment';
-      case 'new_message': return 'message';
-      default: return 'notifications';
-    }
-  };
-
-  // Render notification item
-  const renderNotificationItem = ({ item }) => (
-    <TouchableOpacity 
-      style={[
-        styles.notificationItem,
-        !item.isRead && styles.unreadItem
-      ]}
-      onPress={() => markAsRead(item._id)}
-    >
-      <View style={styles.notificationContent}>
-        <View style={styles.iconContainer}>
-          <Icon 
-            name={getNotificationIcon(item.type)} 
-            size={24} 
-            color={appColors.primary} 
-          />
-        </View>
-        
-        <View style={styles.textContainer}>
-          <Text style={styles.titleText}>{item.title}</Text>
-          <Text style={styles.messageText}>{item.message}</Text>
-          <Text style={styles.timeText}>{formatTime(item.createdAt)}</Text>
-        </View>
-        
-        {!item.isRead && <View style={styles.unreadDot} />}
-      </View>
-    </TouchableOpacity>
-  );
+  }, []);
 
   useEffect(() => {
-    if (auth.accesstoken) {
-      fetchNotifications();
-    }
-  }, [auth.accesstoken]);
+    load();
+  }, [load]);
 
-  if (loading) {
+  const loadMore = async () => {
+    if (!hasMore || loadingMore) {
+      return;
+    }
+    setLoadingMore(true);
+    try {
+      const response = await notificationApi.getNotifications(null, page + 1, PAGE_SIZE);
+      setItems(prev => [...prev, ...(response.data.notifications || [])]);
+      setHasMore(Boolean(response.data.pagination?.hasMore));
+      setPage(page + 1);
+    } catch {
+      // Scrolling again retries.
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const markAllRead = async () => {
+    try {
+      await notificationApi.markAllAsRead();
+      setItems(prev => prev.map(n => ({...n, isRead: true})));
+      setUnread(0);
+    } catch (err) {
+      Alert.alert('Không thực hiện được', err.message);
+    }
+  };
+
+  // Where a notification leads depends on who is reading it.
+  const openTarget = item => {
+    if (auth.role === 'pt') {
+      const screen = item.type === 'new_review_on_pt_profile' ? 'PTProfile' : 'PTBookings';
+      navigation.navigate('PTMain', {screen});
+    } else if (item.relatedBooking) {
+      navigation.navigate('ClientBookings');
+    }
+  };
+
+  const handlePress = item => {
+    if (!item.isRead) {
+      setItems(prev => prev.map(n => (n._id === item._id ? {...n, isRead: true} : n)));
+      setUnread(count => Math.max(count - 1, 0));
+      notificationApi.markAsRead(null, item._id).catch(() => {});
+    }
+    openTarget(item);
+  };
+
+  const handleLongPress = item =>
+    Alert.alert('Xóa thông báo', 'Bạn có muốn xóa thông báo này?', [
+      {text: 'Hủy', style: 'cancel'},
+      {
+        text: 'Xóa',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await notificationApi.deleteNotification(null, item._id);
+            setItems(prev => prev.filter(n => n._id !== item._id));
+            if (!item.isRead) {
+              setUnread(count => Math.max(count - 1, 0));
+            }
+          } catch (err) {
+            Alert.alert('Không xóa được', err.message);
+          }
+        },
+      },
+    ]);
+
+  const renderItem = ({item}) => {
+    const type = TYPES[item.type] || DEFAULT_TYPE;
+    const {Icon} = type;
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-        <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
-            <Icon name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Notifications</Text>
+      <TouchableOpacity
+        style={[styles.item, !item.isRead && styles.unreadItem]}
+        onPress={() => handlePress(item)}
+        onLongPress={() => handleLongPress(item)}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityHint="Nhấn giữ để xóa">
+        <View style={[styles.icon, {backgroundColor: type.soft}]}>
+          <Icon size={20} color={type.color} variant="Bold" />
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={appColors.primary} />
-          <Text style={styles.loadingText}>Loading notifications...</Text>
+        <View style={styles.flex}>
+          <View style={styles.itemTop}>
+            <TextComponent
+              text={type.title}
+              size={14}
+              font={item.isRead ? fontFamilies.medium : fontFamilies.semiBold}
+              numberOfLines={1}
+              styles={styles.flex}
+            />
+            <TextComponent text={formatRelativeTime(item.createdAt)} size={11} color={appColors.textMuted} />
+          </View>
+          <TextComponent text={item.message} size={13} color={appColors.textMuted} styles={styles.message} />
         </View>
-      </View>
+        {!item.isRead ? <View style={styles.dot} /> : null}
+      </TouchableOpacity>
     );
-  }
+  };
+
+  const renderContent = () => {
+    if (status === 'loading') {
+      return <StateView type="loading" title="Đang tải thông báo..." />;
+    }
+    if (status === 'error') {
+      return <StateView type="error" message={error} onAction={load} />;
+    }
+    return (
+      <FlatList
+        data={items}
+        keyExtractor={item => item._id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+            colors={[appColors.primary]}
+            tintColor={appColors.primary}
+          />
+        }
+        ListFooterComponent={loadingMore ? <ActivityIndicator color={appColors.primary} style={styles.footer} /> : null}
+        ListEmptyComponent={
+          <StateView
+            icon={<Notification size={30} color={appColors.primary} />}
+            title="Bạn đã xem hết thông báo"
+            message="Thông báo về lịch tập, tin nhắn và đánh giá sẽ hiện ở đây."
+          />
+        }
+      />
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={appColors.primary} />
-      <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Icon name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notifications</Text>
-        {notifications.some(n => !n.isRead) && (
-          <TouchableOpacity 
-            onPress={markAllAsRead}
-            style={styles.markAllButton}
-          >
-            <Text style={styles.markAllText}>Mark All</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {notifications.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Icon name="notifications-none" size={80} color={appColors.gray} />
-          <Text style={styles.emptyTitle}>No Notifications</Text>
-          <Text style={styles.emptyMessage}>
-            You're all caught up! 🎉{'\n'}Check back later for updates.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={notifications}
-          keyExtractor={(item) => item._id}
-          renderItem={renderNotificationItem}
-          refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
-              onRefresh={onRefresh}
-              colors={[appColors.primary]}
+      <ScreenHeader
+        title="Thông báo"
+        subtitle={unread > 0 ? `${unread} chưa đọc` : undefined}
+        onBack={() => navigation.goBack()}
+        right={
+          unread > 0 ? (
+            <HeaderIconButton
+              icon={<TickSquare size={20} color={appColors.white} />}
+              onPress={markAllRead}
+              accessibilityLabel="Đánh dấu tất cả đã đọc"
             />
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContainer}
-        />
-      )}
-      <SafeAreaView edges={['bottom']} />
+          ) : null
+        }
+      />
+      <View style={styles.flex}>{renderContent()}</View>
     </View>
   );
 };
 
+export default NotificationScreen;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: appColors.background,
   },
-  header: {
-    backgroundColor: appColors.primary,
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    paddingTop: 70, 
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontFamily: fontFamilies.bold,
-    color: 'white',
+  flex: {
     flex: 1,
-    textAlign: 'center',
-    marginRight: 40, 
   },
-  markAllButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+  list: {
+    padding: spacing.lg,
+    gap: spacing.sm,
+    flexGrow: 1,
   },
-  markAllText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: appColors.gray,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: appColors.text,
-    marginTop: 20,
-    marginBottom: 12,
-  },
-  emptyMessage: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  listContainer: {
-    padding: 20,
-    paddingTop: 16,
-  },
-  notificationItem: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    marginBottom: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  unreadItem: {
-    borderLeftWidth: 5,
-    borderLeftColor: appColors.primary,
-    backgroundColor: '#fafbfc',
-  },
-  notificationContent: {
+  item: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    gap: spacing.md,
+    padding: spacing.md + 2,
+    backgroundColor: appColors.surface,
+    borderRadius: radius.lg,
+    ...shadow.sm,
   },
-  iconContainer: {
-    marginRight: 12,
+  unreadItem: {
+    backgroundColor: '#FFF8F2',
+  },
+  icon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  message: {
     marginTop: 2,
+    lineHeight: 19,
   },
-  textContainer: {
-    flex: 1,
-  },
-  titleText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: appColors.text,
-    marginBottom: 6,
-  },
-  messageText: {
-    fontSize: 14,
-    color: '#6b7280',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  timeText: {
-    fontSize: 12,
-    color: appColors.gray,
-    fontWeight: '500',
-  },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: appColors.primary,
-    marginLeft: 12,
-    marginTop: 8,
+    marginTop: 6,
+  },
+  footer: {
+    paddingVertical: spacing.lg,
   },
 });
-
-export default NotificationScreen;

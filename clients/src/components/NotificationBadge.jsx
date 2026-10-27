@@ -1,45 +1,55 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useSelector } from 'react-redux';
+import React, {useCallback, useEffect, useState} from 'react';
+import {StyleSheet, View} from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
+import {useSelector} from 'react-redux';
+import TextComponent from './TextComponent';
 import notificationApi from '../apis/notificationApi';
-import { authSelector } from '../redux/reducers/authReducer';
+import {authSelector} from '../redux/reducers/authReducer';
 import appColors from '../constants/appColors';
+import {fontFamilies} from '../constants/fontFamilies';
 
-const NotificationBadge = ({ size = 16, style }) => {
+const POLL_MS = 30000;
+
+// Unread-count bubble. Refreshes when its screen regains focus (e.g. after
+// reading notifications) and every 30 seconds while mounted.
+const NotificationBadge = ({style}) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const auth = useSelector(authSelector);
 
-  useEffect(() => {
-    const fetchUnreadCount = async () => {
-      try {
-        if (auth.accesstoken) {
-          const response = await notificationApi.getUnreadCount(auth.accesstoken);
-          if (response.success) {
-            setUnreadCount(response.data.unreadCount);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching unread count:', error);
-      }
-    };
-
-    fetchUnreadCount();
-
-    // Poll every 30 seconds for updates
-    const interval = setInterval(fetchUnreadCount, 30000);
-
-    return () => clearInterval(interval);
+  const fetchCount = useCallback(async () => {
+    if (!auth.accesstoken) {
+      return;
+    }
+    try {
+      const response = await notificationApi.getUnreadCount();
+      setUnreadCount(response.data?.unreadCount || 0);
+    } catch {
+      // A missing badge is not worth an error message.
+    }
   }, [auth.accesstoken]);
 
-  if (unreadCount === 0) {
+  useFocusEffect(
+    useCallback(() => {
+      fetchCount();
+    }, [fetchCount]),
+  );
+
+  useEffect(() => {
+    const timer = setInterval(fetchCount, POLL_MS);
+    return () => clearInterval(timer);
+  }, [fetchCount]);
+
+  if (!unreadCount) {
     return null;
   }
-
   return (
-    <View style={[styles.badge, { width: size, height: size }, style]}>
-      <Text style={[styles.badgeText, { fontSize: size * 0.6 }]}>
-        {unreadCount > 99 ? '99+' : unreadCount}
-      </Text>
+    <View style={[styles.badge, style]} accessibilityLabel={`${unreadCount} thông báo chưa đọc`}>
+      <TextComponent
+        text={unreadCount > 99 ? '99+' : String(unreadCount)}
+        size={10}
+        font={fontFamilies.bold}
+        color={appColors.white}
+      />
     </View>
   );
 };
@@ -48,20 +58,17 @@ export default NotificationBadge;
 
 const styles = StyleSheet.create({
   badge: {
-    backgroundColor: appColors.danger,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
     position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 16,
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: appColors.danger,
     borderWidth: 2,
     borderColor: appColors.white,
-  },
-  badgeText: {
-    color: appColors.white,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

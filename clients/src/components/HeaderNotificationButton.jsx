@@ -1,31 +1,22 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet, View } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation } from '@react-navigation/native';
+import {StyleSheet, TouchableOpacity} from 'react-native';
+import {useNavigation} from '@react-navigation/native';
+import {Notification} from 'iconsax-react-native';
 import NotificationBadge from './NotificationBadge';
 import appColors from '../constants/appColors';
+import {header} from '../constants/theme';
 
-const HeaderNotificationButton = ({ color = appColors.text, size = 24 }) => {
+// Bell with unread badge, styled for the gradient headers.
+const HeaderNotificationButton = ({color = appColors.white}) => {
   const navigation = useNavigation();
-
-  const handlePress = () => {
-    navigation.navigate('Notifications');
-  };
-
   return (
     <TouchableOpacity
-      style={styles.container}
-      onPress={handlePress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.iconContainer}>
-        <Icon
-          name="notifications"
-          size={size}
-          color={color}
-        />
-        <NotificationBadge size={16} />
-      </View>
+      style={styles.button}
+      onPress={() => navigation.navigate('Notifications')}
+      accessibilityRole="button"
+      accessibilityLabel="Thông báo">
+      <Notification size={header.iconSize} color={color} />
+      <NotificationBadge />
     </TouchableOpacity>
   );
 };
@@ -33,13 +24,12 @@ const HeaderNotificationButton = ({ color = appColors.text, size = 24 }) => {
 export default HeaderNotificationButton;
 
 const styles = StyleSheet.create({
-  container: {
-    marginRight: 8,
-    marginTop: 20,
-  },
-  iconContainer: {
-    position: 'relative',
-    padding: 8,
-
+  button: {
+    width: header.iconButton,
+    height: header.iconButton,
+    borderRadius: header.iconButton / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
 });
