@@ -3,8 +3,8 @@ import {StyleSheet, Switch} from 'react-native';
 import {useDispatch} from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Lock, Sms} from 'iconsax-react-native';
-import {ButtonComponent, InputComponent, RowComponent, TextComponent} from '../../components';
-import AuthLayout, {FormError} from './components/AuthLayout';
+import {Banner, ButtonComponent, InputComponent, RowComponent, TextComponent} from '../../components';
+import AuthLayout from './components/AuthLayout';
 import authApi from '../../apis/authApi';
 import {addAuth} from '../../redux/reducers/authReducer';
 import {Validate} from '../../utils/validate';
@@ -114,7 +114,7 @@ const LoginScreen = ({navigation}) => {
         />
       </RowComponent>
 
-      <FormError message={error} />
+      <Banner message={error} />
 
       <ButtonComponent
         text="Đăng nhập"

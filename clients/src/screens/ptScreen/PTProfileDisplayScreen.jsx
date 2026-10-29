@@ -1,146 +1,74 @@
 import React, {useCallback, useState} from 'react';
-import {Alert, RefreshControl, StyleSheet, Switch, View} from 'react-native';
-import {useFocusEffect} from '@react-navigation/native';
-import {useDispatch, useSelector} from 'react-redux';
+import {Alert, StyleSheet, Switch, View} from 'react-native';
+import {Briefcase, Edit2, Location, Lock, LogoutCurve, Mobile, Moneys, Trash, User} from 'iconsax-react-native';
+import {useSelector} from 'react-redux';
 import {
-  Briefcase,
-  Edit2,
-  Location,
-  Lock,
-  LogoutCurve,
-  Mobile,
-  Moneys,
-  Star1,
-  Trash,
-  User,
-} from 'iconsax-react-native';
-import {
+  AppRefreshControl,
+  AsyncView,
+  Card,
   HeaderIconButton,
   HeroScrollView,
+  InfoRow,
   MenuList,
   ProfileHero,
-  StateView,
+  ReviewItem,
+  RowComponent,
+  Screen,
+  StatGroup,
+  Tag,
   TextComponent,
 } from '../../components';
-import DeleteAccountModal from '../../modals/DeleteAccountModal';
+import {DeleteAccountModal} from '../../modals';
+import {useAsync, useProfilePhoto, useSignOut} from '../../hooks';
 import ptApi from '../../apis/ptApi';
-import profileApi from '../../apis/profileApi';
 import {authSelector} from '../../redux/reducers/authReducer';
-import {signOut, updateSession} from '../../utils/session';
-import {pickAndUploadProfilePhoto} from '../../utils/photoUpload';
-import {formatCurrency, formatLocation, formatRelativeTime} from '../../utils/format';
+import {formatCurrency, formatLocation} from '../../utils/format';
 import {getSpecializationLabel} from '../../constants/labels';
 import appColors from '../../constants/appColors';
 import {fontFamilies} from '../../constants/fontFamilies';
-import {radius, shadow, spacing} from '../../constants/theme';
+import {spacing} from '../../constants/theme';
 
-const DetailRow = ({icon, label, value}) => (
-  <View style={styles.detailRow}>
-    <View style={styles.detailIcon}>{icon}</View>
-    <TextComponent text={label} size={13} color={appColors.textMuted} styles={styles.flex} />
-    <TextComponent text={value} size={14} font={fontFamilies.semiBold} />
-  </View>
-);
+const fetchProfilePage = async () => {
+  const [profileRes, bookingsRes, reviewsRes] = await Promise.all([
+    ptApi.getProfile(),
+    ptApi.getBookings(),
+    ptApi.getMyReviews({limit: 3}).catch(() => ({data: {data: []}})),
+  ]);
+  return {
+    profile: profileRes.data?.data || null,
+    clients: new Set((bookingsRes.data?.data || []).map(b => b.client?._id).filter(Boolean)).size,
+    reviews: reviewsRes.data?.data || [],
+  };
+};
 
 const PTProfileDisplayScreen = ({navigation}) => {
-  const dispatch = useDispatch();
   const auth = useSelector(authSelector);
-  const [profile, setProfile] = useState(null);
-  const [reviews, setReviews] = useState([]);
-  const [clients, setClients] = useState(0);
-  const [status, setStatus] = useState('loading');
-  const [error, setError] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [togglingAccepting, setTogglingAccepting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const {data, setData, status, error, reload, refresh, refreshing} = useAsync(fetchProfilePage, {trigger: 'focus'});
+  const {confirmSignOut, confirmSignOutEverywhere} = useSignOut();
 
-  const load = useCallback(async () => {
-    try {
-      const [profileRes, bookingsRes, reviewsRes] = await Promise.all([
-        ptApi.getProfile(),
-        ptApi.getBookings(),
-        ptApi.getMyReviews({limit: 3}).catch(() => ({data: {data: []}})),
-      ]);
-      setProfile(profileRes.data?.data || null);
-      setClients(new Set((bookingsRes.data?.data || []).map(b => b.client?._id).filter(Boolean)).size);
-      setReviews(reviewsRes.data?.data || []);
-      setStatus('ready');
-    } catch (err) {
-      setError(err.message);
-      setStatus('error');
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
+  const updateProfile = patch => setData(prev => ({...prev, profile: {...prev.profile, ...patch}}));
+  const {uploading, changePhoto} = useProfilePhoto(
+    useCallback(
+      photoUrl =>
+        setData(prev => ({...prev, profile: {...prev.profile, user: {...prev.profile.user, photoUrl}}})),
+      [setData],
+    ),
   );
-
-  const changePhoto = async () => {
-    setUploading(true);
-    try {
-      const photoUrl = await pickAndUploadProfilePhoto();
-      if (photoUrl) {
-        setProfile(prev => ({...prev, user: {...prev.user, photoUrl}}));
-        await updateSession(dispatch, auth, {photoUrl});
-      }
-    } catch (err) {
-      Alert.alert('Không đổi được ảnh', err.message);
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const toggleAccepting = async value => {
     setTogglingAccepting(true);
-    setProfile(prev => ({...prev, isAcceptingClients: value}));
+    updateProfile({isAcceptingClients: value});
     try {
       await ptApi.updateProfile({isAcceptingClients: value});
     } catch (err) {
-      setProfile(prev => ({...prev, isAcceptingClients: !value}));
+      updateProfile({isAcceptingClients: !value});
       Alert.alert('Không cập nhật được', err.message);
     } finally {
       setTogglingAccepting(false);
     }
   };
-
-  const confirmSignOut = () =>
-    Alert.alert('Đăng xuất', 'Bạn có chắc muốn đăng xuất?', [
-      {text: 'Hủy', style: 'cancel'},
-      {text: 'Đăng xuất', style: 'destructive', onPress: () => signOut(dispatch)},
-    ]);
-
-  const confirmSignOutEverywhere = () =>
-    Alert.alert('Đăng xuất khỏi mọi thiết bị', 'Tất cả thiết bị (kể cả máy này) sẽ phải đăng nhập lại.', [
-      {text: 'Hủy', style: 'cancel'},
-      {
-        text: 'Đăng xuất tất cả',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await profileApi.logoutAllDevices();
-            signOut(dispatch);
-          } catch (err) {
-            Alert.alert('Không thực hiện được', err.message);
-          }
-        },
-      },
-    ]);
-
-  if (status === 'loading') {
-    return <StateView type="loading" />;
-  }
-  if (status === 'error') {
-    return <StateView type="error" message={error} onAction={load} />;
-  }
-
-  const user = profile?.user || {};
-  const specs = profile?.specializations || [];
-  const accepting = profile?.isAcceptingClients !== false;
 
   const editButton = (
     <HeaderIconButton
@@ -150,9 +78,13 @@ const PTProfileDisplayScreen = ({navigation}) => {
     />
   );
 
-  return (
-    <View style={styles.container}>
-      <DeleteAccountModal visible={showDeleteModal} onClose={() => setShowDeleteModal(false)} />
+  const renderContent = () => {
+    const {profile, clients, reviews} = data;
+    const user = profile?.user || {};
+    const specs = profile?.specializations || [];
+    const accepting = profile?.isAcceptingClients !== false;
+
+    return (
       <HeroScrollView
         hero={
           <ProfileHero
@@ -168,30 +100,21 @@ const PTProfileDisplayScreen = ({navigation}) => {
         right={editButton}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              load();
-            }}
-            tintColor={appColors.white}
-            colors={[appColors.primary]}
-          />
-        }>
-        <View style={styles.statsCard}>
-          <Stat
-            value={profile?.numReviews > 0 ? `${Number(profile.rating).toFixed(1)} ★` : 'Mới'}
-            label={profile?.numReviews > 0 ? `${profile.numReviews} đánh giá` : 'Chưa có đánh giá'}
-          />
-          <View style={styles.statDivider} />
-          <Stat value={profile?.totalSessions || 0} label="Buổi đã dạy" />
-          <View style={styles.statDivider} />
-          <Stat value={clients} label="Học viên" />
-        </View>
+        refreshControl={<AppRefreshControl onGradient refreshing={refreshing} onRefresh={refresh} />}>
+        <StatGroup
+          style={styles.stats}
+          items={[
+            {
+              label: profile?.numReviews > 0 ? `${profile.numReviews} đánh giá` : 'Chưa có đánh giá',
+              value: profile?.numReviews > 0 ? `${Number(profile.rating).toFixed(1)} ★` : 'Mới',
+            },
+            {label: 'Buổi đã dạy', value: profile?.totalSessions || 0},
+            {label: 'Học viên', value: clients},
+          ]}
+        />
 
         <View style={styles.body}>
-          <View style={[styles.card, styles.acceptRow]}>
+          <Card style={styles.acceptRow}>
             <View style={styles.flex}>
               <TextComponent text="Nhận học viên mới" size={15} font={fontFamilies.semiBold} />
               <TextComponent
@@ -208,10 +131,9 @@ const PTProfileDisplayScreen = ({navigation}) => {
               thumbColor={appColors.white}
               accessibilityLabel="Nhận học viên mới"
             />
-          </View>
+          </Card>
 
-          <View style={styles.card}>
-            <TextComponent text="Giới thiệu" size={15} font={fontFamilies.semiBold} />
+          <Card title="Giới thiệu">
             <TextComponent
               text={profile?.bio || 'Chưa có giới thiệu. Bấm biểu tượng bút để thêm.'}
               size={14}
@@ -219,65 +141,38 @@ const PTProfileDisplayScreen = ({navigation}) => {
               styles={styles.bio}
             />
             {specs.length ? (
-              <View style={styles.wrap}>
+              <RowComponent wrap gap={spacing.sm}>
                 {specs.map(spec => (
-                  <View key={spec} style={styles.tag}>
-                    <TextComponent
-                      text={getSpecializationLabel(spec)}
-                      size={12}
-                      font={fontFamilies.medium}
-                      color={appColors.primaryDark}
-                    />
-                  </View>
+                  <Tag key={spec} label={getSpecializationLabel(spec)} />
                 ))}
-              </View>
+              </RowComponent>
             ) : null}
-            <DetailRow
+            <InfoRow
+              layout="inline"
               icon={<Moneys size={18} color={appColors.primary} />}
               label="Giá mỗi giờ"
               value={profile?.hourlyRate ? formatCurrency(profile.hourlyRate) : '—'}
             />
-            <DetailRow
+            <InfoRow
+              layout="inline"
               icon={<Briefcase size={18} color={appColors.primary} />}
               label="Kinh nghiệm"
               value={`${profile?.experienceYears || 0} năm`}
             />
-            <DetailRow
+            <InfoRow
+              layout="inline"
               icon={<Location size={18} color={appColors.primary} />}
               label="Khu vực"
               value={formatLocation(profile?.location, '—')}
             />
-          </View>
+          </Card>
 
           {reviews.length > 0 ? (
-            <View style={styles.card}>
-              <TextComponent text="Đánh giá gần đây" size={15} font={fontFamilies.semiBold} />
+            <Card title="Đánh giá gần đây">
               {reviews.map(review => (
-                <View key={review._id} style={styles.review}>
-                  <View style={styles.reviewTop}>
-                    <TextComponent
-                      text={review.client?.username || 'Học viên'}
-                      font={fontFamilies.medium}
-                      styles={styles.flex}
-                    />
-                    <View style={styles.stars}>
-                      {Array.from({length: 5}, (_, i) => (
-                        <Star1
-                          key={i}
-                          size={12}
-                          color={i < review.rating ? appColors.yellow : appColors.border}
-                          variant="Bold"
-                        />
-                      ))}
-                    </View>
-                  </View>
-                  {review.comment ? (
-                    <TextComponent text={review.comment} size={13} color={appColors.textMuted} />
-                  ) : null}
-                  <TextComponent text={formatRelativeTime(review.createdAt)} size={11} color={appColors.placeholder} />
-                </View>
+                <ReviewItem key={review._id} review={review} showDate />
               ))}
-            </View>
+            </Card>
           ) : null}
 
           <MenuList
@@ -290,70 +185,58 @@ const PTProfileDisplayScreen = ({navigation}) => {
                 icon: User,
                 onPress: () => navigation.navigate('EditProfileScreen'),
               },
-              {key: 'password', title: 'Đổi mật khẩu', icon: Lock, onPress: () => navigation.navigate('ChangePasswordScreen')},
+              {
+                key: 'password',
+                title: 'Đổi mật khẩu',
+                icon: Lock,
+                onPress: () => navigation.navigate('ChangePasswordScreen'),
+              },
               {key: 'devices', title: 'Đăng xuất khỏi mọi thiết bị', icon: Mobile, onPress: confirmSignOutEverywhere},
             ]}
           />
           <MenuList
             items={[
               {key: 'logout', title: 'Đăng xuất', icon: LogoutCurve, danger: true, onPress: confirmSignOut},
-              {key: 'delete', title: 'Xóa tài khoản', icon: Trash, danger: true, onPress: () => setShowDeleteModal(true)},
+              {
+                key: 'delete',
+                title: 'Xóa tài khoản',
+                icon: Trash,
+                danger: true,
+                onPress: () => setShowDeleteModal(true),
+              },
             ]}
           />
         </View>
       </HeroScrollView>
-    </View>
+    );
+  };
+
+  return (
+    <Screen>
+      <DeleteAccountModal visible={showDeleteModal} onClose={() => setShowDeleteModal(false)} />
+      <AsyncView status={status} error={error} onRetry={reload}>
+        {renderContent}
+      </AsyncView>
+    </Screen>
   );
 };
-
-const Stat = ({value, label}) => (
-  <View style={styles.stat}>
-    <TextComponent text={String(value)} size={18} font={fontFamilies.bold} numberOfLines={1} />
-    <TextComponent text={label} size={12} color={appColors.textMuted} numberOfLines={1} />
-  </View>
-);
 
 export default PTProfileDisplayScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: appColors.background,
-  },
   scroll: {
     paddingBottom: spacing.xl,
   },
   flex: {
     flex: 1,
   },
-  statsCard: {
-    flexDirection: 'row',
+  stats: {
     marginTop: -28,
     marginHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    backgroundColor: appColors.surface,
-    borderRadius: radius.xl,
-    ...shadow.md,
-  },
-  stat: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: appColors.border,
   },
   body: {
     padding: spacing.lg,
     gap: spacing.lg,
-  },
-  card: {
-    backgroundColor: appColors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.md,
-    ...shadow.sm,
   },
   acceptRow: {
     flexDirection: 'row',
@@ -361,42 +244,5 @@ const styles = StyleSheet.create({
   },
   bio: {
     lineHeight: 21,
-  },
-  wrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  tag: {
-    backgroundColor: appColors.primarySoft,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  detailIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: appColors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  review: {
-    gap: 2,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: appColors.border,
-  },
-  reviewTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  stars: {
-    flexDirection: 'row',
   },
 });

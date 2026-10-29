@@ -1,10 +1,10 @@
 import React, {useState} from 'react';
-import {ActivityIndicator, Modal, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {StyleSheet, TouchableOpacity, View} from 'react-native';
 import {Star1} from 'iconsax-react-native';
-import {InputComponent, TextComponent} from '../components';
+import {Dialog, InputComponent, TextComponent} from '../components';
 import appColors from '../constants/appColors';
 import {fontFamilies} from '../constants/fontFamilies';
-import {radius, spacing} from '../constants/theme';
+import {spacing} from '../constants/theme';
 
 const RATING_LABELS = ['', 'Rất tệ', 'Chưa tốt', 'Bình thường', 'Tốt', 'Tuyệt vời'];
 // Must match the server's Review comment maxlength.
@@ -39,83 +39,52 @@ const ReviewModal = ({visible, trainerName, onSubmit, onClose}) => {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={close}>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
-          <TextComponent text="Đánh giá buổi tập" size={18} font={fontFamilies.bold} />
-          <TextComponent
-            text={`Buổi tập với ${trainerName || 'huấn luyện viên'} thế nào?`}
-            color={appColors.textMuted}
-          />
-          <View style={styles.stars}>
-            {[1, 2, 3, 4, 5].map(value => (
-              <TouchableOpacity
-                key={value}
-                onPress={() => setRating(value)}
-                hitSlop={{top: 8, bottom: 8, left: 4, right: 4}}
-                accessibilityRole="button"
-                accessibilityLabel={`${value} sao`}
-                accessibilityState={{selected: rating === value}}>
-                <Star1
-                  size={36}
-                  color={value <= rating ? appColors.yellow : appColors.border}
-                  variant="Bold"
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TextComponent
-            text={RATING_LABELS[rating] || 'Chạm để chọn số sao'}
-            size={13}
-            font={fontFamilies.medium}
-            color={rating ? appColors.text : appColors.textMuted}
-            styles={styles.center}
-          />
-          <InputComponent
-            value={comment}
-            onChange={setComment}
-            placeholder="Chia sẻ cảm nhận của bạn (không bắt buộc)"
-            maxLength={COMMENT_MAX}
-            multiline
-            autoCapitalize="sentences"
-          />
-          {error ? <TextComponent text={error} size={13} color={appColors.danger} /> : null}
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.button} onPress={close}>
-              <TextComponent text="Để sau" font={fontFamilies.medium} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.submit, (!rating || isLoading) && styles.disabled]}
-              disabled={!rating || isLoading}
-              onPress={submit}>
-              {isLoading ? (
-                <ActivityIndicator color={appColors.white} />
-              ) : (
-                <TextComponent text="Gửi đánh giá" font={fontFamilies.semiBold} color={appColors.white} />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
+    <Dialog
+      visible={visible}
+      title="Đánh giá buổi tập"
+      message={`Buổi tập với ${trainerName || 'huấn luyện viên'} thế nào?`}
+      error={error}
+      cancelLabel="Để sau"
+      confirmLabel="Gửi đánh giá"
+      confirmDisabled={!rating}
+      loading={isLoading}
+      onConfirm={submit}
+      onClose={close}>
+      <View style={styles.stars}>
+        {[1, 2, 3, 4, 5].map(value => (
+          <TouchableOpacity
+            key={value}
+            onPress={() => setRating(value)}
+            hitSlop={{top: 8, bottom: 8, left: 4, right: 4}}
+            accessibilityRole="button"
+            accessibilityLabel={`${value} sao`}
+            accessibilityState={{selected: rating === value}}>
+            <Star1 size={36} color={value <= rating ? appColors.yellow : appColors.border} variant="Bold" />
+          </TouchableOpacity>
+        ))}
       </View>
-    </Modal>
+      <TextComponent
+        text={RATING_LABELS[rating] || 'Chạm để chọn số sao'}
+        size={13}
+        font={fontFamilies.medium}
+        color={rating ? appColors.text : appColors.textMuted}
+        styles={styles.center}
+      />
+      <InputComponent
+        value={comment}
+        onChange={setComment}
+        placeholder="Chia sẻ cảm nhận của bạn (không bắt buộc)"
+        maxLength={COMMENT_MAX}
+        multiline
+        autoCapitalize="sentences"
+      />
+    </Dialog>
   );
 };
 
 export default ReviewModal;
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: appColors.overlay,
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  card: {
-    backgroundColor: appColors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.xl - 4,
-    gap: spacing.md,
-  },
   stars: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -124,24 +93,5 @@ const styles = StyleSheet.create({
   },
   center: {
     textAlign: 'center',
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-  },
-  button: {
-    minHeight: 44,
-    minWidth: 96,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submit: {
-    backgroundColor: appColors.primary,
-  },
-  disabled: {
-    opacity: 0.45,
   },
 });

@@ -1,21 +1,25 @@
 import React, {useState} from 'react';
-import {Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View} from 'react-native';
+import {Alert, StyleSheet, View} from 'react-native';
 import {useDispatch, useSelector} from 'react-redux';
-import {Lock, ShieldTick, TickCircle} from 'iconsax-react-native';
-import {ButtonComponent, InputComponent, ScreenHeader, TextComponent} from '../../components';
+import {Lock, ShieldTick} from 'iconsax-react-native';
+import {
+  Banner,
+  ButtonComponent,
+  Card,
+  FormScrollView,
+  IconBox,
+  InputComponent,
+  Screen,
+  ScreenHeader,
+  TextComponent,
+} from '../../components';
+import PasswordRule from './components/PasswordRule';
 import profileApi from '../../apis/profileApi';
 import {authSelector} from '../../redux/reducers/authReducer';
 import {updateSession} from '../../utils/session';
 import {MIN_PASSWORD_LENGTH} from '../../utils/validate';
 import appColors from '../../constants/appColors';
-import {radius, shadow, spacing} from '../../constants/theme';
-
-const Rule = ({ok, text}) => (
-  <View style={styles.rule}>
-    <TickCircle size={16} color={ok ? appColors.success : appColors.border} variant={ok ? 'Bold' : 'Linear'} />
-    <TextComponent text={text} size={13} color={ok ? appColors.text : appColors.textMuted} />
-  </View>
-);
+import {spacing} from '../../constants/theme';
 
 const ChangePasswordScreen = ({navigation}) => {
   const dispatch = useDispatch();
@@ -52,120 +56,81 @@ const ChangePasswordScreen = ({navigation}) => {
   };
 
   return (
-    <View style={styles.container}>
+    <Screen>
       <ScreenHeader title="Đổi mật khẩu" onBack={() => navigation.goBack()} />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.intro}>
-            <View style={styles.introIcon}>
-              <ShieldTick size={26} color={appColors.primary} variant="Bold" />
-            </View>
-            <TextComponent
-              text="Mật khẩu mạnh giúp bảo vệ tài khoản và lịch tập của bạn."
-              size={14}
-              color={appColors.textMuted}
-              styles={styles.flex}
-            />
-          </View>
-
-          <View style={styles.card}>
-            <InputComponent
-              label="Mật khẩu hiện tại"
-              value={form.currentPassword}
-              onChange={val => setField('currentPassword', val)}
-              textContentType="password"
-              prefix={<Lock size={20} color={appColors.textMuted} />}
-              isPassword
-            />
-            <InputComponent
-              label="Mật khẩu mới"
-              value={form.newPassword}
-              onChange={val => setField('newPassword', val)}
-              textContentType="newPassword"
-              prefix={<Lock size={20} color={appColors.textMuted} />}
-              isPassword
-            />
-            <InputComponent
-              label="Nhập lại mật khẩu mới"
-              value={form.confirmPassword}
-              onChange={val => setField('confirmPassword', val)}
-              textContentType="newPassword"
-              error={form.confirmPassword && !matches ? 'Mật khẩu xác nhận không khớp' : ''}
-              prefix={<Lock size={20} color={appColors.textMuted} />}
-              isPassword
-            />
-            <View style={styles.rules}>
-              <Rule ok={longEnough} text={`Ít nhất ${MIN_PASSWORD_LENGTH} ký tự`} />
-              <Rule ok={differs} text="Khác mật khẩu hiện tại" />
-              <Rule ok={matches} text="Hai lần nhập trùng khớp" />
-            </View>
-          </View>
-
-          {error ? (
-            <View style={styles.errorBox}>
-              <TextComponent text={error} size={13} color={appColors.danger} />
-            </View>
-          ) : null}
-
-          <ButtonComponent
-            text="Đổi mật khẩu"
-            type="primary"
-            size="lg"
-            onPress={submit}
-            disable={!canSubmit}
-            isLoading={saving}
+      <FormScrollView>
+        <View style={styles.intro}>
+          <IconBox size={52}>
+            <ShieldTick size={26} color={appColors.primary} variant="Bold" />
+          </IconBox>
+          <TextComponent
+            text="Mật khẩu mạnh giúp bảo vệ tài khoản và lịch tập của bạn."
+            size={14}
+            color={appColors.textMuted}
+            styles={styles.flex}
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+        </View>
+
+        <Card gap={spacing.lg}>
+          <InputComponent
+            label="Mật khẩu hiện tại"
+            value={form.currentPassword}
+            onChange={val => setField('currentPassword', val)}
+            textContentType="password"
+            prefix={<Lock size={20} color={appColors.textMuted} />}
+            isPassword
+          />
+          <InputComponent
+            label="Mật khẩu mới"
+            value={form.newPassword}
+            onChange={val => setField('newPassword', val)}
+            textContentType="newPassword"
+            prefix={<Lock size={20} color={appColors.textMuted} />}
+            isPassword
+          />
+          <InputComponent
+            label="Nhập lại mật khẩu mới"
+            value={form.confirmPassword}
+            onChange={val => setField('confirmPassword', val)}
+            textContentType="newPassword"
+            error={form.confirmPassword && !matches ? 'Mật khẩu xác nhận không khớp' : ''}
+            prefix={<Lock size={20} color={appColors.textMuted} />}
+            isPassword
+          />
+          <View style={styles.rules}>
+            <PasswordRule ok={longEnough} text={`Ít nhất ${MIN_PASSWORD_LENGTH} ký tự`} />
+            <PasswordRule ok={differs} text="Khác mật khẩu hiện tại" />
+            <PasswordRule ok={matches} text="Hai lần nhập trùng khớp" />
+          </View>
+        </Card>
+
+        <Banner message={error} />
+
+        <ButtonComponent
+          text="Đổi mật khẩu"
+          type="primary"
+          size="lg"
+          onPress={submit}
+          disable={!canSubmit}
+          isLoading={saving}
+        />
+      </FormScrollView>
+    </Screen>
   );
 };
 
 export default ChangePasswordScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: appColors.background,
-  },
   flex: {
     flex: 1,
-  },
-  scroll: {
-    padding: spacing.lg,
-    gap: spacing.lg,
   },
   intro: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
-  introIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: appColors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    backgroundColor: appColors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.lg,
-    ...shadow.sm,
-  },
   rules: {
     gap: spacing.sm,
-  },
-  rule: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  errorBox: {
-    backgroundColor: appColors.dangerSoft,
-    borderRadius: radius.sm,
-    padding: spacing.md,
   },
 });

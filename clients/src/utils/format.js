@@ -1,4 +1,14 @@
+import dayjs from './dayjs';
+
 // Display formatting shared by screens (Vietnamese conventions).
+
+const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+
+// Vietnam calendar date of a UTC instant, e.g. "Thứ 5, 30/10/2026".
+export const formatBookingDate = iso => {
+  const date = dayjs(iso).utcOffset(7 * 60);
+  return `${WEEKDAYS[date.day()]}, ${date.format('DD/MM/YYYY')}`;
+};
 
 // 350000 -> "350.000 ₫". Implemented by hand because Intl support varies
 // between Hermes builds.

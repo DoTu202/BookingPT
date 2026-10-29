@@ -37,4 +37,26 @@ export const timeUtils = {
   getCurrentVietnamHour() {
     return dayjs.utc().add(VIETNAM_OFFSET_HOURS, 'hour').hour();
   },
+
+  /** Two UTC instants -> '06:00 – 07:30' in Vietnam time. */
+  formatTimeRange(startIso, endIso) {
+    return `${this.formatTo24HourTime(startIso)} – ${this.formatTo24HourTime(endIso)}`;
+  },
+
+  /** Greeting for the current part of the day in Vietnam. */
+  greeting(hour = this.getCurrentVietnamHour()) {
+    if (hour < 11) {
+      return 'Chào buổi sáng';
+    }
+    if (hour < 14) {
+      return 'Chào buổi trưa';
+    }
+    if (hour < 18) {
+      return 'Chào buổi chiều';
+    }
+    return 'Chào buổi tối';
+  },
 };
+
+// Today's calendar day in Vietnam as 'YYYY-MM-DD' (the key DateStrip uses).
+export const todayKey = () => dayjs().utcOffset(VIETNAM_OFFSET_HOURS * 60).format('YYYY-MM-DD');

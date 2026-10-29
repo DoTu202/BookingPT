@@ -84,13 +84,6 @@ const AuthLayout = ({title, subtitle, onBack, children, footer}) => {
   );
 };
 
-export const FormError = ({message}) =>
-  message ? (
-    <View style={styles.errorBox} accessibilityLiveRegion="polite">
-      <TextComponent text={message} size={13} color={appColors.danger} />
-    </View>
-  ) : null;
-
 export default AuthLayout;
 
 const styles = StyleSheet.create({
@@ -150,11 +143,5 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: spacing.xl,
     alignItems: 'center',
-  },
-  errorBox: {
-    backgroundColor: appColors.dangerSoft,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
   },
 });

@@ -3,8 +3,8 @@ import {Platform, StyleSheet, TouchableOpacity, View} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import dayjs from '../../utils/dayjs';
 import {Calendar, Call, Lock, Profile, Sms, TickCircle} from 'iconsax-react-native';
-import {ButtonComponent, InputComponent, RowComponent, TextComponent} from '../../components';
-import AuthLayout, {FormError} from './components/AuthLayout';
+import {Banner, ButtonComponent, InputComponent, RowComponent, TextComponent} from '../../components';
+import AuthLayout from './components/AuthLayout';
 import authApi from '../../apis/authApi';
 import {MIN_PASSWORD_LENGTH, Validate} from '../../utils/validate';
 import appColors from '../../constants/appColors';
@@ -282,7 +282,7 @@ const SignUpScreen = ({navigation}) => {
         isPassword
       />
 
-      <FormError message={formError} />
+      <Banner message={formError} />
 
       <ButtonComponent
         text="Tiếp tục"

@@ -1,7 +1,7 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {Calendar, Clock, Home2, Messages2, User} from 'iconsax-react-native';
-import ModernTabBar from '../components/ModernTabBar';
+import {ModernTabBar} from '../components';
 import {tabIcon} from './tabIcon';
 import {
   PTAvailabilityScreen,

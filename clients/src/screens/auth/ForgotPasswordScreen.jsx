@@ -1,8 +1,8 @@
 import React, {useState} from 'react';
 import {Alert} from 'react-native';
 import {Key, Lock, Sms} from 'iconsax-react-native';
-import {ButtonComponent, InputComponent, RowComponent} from '../../components';
-import AuthLayout, {FormError} from './components/AuthLayout';
+import {Banner, ButtonComponent, InputComponent, RowComponent} from '../../components';
+import AuthLayout from './components/AuthLayout';
 import authApi from '../../apis/authApi';
 import {MIN_PASSWORD_LENGTH, Validate} from '../../utils/validate';
 import appColors from '../../constants/appColors';
@@ -133,7 +133,7 @@ const ForgotPasswordScreen = ({navigation}) => {
         </>
       )}
 
-      <FormError message={errorMessage} />
+      <Banner message={errorMessage} />
 
       <ButtonComponent
         text={isEmailStep ? 'Gửi mã' : 'Đổi mật khẩu'}

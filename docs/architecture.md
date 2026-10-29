@@ -203,7 +203,8 @@ flowchart TD
 | State | Redux Toolkit holds the session. "Remember me" keeps a copy in AsyncStorage; `utils/session.js` keeps both in sync and is the only way to sign out. |
 | API | One `axiosClient`: attaches the token, signs out on 401, and turns every failure into an `Error` with a **Vietnamese** message (server messages are translated in `utils/errorMessage.js`). |
 | Realtime | `apis/socketClient.js`: one socket per session, `useSocketEvent(event, handler)` hook for screens. |
-| Design system | Tokens in `constants/appColors.js` and `constants/theme.js`; SVG-based `GradientView`; shared components (`ScreenHeader`, collapsing `HeroScrollView`, `StateView`, `StatCard`, `BarChart`, `DateStrip`, …). |
+| Design system | Tokens in `constants/appColors.js` and `constants/theme.js`; SVG-based `GradientView`; shared components in `components/` grouped as `ui/` (Card, Banner, Tag, ListItem, …), `layout/` (Screen, ScreenHeader, collapsing HeroScrollView, BottomSheet, Dialog, …), `feedback/` (StateView, AsyncView), `charts/`, `domain/` (BookingCard, PtItem, …). |
+| Screen structure | Screens compose shared components; pieces used by one screen group live in that group's `components/` folder (e.g. `screens/ptScreen/components/dashboard`). Request state comes from `hooks/useAsync` / `hooks/usePaginatedList` instead of hand-written status/error/refreshing state. |
 | Charts | Built from Views and `react-native-svg` — no chart library. |
 | Language | Vietnamese UI; API codes mapped to labels in `constants/labels.js`. |
 
