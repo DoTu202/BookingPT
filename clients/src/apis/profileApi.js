@@ -1,19 +1,16 @@
 import axiosClient from './axiosClient';
 
 const profileApi = {
-  // Get profile
   getProfile: async () => {
     const url = '/api/profile/profile';
     return axiosClient.get(url);
   },
 
-  // Update profile
   updateProfile: async profileData => {
     const url = '/api/profile/profile';
     return axiosClient.put(url, profileData);
   },
 
-  // Change password
   changePassword: async passwordData => {
     const url = '/api/profile/change-password';
     return axiosClient.post(url, passwordData);
@@ -35,7 +32,6 @@ const profileApi = {
   unregisterPushToken: async token =>
     axiosClient.delete('/api/profile/push-token', {data: {token}}),
 
-  // Delete account
   deleteAccount: async deleteData => {
     const url = '/api/profile/delete-account';
     return axiosClient.delete(url, {

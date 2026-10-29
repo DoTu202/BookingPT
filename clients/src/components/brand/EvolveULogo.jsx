@@ -1,10 +1,7 @@
-// components/EvolveULogo.jsx
-
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 
 const EvolveULogo = (props) => {
-  // Bạn có thể truyền props như width, height, color vào đây
   const { width = 48, height = 48, color = '#f97316' } = props;
 
   return (

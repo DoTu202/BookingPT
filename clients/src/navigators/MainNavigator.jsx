@@ -45,7 +45,6 @@ const MainNavigator = () => {
         }),
       }}>
       {auth.role === 'pt' ? (
-        //PT FLOW
         <>
           <Stack.Screen
             name="PTMain"
@@ -102,7 +101,6 @@ const MainNavigator = () => {
           />
         </>
       ) : (
-        //CLIENT FLOW
         <>
           <Stack.Screen
             name="ClientMainWithDrawerAndTabs"
@@ -125,7 +123,6 @@ const MainNavigator = () => {
             options={{headerShown: false}}
           />
 
-          {/* Client Booking Flow */}
           <Stack.Screen
             name="PTDetailScreen"
             component={PTDetailScreen}
@@ -135,7 +132,6 @@ const MainNavigator = () => {
           />
 
 
-          {/* client common screen  */}
           <Stack.Screen
             name="Notifications"
             component={NotificationScreen}

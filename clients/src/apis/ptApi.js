@@ -2,13 +2,12 @@ import axiosClient from './axiosClient';
 
 // PT Management APIs (for PT users)
 const ptApi = {
-  // Profile APIs for PT
+  // Profile
   getProfile: async () => {
     const url = '/api/pt/profile';
     return axiosClient.get(url);
   },
 
-  // Update PT Profile
   updateProfile: async data => {
     const url = '/api/pt/profile';
     return axiosClient.put(url, data);
@@ -23,13 +22,12 @@ const ptApi = {
   // Dashboard statistics: {period: 'week'|'month'|'year', offset: 0 = current}
   getDashboard: async (params = {}) => axiosClient.get('/api/pt/dashboard', {params}),
 
-  // Availability APIs
+  // Availability
   getAvailabilitySlots: async (params = {}) => {
     const url = '/api/pt/availability';
     return axiosClient.get(url, {params});
   },
 
-  // Add, update, delete availability slots APIs
   addAvailabilitySlot: async data => {
     const url = '/api/pt/availability';
     return axiosClient.post(url, data);
@@ -45,7 +43,7 @@ const ptApi = {
     return axiosClient.delete(url);
   },
 
-  // Booking APIs
+  // Bookings
   getBookings: async (params = {}) => {
     const url = '/api/pt/bookings';
     return axiosClient.get(url, {params});
