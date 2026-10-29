@@ -1,4 +1,4 @@
-import {formatCurrency, formatCompactCurrency, formatLocation, formatHours} from '../src/utils/format';
+import {formatBookingDate, formatCurrency, formatCompactCurrency, formatLocation, formatHours} from '../src/utils/format';
 
 describe('format', () => {
   it('formats VND with dot separators', () => {
@@ -21,5 +21,12 @@ describe('format', () => {
   it('formats durations in Vietnamese', () => {
     expect(formatHours(1)).toBe('1 giờ');
     expect(formatHours(1.5)).toBe('1,5 giờ');
+  });
+});
+
+describe('formatBookingDate', () => {
+  it('shows the Vietnam weekday and date of a UTC instant', () => {
+    // 23:30 UTC on Tue 1 Jan 2030 is Wed 2 Jan in Vietnam.
+    expect(formatBookingDate('2030-01-01T23:30:00.000Z')).toBe('Thứ 4, 02/01/2030');
   });
 });
