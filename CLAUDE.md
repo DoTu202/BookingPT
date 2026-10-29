@@ -16,7 +16,7 @@ Server (run from `server/`, needs `server/.env` — copy `.env.example`; `MONGOD
 - `npm test` — Jest + Supertest against mongodb-memory-server (no external DB needed). Single file: `npx jest tests/booking.test.js`; single test: `npx jest -t "only one of many concurrent"`. If a local `mongod` exists, `MONGOMS_SYSTEM_BINARY=$(which mongod)` avoids the binary download.
 - `npm run lint` — ESLint 9 flat config (`server/eslint.config.js`).
 - `npm run test-accounts` — non-destructive: creates/resets the client + PT accounts whose credentials are `TEST_CLIENT_*` / `TEST_PT_*` in `server/.env` (and tops up the PT's open slots). Use this against shared DBs instead of `seed`.
-- `npm run seed` — wipes the DB in `MONGODB_URI` and inserts demo data (accounts `client@demo.com` / `pt@demo.com`, password `Password123!`). Refuses to run with `NODE_ENV=production`.
+- `npm run seed` — wipes the DB in `MONGODB_URI` and inserts demo data (accounts `client@demo.com` / `pt@demo.com`, password `Password123!`). Refuses to run with `NODE_ENV=production`. `npm run seed -- --append` keeps existing data and only replaces the `@demo.com` accounts and their data (safe on shared DBs, re-runnable).
 - `docker compose up --build` (repo root) — API + MongoDB.
 - CI: `.github/workflows/ci.yml` runs server lint + tests + `npm audit`, and client lint + unit tests.
 

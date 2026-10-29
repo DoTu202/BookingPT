@@ -2,6 +2,8 @@
 // away. Usage: npm run seed   (uses MONGODB_URI from .env)
 //
 // WARNING: deletes all existing data in the target database.
+// `npm run seed -- --append` keeps existing data and only replaces the demo
+// accounts (`@demo.com`) and everything linked to them.
 const bcrypt = require('bcrypt');
 const mongoose = require('mongoose');
 const connectDB = require('../src/configs/connectDB');
@@ -18,6 +20,7 @@ const {dayjs, APP_TIMEZONE} = require('../src/utils/helpers');
 const {BCRYPT_ROUNDS} = require('../src/utils/validators');
 
 const DEMO_PASSWORD = 'Password123!';
+const APPEND = process.argv.includes('--append');
 
 const trainers = [
   {
@@ -60,16 +63,38 @@ const slotAt = (dayOffset, hour) => {
   return {startTime: start.toDate(), endTime: start.add(1, 'hour').toDate()};
 };
 
+const removeDemoData = async () => {
+  const ids = (await User.find({email: /@demo\.com$/}).select('_id')).map(u => u._id);
+  const rooms = await ChatRoom.find({$or: [{ptUser: {$in: ids}}, {clientUser: {$in: ids}}]}).select('_id');
+  // Trainers outside the demo set reviewed by demo clients get their rating recomputed below.
+  const reviewedPts = await Review.distinct('pt', {client: {$in: ids}, pt: {$nin: ids}});
+  await Promise.all([
+    PTProfile.deleteMany({user: {$in: ids}}),
+    Availability.deleteMany({pt: {$in: ids}}),
+    Booking.deleteMany({$or: [{client: {$in: ids}}, {pt: {$in: ids}}]}),
+    Notification.deleteMany({$or: [{recipient: {$in: ids}}, {sender: {$in: ids}}]}),
+    Message.deleteMany({chatRoom: {$in: rooms.map(r => r._id)}}),
+    ChatRoom.deleteMany({_id: {$in: rooms.map(r => r._id)}}),
+    Review.deleteMany({$or: [{client: {$in: ids}}, {pt: {$in: ids}}]}),
+  ]);
+  await User.deleteMany({_id: {$in: ids}});
+  await Promise.all(reviewedPts.map(refreshPtRating));
+};
+
 const seed = async () => {
   if (isProduction) {
     throw new Error('Refusing to seed a production database.');
   }
   await connectDB();
-  await Promise.all(
-    [User, PTProfile, Availability, Booking, Notification, ChatRoom, Message, Review].map(m =>
-      m.deleteMany({}),
-    ),
-  );
+  if (APPEND) {
+    await removeDemoData();
+  } else {
+    await Promise.all(
+      [User, PTProfile, Availability, Booking, Notification, ChatRoom, Message, Review].map(m =>
+        m.deleteMany({}),
+      ),
+    );
+  }
 
   const password = await bcrypt.hash(DEMO_PASSWORD, BCRYPT_ROUNDS);
   const client = await User.create({
