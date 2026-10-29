@@ -3,27 +3,27 @@ PODS:
   - DoubleConversion (1.1.6)
   - fast_float (6.1.4)
   - FBLazyVector (0.79.2)
-  - Firebase/CoreOnly (12.18.0):
-    - FirebaseCore (~> 12.18.0)
-  - Firebase/Messaging (12.18.0):
+  - Firebase/CoreOnly (12.19.3):
+    - FirebaseCore (~> 12.19.3)
+  - Firebase/Messaging (12.19.3):
     - Firebase/CoreOnly
-    - FirebaseMessaging (~> 12.18.0)
-  - FirebaseCore (12.18.0):
-    - FirebaseCoreInternal (~> 12.18.0)
+    - FirebaseMessaging (~> 12.19.0)
+  - FirebaseCore (12.19.3):
+    - FirebaseCoreInternal (~> 12.19.0)
     - GoogleUtilities/Environment (~> 8.1)
     - GoogleUtilities/Logger (~> 8.1)
-  - FirebaseCoreExtension (12.18.0):
-    - FirebaseCore (~> 12.18.0)
-  - FirebaseCoreInternal (12.18.0):
+  - FirebaseCoreExtension (12.19.0):
+    - FirebaseCore (~> 12.19.0)
+  - FirebaseCoreInternal (12.19.0):
     - "GoogleUtilities/NSData+zlib (~> 8.1)"
-  - FirebaseInstallations (12.18.0):
-    - FirebaseCore (~> 12.18.0)
+  - FirebaseInstallations (12.19.0):
+    - FirebaseCore (~> 12.19.0)
     - GoogleUtilities/Environment (~> 8.1)
     - GoogleUtilities/UserDefaults (~> 8.1)
     - PromisesObjC (~> 2.4)
-  - FirebaseMessaging (12.18.0):
-    - FirebaseCore (~> 12.18.0)
-    - FirebaseInstallations (~> 12.18.0)
+  - FirebaseMessaging (12.19.0):
+    - FirebaseCore (~> 12.19.0)
+    - FirebaseInstallations (~> 12.19.0)
     - GoogleDataTransport (~> 10.1)
     - GoogleUtilities/AppDelegateSwizzler (~> 8.1)
     - GoogleUtilities/Environment (~> 8.1)
@@ -1861,9 +1861,9 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNFBApp (26.4.0):
+  - RNFBApp (26.4.1):
     - DoubleConversion
-    - Firebase/CoreOnly (= 12.18.0)
+    - Firebase/CoreOnly (~> 12.19.0)
     - glog
     - hermes-engine
     - RCT-Folly (= 2024.11.18.00)
@@ -1886,10 +1886,10 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
-  - RNFBMessaging (26.4.0):
+  - RNFBMessaging (26.4.1):
     - DoubleConversion
-    - Firebase/Messaging (= 12.18.0)
-    - FirebaseCoreExtension (= 12.18.0)
+    - Firebase/Messaging (~> 12.19.0)
+    - FirebaseCoreExtension (~> 12.19.0)
     - glog
     - hermes-engine
     - RCT-Folly (= 2024.11.18.00)
@@ -2458,12 +2458,12 @@ SPEC CHECKSUMS:
   DoubleConversion: cb417026b2400c8f53ae97020b2be961b59470cb
   fast_float: 06eeec4fe712a76acc9376682e4808b05ce978b6
   FBLazyVector: 84b955f7b4da8b895faf5946f73748267347c975
-  Firebase: 5523dd53ebe603451b4e1befcd99fa20a5c015cd
-  FirebaseCore: 96787d19ee32dc2242cc487b301bc616afeb398b
-  FirebaseCoreExtension: a86bab02524ca2bff95dddab7a3fcad505c2ddeb
-  FirebaseCoreInternal: 93b2d5f9e184c6818a04433891c358b0720a6a38
-  FirebaseInstallations: 933b2747e8594084c9117b65e8358fce29d7ced7
-  FirebaseMessaging: 422bb80cbf8ff83e69e50bea4d4984fc4704f665
+  Firebase: e3c5ab38229ae085490d02398d97b9f5374bbe6e
+  FirebaseCore: ab948de5d99e69aeed3cd6f5ace263ce795b2559
+  FirebaseCoreExtension: 201c78d7491a273d61d8afbf491214276a951e6d
+  FirebaseCoreInternal: 656b1c2fd5a1c5976183dc54b73deda78fb26ee3
+  FirebaseInstallations: f70a49eed611f5602f373e40974b3b01556ac217
+  FirebaseMessaging: c15f48126adbe8b4d3238a5e1fa24bab3ad3e472
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
   GoogleDataTransport: a24e58982ab3ba2f64d79613e027fe7f57e88539
@@ -2537,8 +2537,8 @@ SPEC CHECKSUMS:
   ReactCommon: 35a5629d7159876dd048c63751eaeb3aa3a6a53b
   RNCAsyncStorage: e25fda4679876e5204c4c502d297757ec1f17ced
   RNDateTimePicker: 9d94d39bcece53d0dfdb64e18b409d9005529191
-  RNFBApp: 5d15a1ac1a7e30583a3fa7225236988f7879cd96
-  RNFBMessaging: 320b082116f991a55a68a87cc6a1a12e68ba0be1
+  RNFBApp: d1797110fa1f0876c2077350a12242068dda1f39
+  RNFBMessaging: 14ad4eb46cf52fb652a2f2fd426f9a07b902ce0f
   RNGestureHandler: b249b5be5a3659025aed8898aaaafd567dc2d660
   RNReanimated: 2b314b18e28adf1b300f606eb0f205a1a6a643e1
   RNScreens: d9d5d8a2a484bb4446968bfa00db991f1117db44
@@ -2549,4 +2549,4 @@ SPEC CHECKSUMS:
 
 PODFILE CHECKSUM: 7859226e7568aa878a97088da7efbfa3bdab3eef
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.15.2
