@@ -2,8 +2,8 @@ import React, {useEffect, useRef, useState} from 'react';
 import {StyleSheet, TextInput, View} from 'react-native';
 import {useDispatch} from 'react-redux';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {ButtonComponent, RowComponent, TextComponent} from '../../components';
-import AuthLayout, {FormError} from './components/AuthLayout';
+import {Banner, ButtonComponent, RowComponent, TextComponent} from '../../components';
+import AuthLayout from './components/AuthLayout';
 import authApi from '../../apis/authApi';
 import {addAuth} from '../../redux/reducers/authReducer';
 import appColors from '../../constants/appColors';
@@ -147,7 +147,7 @@ const VerifyCodeScreen = ({navigation, route}) => {
         ))}
       </View>
 
-      <FormError message={errorMessage} />
+      <Banner message={errorMessage} />
       {notice && !errorMessage ? (
         <TextComponent text={notice} size={13} color={appColors.success} />
       ) : null}
