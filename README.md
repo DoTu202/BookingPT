@@ -54,7 +54,7 @@ I designed and built the whole project on my own: the React Native app, the Node
 | Area | What I did | Where to look |
 | --- | --- | --- |
 | Mobile development | Two role-based navigation flows (drawer + tabs for clients, tabs for trainers), 23 screens, session persistence, optimistic UI, pull-to-refresh, empty/error/loading states everywhere | [`clients/src/navigators`](clients/src/navigators), [`clients/src/screens`](clients/src/screens) |
-| UI engineering | A small design system (color and spacing tokens, shared components), collapsing headers, SVG gradients and charts built without UI or chart libraries, safe-area and notch handling, font-scaling limits | [`components`](clients/src/components), [`HeroScrollView`](clients/src/components/HeroScrollView.jsx), [`BarChart`](clients/src/components/BarChart.jsx) |
+| UI engineering | A small design system (color and spacing tokens, shared components), collapsing headers, SVG gradients and charts built without UI or chart libraries, safe-area and notch handling, font-scaling limits | [`components`](clients/src/components), [`HeroScrollView`](clients/src/components/layout/HeroScrollView.jsx), [`BarChart`](clients/src/components/charts/BarChart.jsx) |
 | Backend design | Layered Express API (routers, controllers, services, models), central error handling, input validation, structured logging with request ids | [`server/src`](server/src), [`app.js`](server/src/app.js) |
 | Data modeling | 10 MongoDB collections with indexes, a TTL index for one-time codes, derived fields (trainer rating) kept consistent through one function | [`server/src/models`](server/src/models), [`reviewService`](server/src/services/reviewService.js) |
 | Concurrency | Booking and every status change are conditional atomic updates; concurrent requests can't both succeed | [`bookingService`](server/src/services/bookingService.js) |
@@ -141,11 +141,12 @@ Running on a physical phone, environment variables, deployment and troubleshooti
 BookingPT/
 ├── clients/                 React Native app
 │   ├── src/apis/            HTTP client, per-domain API modules, Socket.IO client
-│   ├── src/components/      shared UI components
+│   ├── src/components/      shared UI components (ui, layout, feedback, charts, domain, navigation, brand)
+│   ├── src/hooks/           data loading, pagination, chat / photo / sign-out hooks
 │   ├── src/constants/       colors, spacing, labels
 │   ├── src/navigators/      auth, client and trainer navigation
 │   ├── src/redux/           session state
-│   ├── src/screens/         auth, client, trainer and shared screens
+│   ├── src/screens/         auth, client, trainer and shared screens (+ each group's components/)
 │   ├── src/utils/           session, dates, formatting, push, dashboard helpers
 │   └── __tests__/           unit tests
 ├── server/                  Express API
