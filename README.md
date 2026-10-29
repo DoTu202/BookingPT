@@ -23,11 +23,19 @@ I designed and built the whole project on my own: the React Native app, the Node
 
 ## Screenshots
 
-| Sign in | Client home | Search | Book a session |
+**Client**
+
+| Sign in | Home | Menu | Notifications |
 | :---: | :---: | :---: | :---: |
-| <img src="docs/screenshots/sign-in.jpg" width="190" alt="Sign in"/> | <img src="docs/screenshots/client-home.jpg" width="190" alt="Client home"/> | <img src="docs/screenshots/search-trainers.jpg" width="190" alt="Search trainers"/> | <img src="docs/screenshots/book-session.jpg" width="190" alt="Book a session"/> |
-| **Booking sent** | **Chat** | **Trainer dashboard** | **Availability** |
-| <img src="docs/screenshots/booking-success.jpg" width="190" alt="Booking sent"/> | <img src="docs/screenshots/chat.jpg" width="190" alt="Chat"/> | <img src="docs/screenshots/pt-dashboard.jpg" width="190" alt="Trainer dashboard"/> | <img src="docs/screenshots/pt-availability.jpg" width="190" alt="Availability"/> |
+| <img src="docs/screenshots/sign-in.png" width="190" alt="Sign in"/> | <img src="docs/screenshots/client-home.png" width="190" alt="Client home with the next session and monthly stats"/> | <img src="docs/screenshots/client-menu.png" width="190" alt="Drawer menu"/> | <img src="docs/screenshots/notifications.png" width="190" alt="Notifications"/> |
+| **My bookings** | **Progress** | **Messages** | **Profile** |
+| <img src="docs/screenshots/client-bookings.png" width="190" alt="Upcoming bookings with cancel and message actions"/> | <img src="docs/screenshots/client-progress.png" width="190" alt="Monthly progress chart"/> | <img src="docs/screenshots/chat-list.png" width="190" alt="Conversations"/> | <img src="docs/screenshots/client-profile.png" width="190" alt="Client profile"/> |
+
+**Trainer**
+
+| Home | Booking requests | Availability | Public profile |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/pt-home.png" width="190" alt="Trainer home with pending requests and monthly earnings"/> | <img src="docs/screenshots/pt-bookings.png" width="190" alt="Booking request with reject, confirm and message actions"/> | <img src="docs/screenshots/pt-availability.png" width="190" alt="Availability timeline for the next 14 days"/> | <img src="docs/screenshots/pt-profile.png" width="190" alt="Trainer profile with rating and bio"/> |
 
 ## What the app does
 
@@ -62,7 +70,7 @@ I designed and built the whole project on my own: the React Native app, the Node
 | Push notifications | FCM on server and app, token lifecycle (register, move between accounts, prune dead tokens, revoke on sign-out), deep links from a notification tap | [`pushService`](server/src/services/pushService.js), [`pushNotifications`](clients/src/utils/pushNotifications.js) |
 | Analytics | Dashboard statistics computed with MongoDB aggregation pipelines, bucketed per day or month in the local time zone | [`dashboardService`](server/src/services/dashboardService.js) |
 | Security | JWT with server-side revocation, hashed one-time codes with expiry and attempt limits, rate limiting, NoSQL-injection and ReDoS protection, upload content checks, log redaction | [`authMiddleware`](server/src/middleware/authMiddleware.js), [`otpService`](server/src/services/otpService.js) |
-| Testing | 76 integration tests against an in-memory MongoDB, including concurrency, a real Socket.IO server and a fake FCM transport; 26 unit tests in the app | [`server/tests`](server/tests), [`clients/__tests__`](clients/__tests__) |
+| Testing | 76 integration tests against an in-memory MongoDB, including concurrency, a real Socket.IO server and a fake FCM transport; 44 unit, hook and component tests in the app | [`server/tests`](server/tests), [`clients/__tests__`](clients/__tests__) |
 | Tooling | GitHub Actions (lint, tests, `npm audit`), Docker Compose for the API and database, seed and test-account scripts | [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [`docker-compose.yml`](docker-compose.yml) |
 
 ## Technical problems I solved
@@ -116,8 +124,10 @@ cd BookingPT
 docker compose up --build
 # or without Docker: cd server && cp .env.example .env && npm install && npm run dev
 
-# Demo data. This deletes everything in the configured database.
+# Demo data. This deletes everything in the configured database...
 cd server && npm run seed
+# ...or keep existing data and only (re)create the demo accounts:
+# npm run seed -- --append
 
 # Mobile app
 cd ../clients
@@ -165,7 +175,7 @@ BookingPT/
 
 ```bash
 cd server && npm test     # 76 integration tests; uses an in-memory MongoDB, no setup needed
-cd clients && npm test    # 26 unit tests
+cd clients && npm test    # 44 unit, hook and component tests
 npm run lint              # in either folder
 ```
 
