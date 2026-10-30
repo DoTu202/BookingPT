@@ -2,16 +2,23 @@
 
 [![CI](https://github.com/DoTu202/BookingPT/actions/workflows/ci.yml/badge.svg)](https://github.com/DoTu202/BookingPT/actions/workflows/ci.yml)
 
-BookingPT is a mobile app (iOS and Android) that connects freelance personal trainers with clients. Clients search for a trainer, book one of the trainer's open time slots, chat with them and review the session afterwards. Trainers publish their availability, handle booking requests and follow their earnings and activity on a dashboard.
+BookingPT is a mobile app (iOS and Android) that connects freelance personal trainers with clients. Clients find a trainer, book one of the trainer's open time slots, chat with them and review the session afterwards. Trainers publish their availability, handle booking requests and follow their earnings on a dashboard.
 
-I designed and built the whole project on my own: the React Native app, the Node.js API, the MongoDB data model, the realtime and push infrastructure, the tests and the CI pipeline. The app's interface is in Vietnamese and is built for users in Vietnam.
+I designed and built the whole project on my own: the React Native app, the Node.js API, the MongoDB data model, the realtime and push infrastructure, the tests and the CI pipeline. It started as my graduation thesis and I later rebuilt it to production standards ([before and after](#from-thesis-to-production)). The interface is in Vietnamese and built for users in Vietnam.
 
 **Stack:** React Native 0.79 (New Architecture) · Redux Toolkit · React Navigation 7 · Node.js 20 · Express 5 · MongoDB / Mongoose 8 · Socket.IO 4 · Firebase Cloud Messaging · Jest · GitHub Actions
 
+<p align="center">
+  <img src="docs/screenshots/client-home.png" width="200" alt="Client home"/>
+  <img src="docs/screenshots/client-bookings.png" width="200" alt="Client bookings"/>
+  <img src="docs/screenshots/pt-home.png" width="200" alt="Trainer home"/>
+  <img src="docs/screenshots/pt-availability.png" width="200" alt="Trainer availability"/>
+</p>
+
 ---
 
-- [Screenshots](#screenshots)
-- [What the app does](#what-the-app-does)
+- [A tour of the app](#a-tour-of-the-app)
+- [From thesis to production](#from-thesis-to-production)
 - [Skills demonstrated](#skills-demonstrated)
 - [Technical problems I solved](#technical-problems-i-solved)
 - [Architecture](#architecture)
@@ -21,41 +28,80 @@ I designed and built the whole project on my own: the React Native app, the Node
 - [Documentation](#documentation)
 - [What I would build next](#what-i-would-build-next)
 
-## Screenshots
+## A tour of the app
 
-**Client**
+The app has two roles with separate navigation: clients get a drawer plus five tabs, trainers get five tabs. All screenshots are from the iOS simulator with the [demo data](#running-it-locally).
 
-| Sign in | Home | Menu | Notifications |
+### Client
+
+| Sign in | Home | Menu |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/sign-in.png" width="230" alt="Sign in"/> | <img src="docs/screenshots/client-home.png" width="230" alt="Client home"/> | <img src="docs/screenshots/client-menu.png" width="230" alt="Drawer menu"/> |
+
+- **Sign in.** "Remember me" decides whether the session survives an app restart. Sign-up verifies the email with a one-time code, and a forgotten password is reset with a code too.
+- **Home.** The next session with its status, this month's completed and upcoming sessions and hours trained, and shortcuts by goal (weight loss, muscle gain, cardio, yoga). The bell shows the unread count, refreshed whenever the screen comes back into view.
+- **Menu.** Every entry opens a real screen. Signing out asks for confirmation and clears the stored session.
+
+| My bookings | Progress | Notifications |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/client-bookings.png" width="230" alt="Upcoming bookings"/> | <img src="docs/screenshots/client-progress.png" width="230" alt="Monthly progress"/> | <img src="docs/screenshots/notifications.png" width="230" alt="Notifications"/> |
+
+- **My bookings.** Upcoming and past sessions with their status, price and the note sent to the trainer. Requests can be cancelled at any time and confirmed sessions up to 24 hours before they start. "Message" opens the chat with that trainer, and completed sessions in the past tab can be rated and reviewed.
+- **Progress.** Sessions, hours, trainers and money spent, plus a six-month chart drawn with plain Views (no chart library).
+- **Notifications.** One for every booking change, including the trainer's reason when they cancel, and a reminder 24 hours before each session. They also arrive as push notifications when the app is closed.
+
+| Messages | Profile |
+| :---: | :---: |
+| <img src="docs/screenshots/chat-list.png" width="230" alt="Conversations"/> | <img src="docs/screenshots/client-profile.png" width="230" alt="Client profile"/> |
+
+- **Messages.** Realtime chat over Socket.IO with a typing indicator. Messages sent while the phone was offline appear on reconnect.
+- **Profile.** Photo upload, edit profile, change password, sign out of all devices and delete the account (password confirmation required).
+
+### Trainer
+
+| Home | Booking requests |
+| :---: | :---: |
+| <img src="docs/screenshots/pt-home.png" width="230" alt="Trainer home"/> | <img src="docs/screenshots/pt-bookings.png" width="230" alt="Booking requests"/> |
+
+- **Home.** What needs action first (requests waiting for an answer, sessions waiting to be marked complete), then today's sessions, this month's earnings, clients and rating. The numbers come from the same server-side aggregation as the full dashboard, which compares earnings, sessions, completion and cancellation rates by week, month or year.
+- **Booking requests.** Requests, upcoming sessions and sessions to complete in separate tabs. A trainer can confirm or reject (with an optional reason), cancel a confirmed session (reason required) and message the client.
+
+| Availability | Profile |
+| :---: | :---: |
+| <img src="docs/screenshots/pt-availability.png" width="230" alt="Availability timeline"/> | <img src="docs/screenshots/pt-profile.png" width="230" alt="Trainer profile"/> |
+
+- **Availability.** The next 14 days at a glance (open, booked and blocked slots, with dots per day), a timeline for the selected day and one-tap 1-hour slots. Booked slots can't be edited or deleted, so a booking never loses its time.
+- **Profile.** Rating and review count computed from real reviews, specializations, hourly rate and area. The "accepting new clients" switch hides the trainer from search.
+
+## From thesis to production
+
+The thesis version worked for a demo but wasn't safe to put in front of real users: anyone could register with an email they didn't own (the verification code was sent back to the app), two clients could book the same slot, several screens showed hardcoded numbers, and there were no tests. I audited it, fixed 35 bugs (8 of them high or critical security issues), rewrote the backend into layers and redesigned the app.
+
+| | Thesis version | Now |
+| :---: | :---: | :---: |
+| **Sign in** | <img src="docs/screenshots/legacy/sign-in.jpg" width="190" alt="Old sign in"/> | <img src="docs/screenshots/sign-in.png" width="190" alt="New sign in"/> |
+| **Client home** | <img src="docs/screenshots/legacy/client-home.jpg" width="190" alt="Old client home"/> | <img src="docs/screenshots/client-home.png" width="190" alt="New client home"/> |
+| **Trainer home** | <img src="docs/screenshots/legacy/pt-dashboard.jpg" width="190" alt="Old trainer home"/> | <img src="docs/screenshots/pt-home.png" width="190" alt="New trainer home"/> |
+| **Availability** | <img src="docs/screenshots/legacy/pt-availability.jpg" width="190" alt="Old availability"/> | <img src="docs/screenshots/pt-availability.png" width="190" alt="New availability"/> |
+
+<details>
+<summary>More screens from the thesis version</summary>
+
+| Search trainers | Book a session | Booking sent | Chat |
 | :---: | :---: | :---: | :---: |
-| <img src="docs/screenshots/sign-in.png" width="190" alt="Sign in"/> | <img src="docs/screenshots/client-home.png" width="190" alt="Client home with the next session and monthly stats"/> | <img src="docs/screenshots/client-menu.png" width="190" alt="Drawer menu"/> | <img src="docs/screenshots/notifications.png" width="190" alt="Notifications"/> |
-| **My bookings** | **Progress** | **Messages** | **Profile** |
-| <img src="docs/screenshots/client-bookings.png" width="190" alt="Upcoming bookings with cancel and message actions"/> | <img src="docs/screenshots/client-progress.png" width="190" alt="Monthly progress chart"/> | <img src="docs/screenshots/chat-list.png" width="190" alt="Conversations"/> | <img src="docs/screenshots/client-profile.png" width="190" alt="Client profile"/> |
+| <img src="docs/screenshots/legacy/search-trainers.jpg" width="170" alt="Old search"/> | <img src="docs/screenshots/legacy/book-session.jpg" width="170" alt="Old booking screen"/> | <img src="docs/screenshots/legacy/booking-success.jpg" width="170" alt="Old booking confirmation"/> | <img src="docs/screenshots/legacy/chat.jpg" width="170" alt="Old chat"/> |
 
-**Trainer**
+</details>
 
-| Home | Booking requests | Availability | Public profile |
-| :---: | :---: | :---: | :---: |
-| <img src="docs/screenshots/pt-home.png" width="190" alt="Trainer home with pending requests and monthly earnings"/> | <img src="docs/screenshots/pt-bookings.png" width="190" alt="Booking request with reject, confirm and message actions"/> | <img src="docs/screenshots/pt-availability.png" width="190" alt="Availability timeline for the next 14 days"/> | <img src="docs/screenshots/pt-profile.png" width="190" alt="Trainer profile with rating and bio"/> |
-
-## What the app does
-
-**Clients**
-- Search trainers by name, specialization, area, price range and available date; sort by price or experience.
-- Open a trainer's profile with real ratings and reviews, pick an open slot and send a booking request with a note.
-- Cancel a request, or a confirmed session up to 24 hours before it starts.
-- Chat with trainers in real time (typing indicator included).
-- Get notified when a request is confirmed, rejected or cancelled, and 24 hours before each session.
-- Review completed sessions; see monthly progress, hours trained, spending and session history.
-
-**Trainers**
-- Plan availability for the next 14 days: per-day timeline, one-tap 1-hour slots, edit and delete free slots.
-- Confirm or reject requests (with an optional reason), cancel confirmed sessions (reason required), mark sessions as completed.
-- Dashboard by week, month or year: earnings compared with the previous period, completed sessions and hours, completion and cancellation rates, share of open slots that got booked, busiest weekdays, top clients and rating distribution.
-- Manage a public profile: bio, specializations, hourly rate, area, photo, and whether new clients are accepted.
-
-**Accounts**
-- Sign-up with email verification code, password reset, email change with verification, profile photo upload.
-- "Sign out of all devices" and account deletion.
+| Area | Thesis version | Now |
+| --- | --- | --- |
+| Data on screen | Client stats, progress tab and trainer rating were hardcoded or made up | Computed from real bookings and reviews |
+| Email verification | Code returned to the app and compared there | Code stays on the server: hashed, expires in 10 minutes, 5 attempts |
+| Double booking | Possible (check, then save) | Prevented by an atomic conditional update |
+| Chat | Polling every few seconds; any user could post into any room | Socket.IO push with membership checks |
+| Language | English | Vietnamese, with dates and money in local formats |
+| Design | Separate styles per screen | Design tokens and a shared component library |
+| Tests and CI | None (the default test was broken) | 120 automated tests, lint and `npm audit` in CI |
 
 ## Skills demonstrated
 
@@ -167,7 +213,7 @@ BookingPT/
 │   ├── src/middleware/      auth, errors, rate limits, input sanitizing, uploads
 │   ├── scripts/             seed and test-account scripts
 │   └── tests/               integration tests
-├── docs/                    architecture, API, development and push guides
+├── docs/                    architecture, API, development and push guides, screenshots
 └── docker-compose.yml
 ```
 
