@@ -1,20 +1,18 @@
 import React, {useRef, useState} from 'react';
-import {Platform, StyleSheet, TouchableOpacity, View} from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import dayjs from '../../utils/dayjs';
-import {Calendar, Call, Lock, Profile, Sms, TickCircle} from 'iconsax-react-native';
-import {Banner, ButtonComponent, InputComponent, RowComponent, TextComponent} from '../../components';
+import {Call, Lock, Profile, Sms} from 'iconsax-react-native';
+import {
+  Banner,
+  ButtonComponent,
+  DatePickerField,
+  InputComponent,
+  RowComponent,
+  TextComponent,
+} from '../../components';
 import AuthLayout from './components/AuthLayout';
+import RoleSelector from './components/RoleSelector';
 import authApi from '../../apis/authApi';
-import {MIN_PASSWORD_LENGTH, Validate} from '../../utils/validate';
+import {MIN_PASSWORD_LENGTH, validateSignUpField} from '../../utils/validate';
 import appColors from '../../constants/appColors';
-import {fontFamilies} from '../../constants/fontFamilies';
-import {radius, spacing} from '../../constants/theme';
-
-const ROLES = [
-  {value: 'client', title: 'Học viên', description: 'Tìm và đặt lịch với huấn luyện viên'},
-  {value: 'pt', title: 'Huấn luyện viên', description: 'Nhận học viên và quản lý lịch dạy'},
-];
 
 const initValue = {
   username: '',
@@ -26,41 +24,11 @@ const initValue = {
   role: 'client',
 };
 
-// Returns a Vietnamese error message per field ('' when valid).
-const validateField = (key, values) => {
-  const value = values[key];
-  switch (key) {
-    case 'username':
-      return value.trim().length < 2 ? 'Tên cần ít nhất 2 ký tự' : '';
-    case 'email':
-      return !value.trim()
-        ? 'Vui lòng nhập email'
-        : !Validate.email(value.trim())
-        ? 'Email không hợp lệ'
-        : '';
-    case 'phoneNumber':
-      return !Validate.phone(value) ? 'Số điện thoại gồm 9–12 chữ số' : '';
-    case 'dob':
-      return !value ? 'Vui lòng chọn ngày sinh' : '';
-    case 'password':
-      return !Validate.password(value) ? `Mật khẩu cần ít nhất ${MIN_PASSWORD_LENGTH} ký tự` : '';
-    case 'confirmPassword':
-      return !value
-        ? 'Vui lòng nhập lại mật khẩu'
-        : value !== values.password
-        ? 'Mật khẩu xác nhận không khớp'
-        : '';
-    default:
-      return '';
-  }
-};
-
 const FIELDS = ['username', 'email', 'phoneNumber', 'dob', 'password', 'confirmPassword'];
 
 const SignUpScreen = ({navigation}) => {
   const [values, setValues] = useState(initValue);
   const [touched, setTouched] = useState({});
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const refs = {
@@ -70,24 +38,12 @@ const SignUpScreen = ({navigation}) => {
     confirmPassword: useRef(null),
   };
 
-  const errors = Object.fromEntries(FIELDS.map(key => [key, validateField(key, values)]));
+  const errors = Object.fromEntries(FIELDS.map(key => [key, validateSignUpField(key, values)]));
   const isValid = FIELDS.every(key => !errors[key]);
   const errorFor = key => (touched[key] ? errors[key] : '');
 
   const setValue = (key, value) => setValues(prev => ({...prev, [key]: value}));
   const touch = key => setTouched(prev => ({...prev, [key]: true}));
-
-  const handleDateChange = (event, selectedDate) => {
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
-    if (event.type === 'set' && selectedDate) {
-      setValue('dob', selectedDate);
-    }
-    if (event.type !== 'set' || Platform.OS === 'android') {
-      touch('dob');
-    }
-  };
 
   const handleRegister = async () => {
     if (!isValid) {
@@ -130,39 +86,7 @@ const SignUpScreen = ({navigation}) => {
           />
         </RowComponent>
       }>
-      <View>
-        <TextComponent text="Bạn là" size={13} font={fontFamilies.medium} styles={styles.label} />
-        <View style={styles.roles}>
-          {ROLES.map(role => {
-            const selected = values.role === role.value;
-            return (
-              <TouchableOpacity
-                key={role.value}
-                style={[styles.roleCard, selected && styles.roleCardSelected]}
-                onPress={() => setValue('role', role.value)}
-                accessibilityRole="radio"
-                accessibilityState={{selected}}>
-                <RowComponent justify="space-between">
-                  <TextComponent
-                    text={role.title}
-                    font={fontFamilies.semiBold}
-                    color={selected ? appColors.primaryDark : appColors.text}
-                  />
-                  {selected ? (
-                    <TickCircle size={18} color={appColors.primary} variant="Bold" />
-                  ) : null}
-                </RowComponent>
-                <TextComponent
-                  text={role.description}
-                  size={12}
-                  color={appColors.textMuted}
-                  styles={styles.roleDescription}
-                />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
+      <RoleSelector value={values.role} onChange={role => setValue('role', role)} />
 
       <InputComponent
         label="Họ và tên"
@@ -205,52 +129,16 @@ const SignUpScreen = ({navigation}) => {
         prefix={<Call size={20} color={appColors.textMuted} />}
       />
 
-      <View>
-        <TextComponent text="Ngày sinh" size={13} font={fontFamilies.medium} styles={styles.label} />
-        <TouchableOpacity
-          style={[styles.dateField, errorFor('dob') && styles.dateFieldError]}
-          onPress={() => setShowDatePicker(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Chọn ngày sinh">
-          <Calendar size={20} color={appColors.textMuted} />
-          <TextComponent
-            text={values.dob ? dayjs(values.dob).format('DD/MM/YYYY') : 'Chọn ngày sinh'}
-            size={15}
-            color={values.dob ? appColors.text : appColors.placeholder}
-            styles={styles.dateText}
-          />
-        </TouchableOpacity>
-        {errorFor('dob') ? (
-          <TextComponent text={errors.dob} size={12} color={appColors.danger} styles={styles.helper} />
-        ) : null}
-        {showDatePicker && (
-          <View>
-            <DateTimePicker
-              value={values.dob || new Date(2000, 0, 1)}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              maximumDate={new Date()}
-              minimumDate={new Date(1940, 0, 1)}
-              locale="vi-VN"
-            />
-            {Platform.OS === 'ios' ? (
-              <ButtonComponent
-                text="Xong"
-                type="secondary"
-                size="sm"
-                onPress={() => {
-                  if (!values.dob) {
-                    setValue('dob', new Date(2000, 0, 1));
-                  }
-                  setShowDatePicker(false);
-                  touch('dob');
-                }}
-              />
-            ) : null}
-          </View>
-        )}
-      </View>
+      <DatePickerField
+        label="Ngày sinh"
+        placeholder="Chọn ngày sinh"
+        value={values.dob}
+        onChange={date => setValue('dob', date)}
+        onClose={() => touch('dob')}
+        error={errorFor('dob')}
+        minimumDate={new Date(1940, 0, 1)}
+        maximumDate={new Date()}
+      />
 
       <InputComponent
         ref={refs.password}
@@ -296,46 +184,3 @@ const SignUpScreen = ({navigation}) => {
 };
 
 export default SignUpScreen;
-
-const styles = StyleSheet.create({
-  label: {
-    marginBottom: 6,
-  },
-  roles: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  roleCard: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: appColors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  roleCardSelected: {
-    borderColor: appColors.primary,
-    backgroundColor: appColors.primarySoft,
-  },
-  roleDescription: {
-    marginTop: 4,
-    lineHeight: 17,
-  },
-  dateField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 48,
-    borderWidth: 1.5,
-    borderColor: appColors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-  },
-  dateFieldError: {
-    borderColor: appColors.danger,
-  },
-  dateText: {
-    marginLeft: spacing.sm,
-  },
-  helper: {
-    marginTop: 4,
-  },
-});
