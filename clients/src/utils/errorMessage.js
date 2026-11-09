@@ -31,8 +31,8 @@ const EXACT = {
   'Code is invalid or has expired. Please request a new one.':
     'Mã xác minh không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu mã mới.',
   'Code is not correct.': 'Mã xác minh không đúng.',
-  'Too many wrong attempts. Please request a new code.':
-    'Bạn đã nhập sai quá nhiều lần. Vui lòng yêu cầu mã mới.',
+  'Too many wrong attempts. Please try again in 15 minutes.':
+    'Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút.',
   'Please wait a minute before requesting a new code.':
     'Vui lòng đợi 1 phút trước khi yêu cầu mã mới.',
   'Verification code is required.': 'Vui lòng nhập mã xác minh.',

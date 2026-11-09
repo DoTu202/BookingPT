@@ -10,7 +10,7 @@ const Review = require('../models/ReviewModel');
 const {PROFILE_DIR} = require('../middleware/uploadMiddleware');
 const {ACTIVE_BOOKING_STATUSES} = require('./bookingService');
 const {revokeUserSessions} = require('./sessionService');
-const {badRequest} = require('../utils/httpError');
+const {badRequest, conflict} = require('../utils/httpError');
 
 // Removes a previously uploaded profile photo from disk. Only files inside
 // the profile upload folder are ever touched.
@@ -38,27 +38,41 @@ const deleteAccount = async ({userId, password, confirmDelete}) => {
     throw badRequest('Incorrect password');
   }
 
-  const activeBookings = await Booking.countDocuments({
-    $or: [{client: userId}, {pt: userId}],
-    status: {$in: ACTIVE_BOOKING_STATUSES},
-  });
-  if (activeBookings > 0) {
-    throw badRequest(
-      `Cannot delete account. You have ${activeBookings} active booking(s). Please cancel or complete them first.`,
-    );
+  // Deactivate first: an inactive user's token is rejected and a PT can no
+  // longer be booked, so no new booking can appear between the check below
+  // and the deletion.
+  const locked = await User.findOneAndUpdate({_id: userId, isActive: true}, {isActive: false});
+  if (!locked) {
+    throw conflict('This account is already being deleted.');
   }
 
-  await Promise.all([
-    PTProfile.deleteOne({user: userId}),
-    Availability.deleteMany({pt: userId}),
-    Notification.deleteMany({recipient: userId}),
-    // Reviews about a deleted PT have nothing left to describe.
-    Review.deleteMany({pt: userId}),
-    Booking.updateMany({client: userId}, {$set: {clientDeleted: true}}),
-    Booking.updateMany({pt: userId}, {$set: {ptDeleted: true}}),
-    removeLocalPhoto(user.photoUrl),
-  ]);
-  await User.deleteOne({_id: userId});
+  try {
+    const activeBookings = await Booking.countDocuments({
+      $or: [{client: userId}, {pt: userId}],
+      status: {$in: ACTIVE_BOOKING_STATUSES},
+    });
+    if (activeBookings > 0) {
+      throw badRequest(
+        `Cannot delete account. You have ${activeBookings} active booking(s). Please cancel or complete them first.`,
+      );
+    }
+
+    await Promise.all([
+      PTProfile.deleteOne({user: userId}),
+      Availability.deleteMany({pt: userId}),
+      Notification.deleteMany({recipient: userId}),
+      // Reviews about a deleted PT have nothing left to describe.
+      Review.deleteMany({pt: userId}),
+      Booking.updateMany({client: userId}, {$set: {clientDeleted: true}}),
+      Booking.updateMany({pt: userId}, {$set: {ptDeleted: true}}),
+      removeLocalPhoto(user.photoUrl),
+    ]);
+    await User.deleteOne({_id: userId});
+  } catch (error) {
+    // Nothing (or only some of it) was deleted: let the user sign in and retry.
+    await User.updateOne({_id: userId}, {isActive: true});
+    throw error;
+  }
   await revokeUserSessions(userId);
 };
 

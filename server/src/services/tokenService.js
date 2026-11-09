@@ -20,7 +20,7 @@ const buildAuthResponse = user => ({
   username: user.username,
   role: user.role,
   photoUrl: user.photoUrl ?? '',
-  accesstoken: signAccessToken(user),
+  accesstoken: signAccessToken(user)
 });
 
 module.exports = {signAccessToken, verifyAccessToken, buildAuthResponse};
