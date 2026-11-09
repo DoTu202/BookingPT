@@ -26,6 +26,9 @@ const CLIENT_CANCEL_NOTICE_HOURS = 24;
 const REMINDER_LEAD_HOURS = 24;
 const AUTO_COMPLETE_AFTER_HOURS = 12;
 const REASON_MAX_LENGTH = 500;
+// A slot flipped to "booked" gets its booking within milliseconds, so one with
+// none after this long was orphaned (e.g. the process died in between).
+const ORPHAN_SLOT_AFTER_MINUTES = 10;
 
 const HOUR_MS = 60 * 60 * 1000;
 const hoursFrom = (date, hours) => new Date(date.getTime() + hours * HOUR_MS);
@@ -396,6 +399,32 @@ const expireStaleBookings = async (now = new Date()) => {
   return expired;
 };
 
+// createBooking reserves the slot before storing the booking. If the process
+// dies between the two, the slot stays "booked" with no booking and nobody
+// could ever book it again: give it back.
+const releaseOrphanedSlots = async (now = new Date()) => {
+  const candidates = await Availability.find({
+    status: 'booked',
+    updatedAt: {$lte: new Date(now.getTime() - ORPHAN_SLOT_AFTER_MINUTES * 60 * 1000)},
+  })
+    .select('_id')
+    .lean();
+
+  let released = 0;
+  for (const slot of candidates) {
+    if (await Booking.exists({availabilitySlot: slot._id})) {
+      continue;
+    }
+    const result = await Availability.updateOne({_id: slot._id, status: 'booked'}, {status: 'available'});
+    released += result.modifiedCount;
+  }
+
+  if (released > 0) {
+    logger.warn({released}, 'Released slots that were booked without a booking');
+  }
+  return released;
+};
+
 // Reminds both sides about confirmed sessions starting within
 // REMINDER_LEAD_HOURS. Sessions confirmed later than that are reminded on the
 // next run.
@@ -486,4 +515,5 @@ module.exports = {
   expireStaleBookings,
   sendBookingReminders,
   autoCompleteBookings,
+  releaseOrphanedSlots,
 };

@@ -4,7 +4,7 @@ const Availability = require('../src/models/AvailabilityModel');
 const Booking = require('../src/models/bookingModel');
 const Notification = require('../src/models/NotificationModel');
 const PTProfile = require('../src/models/PTProfileModel');
-const {expireStaleBookings} = require('../src/services/bookingService');
+const {expireStaleBookings, releaseOrphanedSlots} = require('../src/services/bookingService');
 const {startDb, clearDb, stopDb, createUser, createPtWithSlot} = require('./setup');
 
 beforeAll(startDb);
@@ -20,6 +20,28 @@ const bookingFor = async ({pt, slot, client, status}) =>
     status,
     priceAtBooking: 200000,
   });
+
+describe('orphaned slot release', () => {
+  it('re-opens an old booked slot that has no booking, and only that', async () => {
+    const orphan = await createPtWithSlot({hoursFromNow: 24});
+    const used = await createPtWithSlot({hoursFromNow: 24});
+    const fresh = await createPtWithSlot({hoursFromNow: 24});
+    const client = await createUser('client');
+    await Availability.updateMany(
+      {_id: {$in: [orphan.slot._id, used.slot._id, fresh.slot._id]}},
+      {status: 'booked'},
+    );
+    await bookingFor({...used, client, status: 'pending_confirmation'});
+
+    // 30 minutes later: the first two are old enough, the fresh one is not.
+    await Availability.updateOne({_id: fresh.slot._id}, {updatedAt: new Date(Date.now() + 60 * 60 * 1000)}, {timestamps: false});
+    expect(await releaseOrphanedSlots(new Date(Date.now() + 30 * 60 * 1000))).toBe(1);
+
+    expect((await Availability.findById(orphan.slot._id)).status).toBe('available');
+    expect((await Availability.findById(used.slot._id)).status).toBe('booked');
+    expect((await Availability.findById(fresh.slot._id)).status).toBe('booked');
+  });
+});
 
 describe('stale booking expiry', () => {
   it('rejects unanswered requests whose session has started and frees the slot', async () => {

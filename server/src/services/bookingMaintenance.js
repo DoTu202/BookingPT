@@ -3,6 +3,7 @@ const {
   expireStaleBookings,
   sendBookingReminders,
   autoCompleteBookings,
+  releaseOrphanedSlots,
 } = require('./bookingService');
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
@@ -11,6 +12,7 @@ const JOBS = [
   ['expire stale requests', expireStaleBookings],
   ['send reminders', sendBookingReminders],
   ['auto-complete sessions', autoCompleteBookings],
+  ['release orphaned slots', releaseOrphanedSlots],
 ];
 
 // Runs every job once; one failing job does not stop the others.
