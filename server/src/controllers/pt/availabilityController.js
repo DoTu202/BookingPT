@@ -5,6 +5,8 @@ const {badRequest, notFound} = require('../../utils/httpError');
 
 const MAX_SLOT_HOURS = 12;
 const MAX_RANGE_DAYS = 62;
+const EDITABLE_STATUSES = ['available', 'unavailable_by_pt'];
+const BOOKED_UPDATE_MESSAGE = 'Cannot change a slot that already has a booking';
 
 // Validates a start/end pair sent as ISO 8601 strings and returns Dates.
 const parseSlotTimes = (startTime, endTime) => {
@@ -70,7 +72,7 @@ const updateAvailability = asyncHandler(async (req, res) => {
   // A booked slot is referenced by a booking that copied its times; moving it
   // would silently desynchronise the two.
   if (availability.status === 'booked') {
-    throw badRequest('Cannot change a slot that already has a booking');
+    throw badRequest(BOOKED_UPDATE_MESSAGE);
   }
 
   const {start, end} = parseSlotTimes(req.body.startTime, req.body.endTime);
@@ -79,17 +81,21 @@ const updateAvailability = asyncHandler(async (req, res) => {
     throw badRequest('Updated time slot overlaps with an existing one');
   }
 
-  availability.startTime = start;
-  availability.endTime = end;
-  // Moving a slot blocked by a PT cancellation re-opens it for booking.
-  if (availability.status === 'unavailable_by_pt') {
-    availability.status = 'available';
+  // The status check is part of the update: a client booking this slot right
+  // now must not have its times changed underneath the booking.
+  const updated = await Availability.findOneAndUpdate(
+    {_id: availabilityId, pt: ptId, status: {$in: EDITABLE_STATUSES}},
+    // Moving a slot blocked by a PT cancellation re-opens it for booking.
+    {startTime: start, endTime: end, status: 'available'},
+    {new: true, runValidators: true},
+  );
+  if (!updated) {
+    throw badRequest(BOOKED_UPDATE_MESSAGE);
   }
-  await availability.save();
 
   res.status(200).json({
     success: true,
-    data: availability,
+    data: updated,
   });
 });
 
@@ -130,20 +136,19 @@ const deleteAvailabilitySlot = asyncHandler(async (req, res) => {
   const {availabilityId} = req.params;
   assertValidId(availabilityId, 'availability id');
 
-  const availability = await Availability.findOne({
+  // Deleting is conditional on the slot not being booked, so a booking made
+  // between a check and the delete cannot end up pointing at a missing slot.
+  const deleted = await Availability.findOneAndDelete({
     _id: availabilityId,
     pt: req.user._id,
+    status: {$ne: 'booked'},
   });
-
-  if (!availability) {
-    throw notFound('Availability slot not found');
+  if (!deleted) {
+    const exists = await Availability.exists({_id: availabilityId, pt: req.user._id});
+    throw exists
+      ? badRequest('Cannot delete a booked time slot')
+      : notFound('Availability slot not found');
   }
-
-  if (availability.status === 'booked') {
-    throw badRequest('Cannot delete a booked time slot');
-  }
-
-  await availability.deleteOne();
 
   res.status(200).json({
     success: true,
