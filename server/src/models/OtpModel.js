@@ -29,6 +29,11 @@ const otpSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Set after too many wrong guesses: no new code can be issued and no code
+    // accepted until then.
+    lockedUntil: {
+      type: Date,
+    },
     expiresAt: {
       type: Date,
       required: true,

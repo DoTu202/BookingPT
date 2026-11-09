@@ -68,7 +68,7 @@ describe('sign up with email verification', () => {
     expect(await bcrypt.compare(newUser.password, stored.password)).toBe(true);
   });
 
-  it('invalidates the code after too many wrong attempts', async () => {
+  it('locks the email after too many wrong attempts, even with the right code', async () => {
     await request(app).post('/auth/verification').send({email: newUser.email});
     const code = sentCodes['register:alice@example.com'];
 
@@ -77,8 +77,28 @@ describe('sign up with email verification', () => {
     }
     const res = await request(app).post('/auth/register').send({...newUser, code});
 
-    expect(res.status).toBe(400);
-    expect(await Otp.countDocuments()).toBe(0);
+    expect(res.status).toBe(429);
+    expect(await User.countDocuments()).toBe(0);
+    const resend = await request(app).post('/auth/verification').send({email: newUser.email});
+    expect(resend.status).toBe(429);
+  });
+
+  it('keeps wrong guesses when a new code is requested', async () => {
+    await request(app).post('/auth/verification').send({email: newUser.email});
+    for (let i = 0; i < 4; i++) {
+      await request(app)
+        .post('/auth/register')
+        .send({...newUser, code: wrongCode(sentCodes['register:alice@example.com'])});
+    }
+    // Skip the resend cooldown.
+    await Otp.updateOne({}, {updatedAt: new Date(Date.now() - 2 * 60 * 1000)}, {timestamps: false});
+    await request(app).post('/auth/verification').send({email: newUser.email});
+
+    const code = sentCodes['register:alice@example.com'];
+    await request(app).post('/auth/register').send({...newUser, code: wrongCode(code)});
+    const res = await request(app).post('/auth/register').send({...newUser, code});
+
+    expect(res.status).toBe(429);
   });
 
   it('does not allow self-registering with an unknown role', async () => {
