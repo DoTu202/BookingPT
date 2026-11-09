@@ -1,27 +1,16 @@
 const fs = require('fs/promises');
-const path = require('path');
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcrypt');
 const User = require('../models/userModel');
-const PTProfile = require('../models/PTProfileModel');
-const Booking = require('../models/bookingModel');
-const Availability = require('../models/AvailabilityModel');
-const Notification = require('../models/NotificationModel');
-const Review = require('../models/ReviewModel');
 const {PUBLIC_URL} = require('../configs/env');
-const {PROFILE_DIR} = require('../middleware/uploadMiddleware');
 const {buildAuthResponse} = require('../services/tokenService');
 const {issueOtp, verifyOtp} = require('../services/otpService');
 const {sendOtpMail} = require('../services/mailService');
 const {verifyImageFile} = require('../utils/imageSignature');
-const {ACTIVE_BOOKING_STATUSES} = require('../services/bookingService');
 const {badRequest} = require('../utils/httpError');
-const {disconnectUser} = require('../services/realtimeService');
-const {
-  registerDeviceToken,
-  unregisterDeviceToken,
-  removeUserDeviceTokens,
-} = require('../services/pushService');
+const {registerDeviceToken, unregisterDeviceToken} = require('../services/pushService');
+const {revokeUserSessions} = require('../services/sessionService');
+const {deleteAccount: deleteAccountService, removeLocalPhoto} = require('../services/accountService');
 const {
   BCRYPT_ROUNDS,
   str,
@@ -31,19 +20,6 @@ const {
   assertPhone,
   parseDob,
 } = require('../utils/validators');
-
-// Removes a previously uploaded profile photo from disk. Only files inside
-// the profile upload folder are ever touched.
-const removeLocalPhoto = async photoUrl => {
-  if (!photoUrl) {
-    return;
-  }
-  const filename = path.basename(photoUrl.split('?')[0]);
-  if (!filename.startsWith('profile-')) {
-    return;
-  }
-  await fs.unlink(path.join(PROFILE_DIR, filename)).catch(() => {});
-};
 
 const getUserProfile = asyncHandler(async (req, res) => {
   res.status(200).json({
@@ -122,8 +98,7 @@ const changePassword = asyncHandler(async (req, res) => {
   // Open sockets were authorized with old tokens; the app reconnects with
   // the fresh one below. Push tokens too: the app registers again once it
   // has the new token.
-  disconnectUser(user._id);
-  await removeUserDeviceTokens(user._id);
+  await revokeUserSessions(user._id);
 
   res.status(200).json({
     message: 'Password changed successfully',
@@ -189,8 +164,7 @@ const confirmEmailChange = asyncHandler(async (req, res) => {
 // Revokes every token issued so far (all devices, including this one).
 const logoutAllDevices = asyncHandler(async (req, res) => {
   await User.updateOne({_id: req.user._id}, {tokensValidAfter: new Date()});
-  disconnectUser(req.user._id);
-  await removeUserDeviceTokens(req.user._id);
+  await revokeUserSessions(req.user._id);
   res.status(200).json({success: true, message: 'Signed out of all devices'});
 });
 
@@ -250,44 +224,11 @@ const unregisterPushToken = asyncHandler(async (req, res) => {
 });
 
 const deleteAccount = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
-  const {password, confirmDelete} = req.body;
-
-  if (typeof password !== 'string' || !password) {
-    throw badRequest('Password is required to delete account');
-  }
-  if (confirmDelete !== 'DELETE') {
-    throw badRequest('Please type "DELETE" to confirm account deletion');
-  }
-
-  const user = await User.findById(userId).select('+password');
-  if (!(await bcrypt.compare(password, user.password))) {
-    throw badRequest('Incorrect password');
-  }
-
-  const activeBookings = await Booking.countDocuments({
-    $or: [{client: userId}, {pt: userId}],
-    status: {$in: ACTIVE_BOOKING_STATUSES},
+  await deleteAccountService({
+    userId: req.user._id,
+    password: req.body.password,
+    confirmDelete: req.body.confirmDelete,
   });
-  if (activeBookings > 0) {
-    throw badRequest(
-      `Cannot delete account. You have ${activeBookings} active booking(s). Please cancel or complete them first.`,
-    );
-  }
-
-  await Promise.all([
-    PTProfile.deleteOne({user: userId}),
-    Availability.deleteMany({pt: userId}),
-    Notification.deleteMany({recipient: userId}),
-    removeUserDeviceTokens(userId),
-    // Reviews about a deleted PT have nothing left to describe.
-    Review.deleteMany({pt: userId}),
-    Booking.updateMany({client: userId}, {$set: {clientDeleted: true}}),
-    Booking.updateMany({pt: userId}, {$set: {ptDeleted: true}}),
-    removeLocalPhoto(user.photoUrl),
-  ]);
-  await User.deleteOne({_id: userId});
-  disconnectUser(userId);
 
   res.status(200).json({
     message: 'Account deleted successfully',

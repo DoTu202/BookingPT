@@ -5,8 +5,7 @@ const {issueOtp, verifyOtp} = require('../services/otpService');
 const {sendOtpMail} = require('../services/mailService');
 const {buildAuthResponse} = require('../services/tokenService');
 const {badRequest, unauthorized} = require('../utils/httpError');
-const {disconnectUser} = require('../services/realtimeService');
-const {removeUserDeviceTokens} = require('../services/pushService');
+const {revokeUserSessions} = require('../services/sessionService');
 const {
   BCRYPT_ROUNDS,
   str,
@@ -164,8 +163,7 @@ const resetPassword = asyncHandler(async (req, res) => {
       passwordChangedAt: new Date(),
     },
   );
-  disconnectUser(user._id);
-  await removeUserDeviceTokens(user._id);
+  await revokeUserSessions(user._id);
 
   res.status(200).json({
     success: true,

@@ -19,6 +19,8 @@ const DatePickerField = ({
   defaultDate = new Date(2000, 0, 1),
   minimumDate,
   maximumDate,
+  error,
+  onClose,
 }) => {
   const [open, setOpen] = useState(false);
 
@@ -29,13 +31,25 @@ const DatePickerField = ({
     if (event.type === 'set' && date) {
       onChange(date);
     }
+    if (event.type !== 'set' || Platform.OS === 'android') {
+      onClose?.();
+    }
+  };
+
+  const handleDone = () => {
+    // Confirming without scrolling picks the date the spinner showed.
+    if (!value) {
+      onChange(defaultDate);
+    }
+    setOpen(false);
+    onClose?.();
   };
 
   return (
     <View>
       {label ? <TextComponent text={label} size={13} font={fontFamilies.medium} styles={styles.label} /> : null}
       <TouchableOpacity
-        style={styles.field}
+        style={[styles.field, error ? styles.fieldError : null]}
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={label || placeholder}>
@@ -46,6 +60,7 @@ const DatePickerField = ({
           color={value ? appColors.text : appColors.placeholder}
         />
       </TouchableOpacity>
+      {error ? <TextComponent text={error} size={12} color={appColors.danger} styles={styles.error} /> : null}
       {open ? (
         <View>
           <DateTimePicker
@@ -58,7 +73,7 @@ const DatePickerField = ({
             locale="vi-VN"
           />
           {Platform.OS === 'ios' ? (
-            <ButtonComponent text="Xong" type="secondary" size="sm" onPress={() => setOpen(false)} />
+            <ButtonComponent text="Xong" type="secondary" size="sm" onPress={handleDone} />
           ) : null}
         </View>
       ) : null}
@@ -81,5 +96,11 @@ const styles = StyleSheet.create({
     borderColor: appColors.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
+  },
+  fieldError: {
+    borderColor: appColors.danger,
+  },
+  error: {
+    marginTop: 4,
   },
 });
