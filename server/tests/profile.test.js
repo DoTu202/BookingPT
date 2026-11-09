@@ -12,7 +12,9 @@ jest.mock('../src/services/mailService', () => ({
 const app = require('../src/app');
 const User = require('../src/models/userModel');
 const {PROFILE_DIR} = require('../src/middleware/uploadMiddleware');
-const {startDb, clearDb, stopDb, createUser} = require('./setup');
+const bcrypt = require('bcrypt');
+const Booking = require('../src/models/bookingModel');
+const {startDb, clearDb, stopDb, createUser, createPtWithSlot} = require('./setup');
 
 beforeAll(startDb);
 afterEach(async () => {
@@ -126,5 +128,38 @@ describe('profile photo upload', () => {
       'evil.png',
     );
     expect(res.status).toBe(400);
+  });
+});
+
+describe('account deletion', () => {
+  const deleteAs = (auth, body = {password: 'Password123!', confirmDelete: 'DELETE'}) =>
+    request(app).delete('/api/profile/delete-account').set('Authorization', auth).send(body);
+
+  const createClient = async () =>
+    createUser('client', {passwordHash: await bcrypt.hash('Password123!', 4)});
+
+  it('deletes the account when there are no active bookings', async () => {
+    const {user, auth} = await createClient();
+    const res = await deleteAs(auth);
+    expect(res.status).toBe(200);
+    expect(await User.exists({_id: user._id})).toBeNull();
+  });
+
+  it('keeps the account usable when active bookings block the deletion', async () => {
+    const {user, auth} = await createClient();
+    const {pt, slot} = await createPtWithSlot({hoursFromNow: 24});
+    await Booking.create({
+      client: user._id,
+      pt: pt.user._id,
+      availabilitySlot: slot._id,
+      bookingTime: {startTime: slot.startTime, endTime: slot.endTime},
+      status: 'confirmed',
+      priceAtBooking: 200000,
+    });
+
+    const res = await deleteAs(auth);
+    expect(res.status).toBe(400);
+    expect((await User.findById(user._id)).isActive).toBe(true);
+    await request(app).get('/api/profile/profile').set('Authorization', auth).expect(200);
   });
 });
