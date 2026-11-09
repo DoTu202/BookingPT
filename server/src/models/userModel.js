@@ -60,6 +60,9 @@ const userSchema = new mongoose.Schema({
   timestamps: true,
 });
 
+// Search hides deactivated trainers with {role, isActive: false}.
+userSchema.index({role: 1, isActive: 1});
+
 userSchema.set('toJSON', {
   transform: (doc, ret) => {
     delete ret.password;
