@@ -39,6 +39,28 @@ describe('booking lifecycle', () => {
     expect(await Booking.countDocuments()).toBe(1);
   });
 
+  it('never gives one client two overlapping bookings, even when requests race', async () => {
+    const first = await createPtWithSlot();
+    const second = await createPtWithSlot();
+    // Same time window, different trainers.
+    await Availability.updateOne(
+      {_id: second.slot._id},
+      {startTime: first.slot.startTime, endTime: first.slot.endTime},
+    );
+    const client = await createUser('client');
+
+    const results = await Promise.all([
+      book(client.auth, first.pt, first.slot),
+      book(client.auth, second.pt, second.slot),
+    ]);
+
+    expect(results.filter(r => r.status === 201).length).toBeLessThanOrEqual(1);
+    expect(await Booking.countDocuments({client: client.user._id})).toBeLessThanOrEqual(1);
+    // A slot is only "booked" while a booking holds it.
+    const booked = await Availability.countDocuments({status: 'booked'});
+    expect(booked).toBe(await Booking.countDocuments());
+  });
+
   it('frees the slot when the PT rejects', async () => {
     const {pt, slot} = await createPtWithSlot();
     const client = await createUser('client');

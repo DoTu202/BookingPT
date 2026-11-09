@@ -81,6 +81,18 @@ const ptMessages = action => ({
   status: status => `Booking is currently in "${status}" status, cannot ${action}.`,
 });
 
+const CLIENT_CONFLICT_MESSAGE = 'You already have another booking that conflicts with this time slot.';
+
+// Another active booking of this client overlapping the slot's time.
+const clientHasConflict = (clientId, slot, excludeBookingId) =>
+  Booking.exists({
+    client: clientId,
+    ...(excludeBookingId && {_id: {$ne: excludeBookingId}}),
+    status: {$in: ACTIVE_BOOKING_STATUSES},
+    'bookingTime.startTime': {$lt: slot.endTime},
+    'bookingTime.endTime': {$gt: slot.startTime},
+  });
+
 const releaseSlot = (slotId, status = 'available') =>
   Availability.updateOne({_id: slotId, status: 'booked'}, {status});
 
@@ -134,14 +146,8 @@ const createBooking = async ({client, ptId, availabilitySlotId, notesFromClient,
     throw badRequest('Cannot book past time slots.');
   }
 
-  const existingClientBooking = await Booking.exists({
-    client: client._id,
-    status: {$in: ACTIVE_BOOKING_STATUSES},
-    'bookingTime.startTime': {$lt: slot.endTime},
-    'bookingTime.endTime': {$gt: slot.startTime},
-  });
-  if (existingClientBooking) {
-    throw badRequest('You already have another booking that conflicts with this time slot.');
+  if (await clientHasConflict(client._id, slot)) {
+    throw badRequest(CLIENT_CONFLICT_MESSAGE);
   }
 
   // Reserve the slot atomically. Only one concurrent request can flip it from
@@ -170,6 +176,15 @@ const createBooking = async ({client, ptId, availabilitySlotId, notesFromClient,
     // Release the reservation if the booking could not be stored.
     await releaseSlot(availabilitySlotId);
     throw error;
+  }
+
+  // The check above and the insert are not atomic: two requests for slots of
+  // different PTs at overlapping times can both pass it. Check again now that
+  // this booking exists; if both race, both back off and the client retries.
+  if (await clientHasConflict(client._id, slot, booking._id)) {
+    await Booking.deleteOne({_id: booking._id});
+    await releaseSlot(availabilitySlotId);
+    throw badRequest(CLIENT_CONFLICT_MESSAGE);
   }
 
   await notifySafely(
